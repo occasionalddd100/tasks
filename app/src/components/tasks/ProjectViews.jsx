@@ -1,37 +1,80 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MoreHorizontalIcon, PencilIcon, PlusIcon, Repeat2Icon, Trash2Icon, UsersIcon, XIcon } from "lucide-react";
+import { ChevronRightIcon, MoreHorizontalIcon, Repeat2Icon, UsersIcon, XIcon } from "lucide-react";
 import { useDb, add, update, remove, isMine } from "@/lib/db";
+import { folderPath } from "@/lib/notes";
+import { FileMenu } from "@/components/notes/NotesTree";
 import { today, byOrder, nextOrder, stale, fmtDate, plural, EVERY, habitDue, dayDiff } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { confirmAction } from "@/components/Confirm";
 import ShareDialog from "@/components/ShareDialog";
 import Board from "@/components/tasks/Board";
 
-const LOG = "log";
-const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
-
-export default function TasksView() {
+// a project: one screen of task categories, opened from the sidebar like a note
+export function ProjectView({ id, fresh, go }) {
   const db = useDb();
-  const [current, setCurrent] = useState(() => store.get("board"));
-  const [renaming, setRenaming] = useState(false);
+  const board = db.boards.find(b => b.id === id);
+  const [name, setName] = useState(board?.name || "");
   const [sharing, setSharing] = useState(false);
+  const titleRef = useRef(null), editing = useRef(false);
+  useEffect(() => { if (fresh) { titleRef.current?.focus(); titleRef.current?.select(); } }, [id]);
+  useEffect(() => { if (board && !editing.current) setName(board.name || ""); }, [board?.name]);
+  useEffect(() => { if (board) { try { localStorage.setItem("lastProject", id); } catch {} } }, [id, !!board]);
 
-  // own tabs in their order, then tabs other people shared with me
-  const boards = useMemo(() => [
-    ...db.boards.filter(isMine).sort(byOrder),
-    ...db.boards.filter(b => !isMine(b)).sort((a, b) => a.name.localeCompare(b.name, "ru")),
-  ], [db.boards]);
-  const cur = current === LOG ? LOG : boards.find(b => b.id === current)?.id || boards[0]?.id || LOG;
-  const board = boards.find(b => b.id === cur);
-  const pick = id => { setCurrent(id); store.set("board", id); setRenaming(false); };
-
-  const catIds = useMemo(() => new Set(db.cats.filter(c => c.board === cur).map(c => c.id)), [db.cats, cur]);
-  const scope = cur === LOG ? [] : db.tasks.filter(t => !stale(t) && catIds.has(t.cat));
+  const catIds = useMemo(() => new Set(db.cats.filter(c => c.board === id).map(c => c.id)), [db.cats, id]);
+  const scope = db.tasks.filter(t => !stale(t) && catIds.has(t.cat));
   const done = scope.filter(t => t.done).length;
+
+  if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
+  if (!board) return (
+    <div className="mx-auto flex max-w-3xl flex-col items-start gap-3 px-6 py-16 text-muted-foreground">
+      <p>Проекта нет: его удалили или закрыли к нему доступ.</p>
+      <Button variant="outline" onClick={() => go({ journal: true })}>К журналу</Button>
+    </div>
+  );
+
+  const path = folderPath(db.folders, board.folder);
+  const shared = !isMine(board) || db.grants.some(g => g.coll === "boards" && g.target === id);
+  const saveName = () => { editing.current = false; const n = name.trim(); if (n && n !== board.name) update("boards", id, { name: n }); else setName(board.name); };
+
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 pt-5 pb-16 md:px-8 md:pt-8">
+      <div className="flex min-h-8 items-center gap-1 text-sm text-muted-foreground">
+        {path.length ? path.map((f, i) => (
+          <span key={f.id} className="flex min-w-0 items-center gap-1">
+            {i > 0 && <ChevronRightIcon className="size-3.5 shrink-0" />}<span className="truncate">{f.name}</span>
+          </span>
+        )) : <span>Проект</span>}
+        <span className="ml-auto" />
+        <Button variant="outline" size="sm" onClick={() => setSharing(true)} aria-label={isMine(board) ? "Поделиться" : "Участники"}>
+          <UsersIcon /><span className="max-sm:hidden">{isMine(board) ? "Поделиться" : "Участники"}</span>
+        </Button>
+        <FileMenu x={{ ...board, kind: "project" }} folders={db.folders} after={() => go({ journal: true })}
+          trigger={<Button variant="ghost" size="iconSm" aria-label="Действия с проектом"><MoreHorizontalIcon /></Button>} />
+      </div>
+      <header className="flex flex-col gap-3">
+        <input ref={titleRef} value={name} aria-label="Название проекта" placeholder="Без названия"
+          onFocus={() => { editing.current = true; }} onChange={e => setName(e.target.value)} onBlur={saveName}
+          onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setName(board.name); editing.current = false; setTimeout(() => e.target.blur()); } }}
+          className="w-full bg-transparent text-3xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/60 md:text-4xl" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge>{scope.length ? <>сделано <b>{done}</b> из {scope.length}</> : "задач пока нет"}</Badge>
+          {shared && <Badge><UsersIcon className="size-3.5" />общий</Badge>}
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-border" aria-hidden>
+          <i className="block h-full bg-primary transition-[width] duration-300" style={{ width: scope.length ? (done / scope.length) * 100 + "%" : 0 }} />
+        </div>
+      </header>
+      <Board board={board} />
+      <ShareDialog open={sharing} onOpenChange={setSharing} coll="boards" target={board.id} name={board.name} isOwner={isMine(board)} />
+    </div>
+  );
+}
+
+// home screen: recurring tasks and what got done, day by day
+export function JournalView() {
+  const db = useDb();
   const days = useJournal(db);
   const streak = useMemo(() => {
     let n = 0; const d = new Date();
@@ -44,76 +87,21 @@ export default function TasksView() {
     return n;
   }, [days]);
   const deadline = Math.ceil((new Date("2026-10-31T23:59:00+03:00") - new Date()) / 864e5);
-
-  const addBoard = async () => {
-    const id = await add("boards", { name: "Новая вкладка", order: nextOrder(db.boards.filter(isMine)) });
-    if (id) { pick(id); setRenaming(true); }
-  };
-  const deleteBoard = async b => {
-    const cats = db.cats.filter(c => c.board === b.id).map(c => c.id);
-    const open = db.tasks.filter(t => cats.includes(t.cat) && !t.done).map(t => t.id);
-    if (!await confirmAction({ title: `Удалить вкладку «${b.name}»?`, description: cats.length ? `Удалятся категории (${cats.length}) и открытые задачи (${open.length}). Выполненные останутся в журнале.` : "Вкладка пустая." })) return;
-    if (open.length) await remove("tasks", open);
-    if (cats.length) await remove("cats", cats);
-    await remove("boards", b.id);
-  };
+  const todayDone = days.get(today())?.items.length || 0;
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
-
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 pt-5 pb-16 md:px-8 md:pt-8">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 pt-5 pb-16 md:px-8 md:pt-8">
       <header className="flex flex-col gap-3">
+        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Журнал</h1>
         <div className="flex flex-wrap gap-2">
-          <Badge>{cur === LOG ? "журнал по дням" : scope.length ? <>сделано <b>{done}</b> из {scope.length}</> : "задач пока нет"}</Badge>
+          <Badge>сегодня: <b>{todayDone}</b> {plural(todayDone, ["дело", "дела", "дел"])}</Badge>
           {deadline >= 0 && <Badge>до 31.10: <b>{deadline}</b> {plural(deadline, ["день", "дня", "дней"])}</Badge>}
           {streak >= 2 && <Badge>дней подряд с делами: <b>{streak}</b></Badge>}
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-border" aria-hidden>
-          <i className="block h-full bg-primary transition-[width] duration-300" style={{ width: scope.length ? (done / scope.length) * 100 + "%" : 0 }} />
-        </div>
       </header>
-
-      {cur !== LOG && <Habits habits={db.habits} />}
-
-      <div className="flex items-center gap-2">
-        <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1">
-          <div role="tablist" className="inline-flex gap-1 rounded-lg border bg-muted p-1 whitespace-nowrap">
-            {boards.map(b => (
-              b.id === cur && renaming
-                ? <TabRename key={b.id} value={b.name} onDone={name => { setRenaming(false); if (name && name !== b.name) update("boards", b.id, { name }); }} />
-                : <Tab key={b.id} active={b.id === cur} onClick={() => b.id === cur ? setRenaming(true) : pick(b.id)}
-                    title={b.id === cur ? "Нажми ещё раз, чтобы переименовать" : undefined}>
-                    {b.name}{(!isMine(b) || db.grants.some(g => g.coll === "boards" && g.target === b.id)) && <UsersIcon className="size-3.5 opacity-60" aria-label="общая" />}
-                  </Tab>
-            ))}
-            <Tab active={cur === LOG} onClick={() => pick(LOG)}>Журнал</Tab>
-            <Tab onClick={addBoard} title="Новая вкладка" aria-label="Новая вкладка"><PlusIcon className="size-4" /></Tab>
-          </div>
-        </div>
-        {board && (
-          <>
-            <Button variant="outline" size="sm" onClick={() => setSharing(true)} aria-label={isMine(board) ? "Поделиться" : "Участники"}>
-              <UsersIcon /><span className="max-sm:hidden">{isMine(board) ? "Поделиться" : "Участники"}</span>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label="Действия с вкладкой"><MoreHorizontalIcon /></Button></DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setTimeout(() => setRenaming(true))}><PencilIcon />Переименовать</DropdownMenuItem>
-                {isMine(board) && <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onSelect={() => deleteBoard(board)}><Trash2Icon />Удалить вкладку</DropdownMenuItem>
-                </>}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        )}
-      </div>
-
-      {cur === LOG ? <Journal days={days} /> : board ? <Board board={board} /> : (
-        <p className="text-sm text-muted-foreground">Вкладок пока нет. Создай первую кнопкой «+».</p>
-      )}
-
-      {board && <ShareDialog open={sharing} onOpenChange={setSharing} coll="boards" target={board.id} name={board.name} isOwner={isMine(board)} />}
+      <Habits habits={db.habits} />
+      <Journal days={days} />
     </div>
   );
 }
@@ -121,28 +109,6 @@ export default function TasksView() {
 const Badge = ({ children }) => (
   <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-0.5 text-[13px] font-medium text-muted-foreground tabular-nums [&_b]:font-semibold [&_b]:text-foreground">{children}</span>
 );
-
-function Tab({ active, className, children, ...props }) {
-  return (
-    <button type="button" role="tab" aria-selected={!!active} {...props}
-      className={cn("inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
-        active && "bg-background text-foreground shadow-sm", className)}>
-      {children}
-    </button>
-  );
-}
-
-function TabRename({ value, onDone }) {
-  const ref = useRef(null), done = useRef(false);
-  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
-  const finish = v => { if (!done.current) { done.current = true; onDone(v); } };
-  return (
-    <input ref={ref} defaultValue={value} aria-label="Название вкладки"
-      onKeyDown={e => { if (e.key === "Enter") finish(e.currentTarget.value.trim()); if (e.key === "Escape") finish(null); }}
-      onBlur={e => finish(e.currentTarget.value.trim())}
-      className="h-8 w-40 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring/50" />
-  );
-}
 
 function Habits({ habits }) {
   const [showRest, setShowRest] = useState(false);

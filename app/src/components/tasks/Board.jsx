@@ -120,7 +120,7 @@ export default function Board({ board }) {
           {activeCat && <div className="rounded-xl border bg-card px-4 py-3 font-semibold shadow-lg">{activeCat.name}</div>}
         </DragOverlay>
       </DndContext>
-      {!cats.length && <p className="text-sm text-muted-foreground">В этой вкладке пока нет категорий. Создай первую кнопкой ниже.</p>}
+      {!cats.length && <p className="text-sm text-muted-foreground">В проекте пока нет категорий. Создай первую кнопкой ниже.</p>}
       <NewCat board={board} cats={cats} />
       <p className="text-xs text-muted-foreground">Тяни за ⋮⋮, чтобы переставить задачу или категорию. Нажми на текст задачи или название категории, чтобы изменить.</p>
     </div>

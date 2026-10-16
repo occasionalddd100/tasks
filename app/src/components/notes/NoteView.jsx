@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { MoreHorizontalIcon, UsersIcon, ChevronRightIcon } from "lucide-react";
 import { useDb, update, isMine } from "@/lib/db";
 import { folderPath } from "@/lib/notes";
-import { NoteMenu } from "@/components/notes/NotesTree";
+import { FileMenu } from "@/components/notes/NotesTree";
 import { Button } from "@/components/ui/button";
 
 const Editor = lazy(() => import("@/components/notes/Editor"));
@@ -38,7 +38,7 @@ export default function NoteView({ id, fresh, go }) {
   if (!note) return (
     <div className="mx-auto flex max-w-3xl flex-col items-start gap-3 px-6 py-16 text-muted-foreground">
       <p>Заметки нет: её удалили или закрыли к ней доступ.</p>
-      <Button variant="outline" onClick={() => go({ tasks: true })}>К задачам</Button>
+      <Button variant="outline" onClick={() => go({ journal: true })}>К журналу</Button>
     </div>
   );
 
@@ -57,7 +57,7 @@ export default function NoteView({ id, fresh, go }) {
         )) : <span>Без папки</span>}
         {shared && <UsersIcon className="ml-1 size-3.5 shrink-0" aria-label="Общая папка" />}
         <span className="ml-auto" />
-        <NoteMenu n={note} folders={db.folders} after={() => go({ tasks: true })}
+        <FileMenu x={{ ...note, kind: "note" }} folders={db.folders} after={() => go({ journal: true })}
           trigger={<Button variant="ghost" size="iconSm" aria-label="Действия с заметкой"><MoreHorizontalIcon /></Button>} />
       </div>
       <textarea
