@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Задачи Марка</title></head><body>
+<title>Задачи Марка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one 720px column; header, tab strip (boards + Journal), then draggable category cards with draggable tasks */
+:root{
+  --bg:#f6f6f8; --card:#ffffff; --fg:#111318; --muted:#6b7080; --border:#e4e5ea; --hover:#f1f2f5;
+  --primary:#18181b; --primary-fg:#fafafa; --ring:#a1a1aa; --good:#15803d; --good-soft:#dcfce7; --danger:#dc2626; --p-urgent:#dc2626; --p-today:#d97706; --p-later:#2563eb; --p-rep:#7c3aed;
+  --font:"Golos Text",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --radius:10px; --shadow:0 1px 2px rgba(16,18,24,.05),0 1px 3px rgba(16,18,24,.04);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#09090b; --card:#131316; --fg:#f4f4f5; --muted:#a1a1aa; --border:#27272a; --hover:#1c1c20;
+  --primary:#fafafa; --primary-fg:#18181b; --ring:#52525b; --good:#4ade80; --good-soft:#14321f; --danger:#f87171; --p-urgent:#f87171; --p-today:#fbbf24; --p-later:#60a5fa; --p-rep:#a78bfa;
+  --shadow:none; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#09090b; --card:#131316; --fg:#f4f4f5; --muted:#a1a1aa; --border:#27272a; --hover:#1c1c20;
+  --primary:#fafafa; --primary-fg:#18181b; --ring:#52525b; --good:#4ade80; --good-soft:#14321f; --danger:#f87171; --p-urgent:#f87171; --p-today:#fbbf24; --p-later:#60a5fa; --p-rep:#a78bfa;
+  --shadow:none; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.5}
+.wrap{max-width:960px;margin:0 auto;padding:28px 16px 64px;display:flex;flex-direction:column;gap:24px}
+header{display:flex;flex-direction:column;gap:12px}
+h1{font-size:24px;font-weight:700;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.stats{display:flex;gap:8px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;padding:3px 10px;border:1px solid var(--border);border-radius:999px;background:var(--card);color:var(--muted);font-variant-numeric:tabular-nums}
+.badge b{color:var(--fg);font-weight:600}
+.progress{height:6px;border-radius:999px;background:var(--border);overflow:hidden}
+.progress>i{display:block;height:100%;width:0;background:var(--primary);transition:width .3s ease}
+.tabs-scroll{overflow-x:auto;margin:0 -4px;padding:0 4px}
+.tabs{display:inline-flex;padding:4px;gap:4px;background:var(--hover);border:1px solid var(--border);border-radius:var(--radius);white-space:nowrap}
+.tab{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:6px 14px;border-radius:7px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--card);color:var(--fg);box-shadow:var(--shadow)}
+.panel{display:flex;flex-direction:column;gap:16px}
+.input{font:inherit;height:36px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--fg);min-width:0;width:100%}
+.input::placeholder{color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+.card-h{display:flex;align-items:center;gap:6px;padding:12px 12px 8px 8px}
+.card-h h2{font-size:15px;font-weight:600;margin:0;flex:1;min-width:0;overflow-wrap:anywhere;cursor:text;border-radius:6px;padding:2px 4px}
+.card-h h2:hover{background:var(--hover)}
+.card-h .c{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.card-h .input{height:32px;flex:1}
+ul.tasks{list-style:none;margin:0;padding:0 8px;min-height:12px}
+li.task{display:flex;align-items:flex-start;gap:6px;padding:8px;border-radius:8px}
+li.task:hover{background:var(--hover)}
+.grip{flex:none;width:20px;height:24px;display:grid;place-items:center;color:var(--ring);cursor:grab;touch-action:none;border-radius:4px}
+.grip:active{cursor:grabbing}
+.grip svg{width:12px;height:16px;fill:currentColor}
+li.task label{flex:1;min-width:0;display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.cb{appearance:none;flex:none;width:18px;height:18px;margin:3px 0 0;border:1.5px solid var(--ring);border-radius:5px;display:grid;place-items:center;cursor:pointer;background:var(--card)}
+.cb:checked{background:var(--primary);border-color:var(--primary)}
+.cb:checked::after{content:"";width:5px;height:9px;border:solid var(--primary-fg);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.t{overflow-wrap:anywhere}
+.note{display:block;font-size:13px;color:var(--muted)}
+li.done .t{color:var(--muted);text-decoration:line-through}
+.x{flex:none;border:0;background:none;color:var(--muted);font:inherit;font-size:13px;padding:2px 6px;border-radius:6px;cursor:pointer;opacity:.55}
+li.task:hover .x,.card-h:hover .x,.x:focus-visible{opacity:1}
+.x:hover{color:var(--danger)}
+.x[data-armed="1"]{opacity:1;color:var(--danger)}
+.add-task{padding:6px 12px 12px 36px}
+.add-task .input{border-style:dashed;background:transparent}
+.add-cat{border:1px dashed var(--border);border-radius:12px;background:transparent;color:var(--muted);font:inherit;font-weight:500;padding:12px;cursor:pointer;text-align:left}
+.add-cat:hover{background:var(--card);color:var(--fg)}
+.add-cat-form{display:flex;gap:8px}
+.btn{font:inherit;font-weight:500;height:36px;padding:0 14px;border-radius:8px;border:1px solid transparent;background:var(--primary);color:var(--primary-fg);cursor:pointer;flex:none}
+.ghost{opacity:.35}
+.chosen{background:var(--hover)}
+.empty{color:var(--muted);padding:20px;background:var(--card);border:1px dashed var(--border);border-radius:12px}
+.hint{font-size:13px;color:var(--muted)}
+.status{font-size:13px;color:var(--danger)}
+:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.day ul{list-style:none;margin:0;padding:0 16px 14px;display:flex;flex-direction:column;gap:6px}
+.day .card-h{padding:14px 16px 10px}
+.day li{display:flex;gap:10px;align-items:flex-start}
+.day li::before{content:"";flex:none;width:16px;height:16px;margin-top:3px;border-radius:999px;background:var(--good-soft);box-shadow:inset 0 0 0 1.5px var(--good)}
+.day .from{font-size:12px;color:var(--muted)}
+.day .dnote{padding:0 16px 14px;color:var(--muted);font-size:14px}
+.pill{font-size:12px;font-weight:600;color:var(--good);background:var(--good-soft);padding:2px 8px;border-radius:999px;font-variant-numeric:tabular-nums}
+#cats{display:grid;grid-template-columns:1fr;gap:0 16px;grid-auto-rows:4px;align-items:start}
+#cats>.empty{grid-column:1/-1}
+.tab-input{height:32px;width:160px;flex:none}
+@media (min-width:640px){#cats{grid-template-columns:1fr 1fr}}
+li.task{position:relative}
+li.task[data-p="urgent"]{--pc:var(--p-urgent)} li.task[data-p="today"]{--pc:var(--p-today)} li.task[data-p="later"]{--pc:var(--p-later)}
+li.task[data-p]{box-shadow:inset 3px 0 0 var(--pc);background:color-mix(in srgb,var(--pc) 7%,transparent)}
+li.task.done[data-p]{box-shadow:none;background:none}
+.pbtn{flex:none;border:0;background:none;width:24px;height:24px;display:grid;place-items:center;border-radius:6px;cursor:pointer;color:var(--ring);opacity:.5;padding:0}
+li.task:hover .pbtn,.pbtn:focus-visible{opacity:1}
+li.task[data-p] .pbtn{color:var(--pc);opacity:1}
+.pbtn svg,.pmenu svg{width:15px;height:15px}
+.pmenu{position:absolute;right:8px;top:calc(100% - 4px);z-index:20;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.14);padding:4px;display:flex;flex-direction:column;min-width:170px}
+.pmenu button{display:flex;gap:8px;align-items:center;border:0;background:none;font:inherit;font-size:14px;color:var(--fg);padding:7px 10px;border-radius:6px;cursor:pointer;text-align:left}
+.pmenu button:hover{background:var(--hover)}
+.pmenu button[aria-checked="true"]{font-weight:600}
+.trash{flex:none;display:grid;place-items:center;border:0;background:none;color:var(--muted);border-radius:6px;cursor:pointer;padding:0 4px;min-width:24px;height:24px;font:inherit;font-size:12px;opacity:0}
+.trash svg{width:14px;height:14px}
+.trash:hover,.trash[data-armed="1"]{color:var(--danger)}
+.trash[data-armed="1"]{opacity:1}
+.card-h:hover .trash,.tabwrap:hover .trash,.trash:focus-visible{opacity:.75}
+.tabwrap{display:inline-flex;align-items:center}
+@media (hover:none){.card-h .trash{opacity:.5}.tabwrap .tab[aria-selected="true"]+.trash{opacity:.5}}
+.habits{--pc:var(--p-rep);border-color:color-mix(in srgb,var(--pc) 35%,var(--border));margin-bottom:16px}
+.habits .card-h h2{display:flex;gap:8px;align-items:center;cursor:default;color:var(--pc)}
+.habits .card-h svg{width:16px;height:16px}
+.habits li.task{box-shadow:inset 3px 0 0 var(--pc);background:color-mix(in srgb,var(--pc) 7%,transparent)}
+.habits li.task .every{font-size:12px;color:var(--pc);flex:none;align-self:center}
+.habits .rest{border:0;background:none;font:inherit;font-size:13px;color:var(--muted);padding:0 16px 10px;cursor:pointer;text-align:left}
+.habits .hadd{display:flex;gap:8px;padding:6px 12px 12px}
+.habits .hadd select{font:inherit;font-size:14px;border:1px dashed var(--border);border-radius:8px;background:transparent;color:var(--fg);padding:0 6px}
+.habits .alldone{padding:2px 16px 10px;font-size:14px;color:var(--muted)}
+.habits li.task.wait{opacity:.55}
+.habits li.task:hover .trash{opacity:.75}
+@media (hover:none){.habits li.wait .trash{opacity:.6}}
+.fold{flex:none;border:0;background:none;color:var(--muted);width:22px;height:22px;display:grid;place-items:center;border-radius:6px;cursor:pointer;padding:0}
+.fold svg{width:14px;height:14px;transition:transform .15s}
+.collapsed .fold svg{transform:rotate(-90deg)}
+.collapsed > ul,.collapsed > form{display:none}
+.collapsed .card-h{padding-bottom:14px}
+.dbtn{flex:none;border:0;background:none;height:24px;min-width:24px;display:grid;place-items:center;border-radius:6px;cursor:pointer;color:var(--ring);opacity:.5;padding:0 4px;font:inherit;font-size:12px;position:relative}
+.dbtn svg{width:15px;height:15px}
+li.task:hover .dbtn,.dbtn:focus-visible,.dbtn.set{opacity:1}
+.dbtn.set{color:var(--muted);background:var(--hover)}
+.dbtn.late{color:var(--danger)}
+.dbtn input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:0;padding:0;pointer-events:none}
+.week{grid-column:1/-1}
+.week .card-h h2{cursor:default;display:flex;gap:8px;align-items:center}
+.week .card-h h2 svg{width:16px;height:16px}
+.week .tgrip{visibility:hidden}
+@media (prefers-reduced-motion: reduce){.progress>i{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Задачи Марка</h1>
+    <div class="stats">
+      <span class="badge" id="count">Загружаю…</span>
+      <span class="badge" id="deadline"></span>
+      <span class="badge" id="streak" hidden></span>
+    </div>
+    <div class="progress" aria-hidden="true"><i id="fill"></i></div>
+  </header>
+
+  <div class="card habits" id="habits" hidden></div>
+
+  <div class="tabs-scroll"><div class="tabs" role="tablist" id="tabs"></div></div>
+
+  <div class="panel" id="p-board">
+    <div class="panel" id="cats">
+      <div class="empty">Здесь появятся категории с задачами. Тяни за ⋮⋮, чтобы переставить задачу или целую категорию.</div>
+    </div>
+    <button class="add-cat" type="button" id="addcat" hidden>+ Новая категория</button>
+    <form class="add-cat-form" id="addcatform" hidden>
+      <input class="input" id="newcat" placeholder="Название категории" autocomplete="off" required>
+      <button class="btn" type="submit">Создать</button>
+    </form>
+    <p class="hint" id="hint" hidden>Нажми на название категории или на открытую вкладку, чтобы переименовать. «+» добавляет вкладку. Мусорка при наведении удаляет (нажми дважды); выполненные задачи остаются в журнале.</p>
+  </div>
+
+  <div class="panel" id="p-log" hidden>
+    <div class="empty" id="log-empty">Тут будет журнал по дням: что сделал. Отмеченные задачи тоже попадают сюда сами.</div>
+    <div class="panel" id="days"></div>
+  </div>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const MONTHS = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+const WD = ["вс","пн","вт","ср","чт","пт","сб"];
+const $ = id => document.getElementById(id);
+const today = () => new Date().toLocaleDateString("sv-SE");
+const GRIP = '<svg viewBox="0 0 12 16" aria-hidden="true"><circle cx="3" cy="3" r="1.4"/><circle cx="9" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="9" cy="13" r="1.4"/></svg>';
+
+const SV = (d, fill) => '<svg viewBox="0 0 24 24" fill="' + (fill ? 'currentColor' : 'none') + '" stroke="' + (fill ? 'none' : 'currentColor') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+const PRIO = {
+  urgent: {label: "Срочно", icon: SV('<path d="M12 2.5c1.2 3.8 5.5 5.8 5.5 10.5a5.5 5.5 0 0 1-11 0c0-2.7 1.6-4.3 2.7-5.3.3 1.8 1.1 2.9 2.2 3.3 0-3.3.6-6 .6-8.5z"/>', true)},
+  today: {label: "Сегодня", icon: SV('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>')},
+  later: {label: "Позже", icon: SV('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')}
+};
+const NOPRIO = SV('<path d="M5 21V4h11l-2 4 2 4H5"/>');
+let openMenu = null;
+function closeMenu(){ if (openMenu){ openMenu.remove(); openMenu = null; editing = false; render(); } }
+document.addEventListener("click", e => { if (openMenu && !openMenu.contains(e.target)) closeMenu(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
+function prioMenu(li, t){
+  if (openMenu){ closeMenu(); return; }
+  editing = true;
+  const m = document.createElement("div"); m.className = "pmenu"; m.role = "menu";
+  for (const [k, v] of [...Object.entries(PRIO), ["", {label: "Без приоритета", icon: NOPRIO}]]){
+    const b = document.createElement("button"); b.type = "button"; b.role = "menuitemradio";
+    b.setAttribute("aria-checked", (t.prio || "") === k); b.innerHTML = v.icon;
+    b.append(v.label);
+    b.onclick = async e => {
+      e.stopPropagation(); t.prio = k; closeMenu();
+      try { await db.doc("tasks/" + t.id).update({prio: k}); } catch(err){ say("Не сохранилось: " + (err.message || err.code)); }
+    };
+    m.append(b);
+  }
+  li.append(m); openMenu = m;
+}
+const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>';
+function trashBtn(label, run){
+  const b = document.createElement("button"); b.type = "button"; b.className = "trash"; b.innerHTML = TRASH;
+  b.title = label; b.setAttribute("aria-label", label);
+  b.onclick = e => { e.stopPropagation(); armDelete(b, run); };
+  return b;
+}
+// deleting a category drops its open tasks; done ones stay so the journal keeps them
+async function removeCats(ids){
+  try {
+    for (const t of tasks.filter(t => ids.includes(t.cat) && !t.done)) await db.doc("tasks/" + t.id).delete();
+    for (const id of ids) await db.doc("cats/" + id).delete();
+  } catch(e){ say("Не удалилось: " + (e.message || e.code)); }
+}
+let boards = [], cats = [], tasks = [], logs = [], habits = [], showRest = false;
+let db = null, current = null, sortables = [], dragging = false, editing = false;
+try { current = localStorage.getItem("board"); } catch(e){}
+
+(function(){
+  const d = Math.ceil((new Date("2026-10-31T23:59:00+03:00") - new Date())/864e5);
+  if (d >= 0) $("deadline").innerHTML = "до 31.10: <b>" + d + "</b> дн."; else $("deadline").hidden = true;
+})();
+
+function say(m){ $("status").textContent = m; }
+const byOrder = (a,b) => (a.order ?? 999) - (b.order ?? 999);
+// done before today: hidden from boards, still shown in the journal via doneOn
+const stale = t => t.done && t.doneOn && t.doneOn < today();
+const nextOrder = arr => Math.max(0, ...arr.map(x => x.order || 0)) + 1;
+function grip(cls){ const g = document.createElement("span"); g.className = "grip " + (cls||""); g.innerHTML = GRIP; g.title = "Перетащить"; return g; }
+function armDelete(btn, run){
+  if (btn.dataset.armed !== "1"){
+    btn.dataset.armed = "1"; const old = btn.innerHTML; btn.textContent = "удалить?";
+    setTimeout(() => { if (btn.isConnected){ btn.dataset.armed = ""; btn.innerHTML = old; } }, 3000); return;
+  }
+  run();
+}
+
+function renderTabs(){
+  const box = $("tabs"); box.textContent = "";
+  const list = [...boards].sort(byOrder);
+  if (!list.find(b => b.id === current) && current !== "log") current = list[0]?.id || null;
+  for (const b of [...list, {id: "log", name: "Журнал"}]){
+    const t = document.createElement("button"); t.className = "tab"; t.role = "tab"; t.type = "button";
+    t.textContent = b.name; t.setAttribute("aria-selected", b.id === current);
+    // a tap on the already open tab edits it (rename; empty name deletes an empty tab)
+    t.onclick = () => {
+      if (b.id === current && b.id !== "log" && db) return tabInput(t, b);
+      current = b.id; try { localStorage.setItem("board", b.id); } catch(e){} render();
+    };
+    if (b.id === "log" || !db){ box.append(t); continue; }
+    const w = document.createElement("span"); w.className = "tabwrap";
+    w.append(t, trashBtn("Удалить вкладку", async () => {
+      await removeCats(cats.filter(c => c.board === b.id).map(c => c.id));
+      try { await db.doc("boards/" + b.id).delete(); } catch(e){ say("Не удалилось: " + (e.message || e.code)); }
+    }));
+    box.append(w);
+  }
+  if (db){
+    const add = document.createElement("button"); add.className = "tab"; add.type = "button";
+    add.textContent = "+"; add.title = "Новая вкладка"; add.onclick = () => tabInput(add, null);
+    box.append(add);
+  }
+}
+
+function tabInput(el, b){
+  editing = true;
+  const inp = document.createElement("input"); inp.className = "input tab-input";
+  inp.value = b ? b.name : ""; inp.placeholder = b ? "Пусто = удалить" : "Название вкладки";
+  el.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = async save => {
+    if (done) return; done = true; editing = false;
+    const name = inp.value.trim();
+    if (!save || (b && name === b.name) || (!b && !name)) return render();
+    try {
+      if (!b){
+        const r = await db.collection("boards").add({name, order: nextOrder(boards)});
+        current = r?.id || current;
+      } else if (name){
+        b.name = name; await db.doc("boards/" + b.id).update({name});
+      } else if (cats.some(c => c.board === b.id)){
+        say("Сначала удали или перенеси категории из этой вкладки.");
+      } else {
+        await db.doc("boards/" + b.id).delete();
+      }
+    } catch(e){ say("Не сохранилось: " + (e.message || e.code)); }
+    render();
+  };
+  inp.onkeydown = e => { if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); };
+  inp.onblur = () => finish(true);
+}
+
+// recurring: due when never done or `every` days have passed since lastDone
+const REP = SV('<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>');
+const EVERY = {1: "каждый день", 2: "через день", 7: "раз в неделю"};
+const dayDiff = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
+const due = h => !h.lastDone || dayDiff(h.lastDone, today()) >= (h.every || 1);
+function renderHabits(){
+  const box = $("habits"); box.textContent = ""; box.hidden = !db || current === "log";
+  if (box.hidden) return;
+  const list = [...habits].sort(byOrder), now = list.filter(due), rest = list.filter(h => !due(h));
+  const h = document.createElement("div"); h.className = "card-h";
+  const h2 = document.createElement("h2"); h2.innerHTML = REP; h2.append("Повторяющиеся");
+  h.append(h2); box.append(h);
+  const ul = document.createElement("ul"); ul.className = "tasks";
+  for (const x of now) ul.append(habitRow(x, false));
+  if (showRest) for (const x of rest) ul.append(habitRow(x, true));
+  box.append(ul);
+  if (!now.length && list.length){ const d = document.createElement("div"); d.className = "alldone"; d.textContent = "На сегодня всё сделано ✓"; box.append(d); }
+  if (rest.length){
+    const b = document.createElement("button"); b.type = "button"; b.className = "rest";
+    b.textContent = showRest ? "Скрыть сделанные" : "Ждут следующего раза: " + rest.length;
+    b.onclick = () => { showRest = !showRest; render(); }; box.append(b);
+  }
+  const f = document.createElement("form"); f.className = "hadd";
+  const inp = document.createElement("input"); inp.className = "input"; inp.placeholder = "+ повторяющаяся задача"; inp.autocomplete = "off";
+  const sel = document.createElement("select"); sel.setAttribute("aria-label", "Как часто");
+  for (const [k, v] of Object.entries(EVERY)){ const o = document.createElement("option"); o.value = k; o.textContent = v; sel.append(o); }
+  f.append(inp, sel);
+  f.onsubmit = async ev => {
+    ev.preventDefault(); const text = inp.value.trim(); if (!text) return; inp.value = "";
+    try { await db.collection("habits").add({text, every: +sel.value, order: nextOrder(habits), history: []}); }
+    catch(e){ say("Не добавилось: " + (e.message || e.code)); inp.value = text; }
+  };
+  box.append(f);
+}
+function habitRow(x, waiting){
+  const li = document.createElement("li"); li.className = "task" + (waiting ? " wait" : "");
+  const lab = document.createElement("label");
+  const cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "cb"; cb.checked = waiting;
+  cb.onchange = () => markHabit(x, cb.checked);
+  const span = document.createElement("span"); span.className = "t"; span.textContent = x.text;
+  lab.append(cb, span);
+  const ev = document.createElement("span"); ev.className = "every"; ev.textContent = EVERY[x.every] || "каждые " + x.every + " дн.";
+  li.append(lab, ev, trashBtn("Удалить повторяющуюся", () => db.doc("habits/" + x.id).delete().catch(e => say("Не удалилось: " + (e.message || e.code)))));
+  li.querySelector(".trash").style.alignSelf = "center";
+  return li;
+}
+async function markHabit(x, val){
+  const d = today(), hist = (x.history || []).filter(k => k !== d);
+  if (val) hist.push(d);
+  const prev = hist.filter(k => k < d).sort().pop() || "";
+  x.history = hist.slice(-120); x.lastDone = val ? d : prev; render();
+  try { await db.doc("habits/" + x.id).update({history: x.history, lastDone: x.lastDone}); say(""); }
+  catch(e){ say("Не сохранилось: " + (e.message || e.code)); }
+}
+
+function header(){
+  const scope = current === "log" ? tasks : tasks.filter(t => !stale(t) && cats.find(c => c.id === t.cat)?.board === current);
+  const done = scope.filter(t => t.done).length;
+  $("count").innerHTML = scope.length ? `сделано <b>${done}</b> из ${scope.length}` : "задач пока нет";
+  $("fill").style.width = scope.length ? (done/scope.length*100) + "%" : "0";
+}
+
+function render(){
+  if (dragging || editing) return;
+  renderTabs(); renderHabits(); header();
+  const isLog = current === "log";
+  $("p-board").hidden = isLog; $("p-log").hidden = !isLog;
+  renderLog();
+  if (!isLog) renderBoard();
+}
+
+const CAL = SV('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>');
+const CHEV = SV('<path d="M6 9l6 6 6-6"/>');
+const addDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString("sv-SE"); };
+// dated tasks due within the next 7 days (or overdue) move into the "На неделе" card
+const inWeek = t => t.due && t.due <= addDays(6);
+function dueLabel(iso){
+  const [y,m,d] = iso.split("-").map(Number), k = dayDiff(today(), iso);
+  if (k === 0) return "сегодня"; if (k === 1) return "завтра";
+  return WD[new Date(y, m-1, d).getDay()] + " " + d + (k > 6 || k < 0 ? "." + String(m).padStart(2, "0") : "");
+}
+async function setDue(t, v){
+  t.due = v; render();
+  try { await db.doc("tasks/" + t.id).update({due: v}); } catch(e){ say("Не сохранилось: " + (e.message || e.code)); }
+}
+function weekCard(){
+  const ids = new Set(cats.filter(c => c.board === current).map(c => c.id));
+  const items = tasks.filter(t => ids.has(t.cat) && !stale(t) && inWeek(t)).sort((a,b) => a.due.localeCompare(b.due) || byOrder(a,b));
+  if (!items.length) return null;
+  let folded = false; try { folded = localStorage.getItem("weekFold") === "1"; } catch(e){}
+  const card = document.createElement("div"); card.className = "card week" + (folded ? " collapsed" : "");
+  const h = document.createElement("div"); h.className = "card-h";
+  const fold = document.createElement("button"); fold.type = "button"; fold.className = "fold"; fold.innerHTML = CHEV;
+  fold.setAttribute("aria-expanded", !folded); fold.title = folded ? "Развернуть" : "Свернуть";
+  fold.onclick = () => { try { localStorage.setItem("weekFold", folded ? "0" : "1"); } catch(e){} card.classList.toggle("collapsed"); folded = !folded; };
+  const h2 = document.createElement("h2"); h2.innerHTML = CAL; h2.append("На неделе");
+  const cnt = document.createElement("span"); cnt.className = "c"; cnt.textContent = items.filter(t => t.done).length + " / " + items.length;
+  h.append(fold, h2, cnt); card.append(h);
+  const ul = document.createElement("ul"); ul.className = "tasks";
+  for (const t of items) ul.append(taskRow(t));
+  card.append(ul); return card;
+}
+
+// masonry: each card spans as many 4px rows as its height (+16px gap) needs
+const ro = window.ResizeObserver ? new ResizeObserver(es => { for (const e of es) span(e.target); }) : null;
+function span(el){ el.style.gridRowEnd = "span " + Math.ceil((el.getBoundingClientRect().height + 16) / 4); }
+function masonry(){ document.querySelectorAll("#cats > *").forEach(el => { span(el); ro?.observe(el); }); }
+
+function renderBoard(){
+  ro?.disconnect();
+  sortables.forEach(s => s.destroy()); sortables = [];
+  const box = $("cats"); box.textContent = "";
+  const list = cats.filter(c => c.board === current).sort(byOrder);
+  $("addcat").hidden = !db; $("addcatform").hidden = true; $("hint").hidden = !db;
+  if (!list.length){
+    const e = document.createElement("div"); e.className = "empty";
+    e.textContent = "В этой вкладке пока нет категорий. Создай первую кнопкой ниже.";
+    box.append(e); masonry(); return;
+  }
+  const wk = weekCard(); if (wk) box.append(wk);
+  for (const c of list){
+    const items = tasks.filter(t => t.cat === c.id && !stale(t) && !inWeek(t)).sort(byOrder);
+    const card = document.createElement("div"); card.className = "card cat" + (c.collapsed ? " collapsed" : ""); card.dataset.id = c.id;
+    const h = document.createElement("div"); h.className = "card-h";
+    const h2 = document.createElement("h2"); h2.textContent = c.name; h2.title = "Переименовать";
+    h2.onclick = () => rename(c, h, h2);
+    const cnt = document.createElement("span"); cnt.className = "c";
+    cnt.textContent = items.length ? items.filter(t => t.done).length + " / " + items.length : "";
+    const fold = document.createElement("button"); fold.type = "button"; fold.className = "fold"; fold.innerHTML = CHEV;
+    fold.setAttribute("aria-expanded", !c.collapsed); fold.title = c.collapsed ? "Развернуть" : "Свернуть";
+    fold.onclick = async () => {
+      c.collapsed = !c.collapsed; render();
+      try { await db.doc("cats/" + c.id).update({collapsed: c.collapsed}); } catch(e){ say("Не сохранилось: " + (e.message || e.code)); }
+    };
+    h.append(grip("cgrip"), fold, h2, cnt);
+    h.append(trashBtn("Удалить категорию", () => removeCats([c.id])));
+    card.append(h);
+    const ul = document.createElement("ul"); ul.className = "tasks"; ul.dataset.cat = c.id;
+    for (const t of items) ul.append(taskRow(t));
+    card.append(ul);
+    const f = document.createElement("form"); f.className = "add-task";
+    const inp = document.createElement("input"); inp.className = "input"; inp.placeholder = "+ задача"; inp.id = "add-" + c.id; inp.autocomplete = "off";
+    f.append(inp);
+    f.onsubmit = async ev => {
+      ev.preventDefault(); const text = inp.value.trim(); if (!text) return; inp.value = "";
+      try { await db.collection("tasks").add({text, cat: c.id, order: nextOrder(items), done: false}); }
+      catch(e){ say("Не добавилось: " + (e.message || e.code)); inp.value = text; }
+    };
+    card.append(f); box.append(card);
+    if (window.Sortable) sortables.push(Sortable.create(ul, {
+      group: "tasks", handle: ".tgrip", draggable: ".task", animation: 150, ghostClass: "ghost", chosenClass: "chosen",
+      delayOnTouchOnly: true, delay: 120, onStart(){ dragging = true; }, onEnd: dropTasks
+    }));
+  }
+  masonry();
+  if (window.Sortable) sortables.push(Sortable.create(box, {
+    handle: ".cgrip", draggable: ".cat", animation: 150, ghostClass: "ghost",
+    delayOnTouchOnly: true, delay: 120, onStart(){ dragging = true; }, onEnd: dropCats
+  }));
+}
+
+function taskRow(t){
+  const li = document.createElement("li"); li.className = "task" + (t.done ? " done" : ""); li.dataset.id = t.id;
+  const lab = document.createElement("label");
+  const cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "cb"; cb.id = "cb-" + t.id; cb.checked = !!t.done;
+  cb.onchange = () => toggle(t, cb.checked);
+  const span = document.createElement("span"); span.className = "t"; span.textContent = t.text;
+  if (t.note){ const n = document.createElement("span"); n.className = "note"; n.textContent = t.note; span.append(n); }
+  lab.append(cb, span);
+  const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "✕"; x.setAttribute("aria-label", "Удалить задачу");
+  x.onclick = () => armDelete(x, () => db.doc("tasks/" + t.id).delete().catch(e => say("Не удалилось: " + (e.message || e.code))));
+  if (PRIO[t.prio]) li.dataset.p = t.prio;
+  const pb = document.createElement("button"); pb.type = "button"; pb.className = "pbtn";
+  pb.innerHTML = PRIO[t.prio]?.icon || NOPRIO; pb.title = PRIO[t.prio]?.label || "Приоритет"; pb.setAttribute("aria-label", "Приоритет: " + pb.title);
+  pb.onclick = e => { e.stopPropagation(); prioMenu(li, t); };
+  const db_ = document.createElement("button"); db_.type = "button";
+  db_.className = "dbtn" + (t.due ? " set" : "") + (t.due && t.due < today() && !t.done ? " late" : "");
+  if (t.due) db_.textContent = dueLabel(t.due); else db_.innerHTML = CAL;
+  db_.title = t.due ? "Дата: " + t.due + " (очисти, чтобы убрать)" : "Поставить дату";
+  const di = document.createElement("input"); di.type = "date"; di.value = t.due || ""; di.tabIndex = -1;
+  di.onchange = () => setDue(t, di.value || "");
+  db_.append(di);
+  db_.onclick = e => { e.stopPropagation(); try { di.showPicker(); } catch(_){ di.style.pointerEvents = "auto"; di.focus(); di.click(); } };
+  li.append(grip("tgrip"), lab, db_, pb, x);
+  return li;
+}
+
+async function writeAll(changes, path, fields){
+  for (const it of changes){
+    try { await db.doc(path + it.id).update(fields(it)); }
+    catch(e){ say("Не сохранилось: " + (e.message || e.code) + ". Обнови страницу."); break; }
+  }
+}
+
+async function dropTasks(){
+  const changes = [];
+  document.querySelectorAll("#cats ul.tasks").forEach(ul => {
+    [...ul.querySelectorAll(".task")].forEach((li, i) => {
+      const t = tasks.find(x => x.id === li.dataset.id); if (!t) return;
+      if (t.cat !== ul.dataset.cat || t.order !== i + 1){ t.cat = ul.dataset.cat; t.order = i + 1; changes.push(t); }
+    });
+  });
+  dragging = false; render();
+  await writeAll(changes, "tasks/", t => ({cat: t.cat, order: t.order}));
+}
+
+async function dropCats(){
+  const changes = [];
+  [...document.querySelectorAll("#cats > .cat")].forEach((el, i) => {
+    const c = cats.find(x => x.id === el.dataset.id);
+    if (c && c.order !== i + 1){ c.order = i + 1; changes.push(c); }
+  });
+  dragging = false; render();
+  await writeAll(changes, "cats/", c => ({order: c.order}));
+}
+
+function rename(c, h, h2){
+  editing = true;
+  const inp = document.createElement("input"); inp.className = "input"; inp.value = c.name; inp.id = "rename-" + c.id;
+  h2.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = async save => {
+    if (done) return; done = true; editing = false;
+    const name = inp.value.trim();
+    if (save && name && name !== c.name){
+      c.name = name; render();
+      try { await db.doc("cats/" + c.id).update({name}); } catch(e){ say("Не переименовалось: " + (e.message || e.code)); }
+    } else render();
+  };
+  inp.onkeydown = e => { if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); };
+  inp.onblur = () => finish(true);
+}
+
+async function toggle(t, val){
+  t.done = val; t.doneOn = val ? today() : ""; render();
+  try { await db.doc("tasks/" + t.id).update({done: val, doneOn: t.doneOn}); say(""); }
+  catch(e){ say("Не сохранилось: " + (e.message || e.code) + ". Обнови страницу."); }
+}
+
+$("addcat").onclick = () => { $("addcat").hidden = true; $("addcatform").hidden = false; $("newcat").focus(); };
+$("addcatform").onsubmit = async ev => {
+  ev.preventDefault(); const name = $("newcat").value.trim(); if (!name) return;
+  $("newcat").value = "";
+  try { await db.collection("cats").add({name, board: current, order: nextOrder(cats.filter(c => c.board === current))}); }
+  catch(e){ say("Не создалось: " + (e.message || e.code)); }
+};
+$("newcat").onkeydown = e => { if (e.key === "Escape"){ $("addcatform").hidden = true; $("addcat").hidden = false; } };
+
+function fmtDate(iso){
+  const [y,m,d] = iso.split("-").map(Number); const dt = new Date(y, m-1, d);
+  const label = d + " " + MONTHS[m-1] + ", " + WD[dt.getDay()];
+  return iso === today() ? "Сегодня · " + label : label;
+}
+function plural(n){ const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? "дело" : a >= 2 && a <= 4 && (b < 10 || b >= 20) ? "дела" : "дел"; }
+
+function renderLog(){
+  const byDay = new Map();
+  for (const l of logs) byDay.set(l.id, {items: (l.items || []).map(x => ({text: x})), note: l.note || ""});
+  for (const t of tasks){
+    if (!t.done || !t.doneOn) continue;
+    if (!byDay.has(t.doneOn)) byDay.set(t.doneOn, {items: [], note: ""});
+    const day = byDay.get(t.doneOn);
+    if (!day.items.some(i => i.text === t.text)) day.items.push({text: t.text, task: true});
+  }
+  for (const x of habits) for (const k of x.history || []){
+    if (!byDay.has(k)) byDay.set(k, {items: [], note: ""});
+    byDay.get(k).items.push({text: x.text, rep: true});
+  }
+  const days = [...byDay.keys()].sort().reverse();
+  let streak = 0; { const d = new Date(); for(;;){ const k = d.toLocaleDateString("sv-SE");
+    if (byDay.get(k)?.items.length){ streak++; d.setDate(d.getDate()-1); }
+    else if (streak === 0 && k === today()){ d.setDate(d.getDate()-1); } else break; } }
+  $("streak").hidden = streak < 2; $("streak").innerHTML = "дней подряд с делами: <b>" + streak + "</b>";
+  if (current !== "log") return;
+  $("log-empty").hidden = days.length > 0;
+  const box = $("days"); box.textContent = "";
+  for (const k of days){
+    const day = byDay.get(k);
+    const card = document.createElement("div"); card.className = "card day";
+    const h = document.createElement("div"); h.className = "card-h";
+    const h2 = document.createElement("h2"); h2.textContent = fmtDate(k); h2.style.cursor = "default";
+    const p = document.createElement("span"); p.className = "pill"; p.textContent = day.items.length + " " + plural(day.items.length);
+    h.append(h2, p); card.append(h);
+    const ul = document.createElement("ul");
+    for (const it of day.items){
+      const li = document.createElement("li"); const s = document.createElement("span"); s.textContent = it.text;
+      if (it.task || it.rep){ const f = document.createElement("span"); f.className = "from"; f.textContent = it.rep ? " · повторяющаяся" : " · из задач"; s.append(f); }
+      li.append(s); ul.append(li);
+    }
+    card.append(ul);
+    if (day.note){ const n = document.createElement("div"); n.className = "dnote"; n.textContent = day.note; card.append(n); }
+    box.append(card);
+  }
+}
+
+// ---- Supabase: заполни URL и anon key из Project Settings → API ----
+const SB_URL = "https://hhqxiwiodbowvnbrahsf.supabase.co", SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhocXhpd2lvZGJvd3ZuYnJhaHNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNDgyMzQsImV4cCI6MjEwNzcyNDIzNH0.j0_v9nyuqldNVXpQFLU8Z1xDS_9COPgW3c2cqCzOGK4";
+function makeDb(sb){
+  const subs = {}, cache = {};
+  const emit = c => { const docs = [...cache[c].entries()].map(([id, data]) => ({id, data: () => data})); (subs[c] || []).forEach(f => f({docs})); };
+  const chk = r => { if (r.error) throw r.error; return r; };
+  const rid = () => Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+  sb.channel("docs").on("postgres_changes", {event: "*", schema: "public", table: "docs"}, p => {
+    const r = p.eventType === "DELETE" ? p.old : p.new; if (!cache[r.coll]) return;
+    if (p.eventType === "DELETE") cache[r.coll].delete(r.id); else cache[r.coll].set(r.id, r.data);
+    emit(r.coll);
+  }).subscribe();
+  return {
+    collection: c => ({
+      onSnapshot(cb, err){
+        (subs[c] = subs[c] || []).push(cb); cache[c] = cache[c] || new Map();
+        sb.from("docs").select("id,data").eq("coll", c).then(({data, error}) => {
+          if (error) return err && err(error);
+          data.forEach(r => cache[c].set(r.id, r.data)); emit(c);
+        });
+      },
+      async add(data){ const id = rid(); cache[c]?.set(id, data); emit(c); chk(await sb.from("docs").insert({coll: c, id, data})); return {id}; }
+    }),
+    doc(path){
+      const [c, id] = path.split("/");
+      return {
+        async update(f){ cache[c]?.set(id, {...(cache[c].get(id) || {}), ...f}); emit(c); chk(await sb.rpc("merge_doc", {c, i: id, f})); },
+        async delete(){ cache[c]?.delete(id); emit(c); chk(await sb.from("docs").delete().eq("coll", c).eq("id", id)); }
+      };
+    }
+  };
+}
+function loginForm(sb){
+  return new Promise(done => {
+    const f = document.createElement("form"); f.className = "add-cat-form"; f.style.marginBottom = "16px";
+    f.innerHTML = '<input class="input" type="email" placeholder="Почта" required autocomplete="username"><input class="input" type="password" placeholder="Пароль" required autocomplete="current-password"><button class="btn">Войти</button>';
+    $("count").textContent = "Нужно войти"; document.querySelector("header").after(f);
+    f.onsubmit = async e => {
+      e.preventDefault(); const [em, pw] = f.querySelectorAll("input");
+      const {error} = await sb.auth.signInWithPassword({email: em.value, password: pw.value});
+      if (error) return say("Не вошёл: " + error.message);
+      say(""); f.remove(); done();
+    };
+  });
+}
+(async () => {
+  if (!window.supabase){ $("count").textContent = "Не загрузилась библиотека Supabase. Проверь интернет или VPN."; return; }
+  const sb = window.supabase.createClient(SB_URL, SB_KEY);
+  const {data: {session}} = await sb.auth.getSession();
+  if (!session) await loginForm(sb);
+  db = makeDb(sb);
+  const err = e => say("Нет связи с базой: " + (e?.message || "") + " Обнови страницу.");
+  for (const [c, set] of [["boards", v => boards = v], ["cats", v => cats = v], ["tasks", v => tasks = v], ["habits", v => habits = v], ["log", v => logs = v]])
+    db.collection(c).onSnapshot(s => { set(s.docs.map(d => ({id: d.id, ...d.data()}))); render(); }, err);
+})();
+</script>
+
+</body></html>
