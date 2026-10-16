@@ -119,6 +119,17 @@ li.task[data-p] .pbtn{color:var(--pc);opacity:1}
 .habits li.task.wait{opacity:.55}
 .habits li.task:hover .trash{opacity:.75}
 @media (hover:none){.habits li.wait .trash{opacity:.6}}
+.sbtn{flex:none;border:0;background:none;color:var(--muted);height:24px;min-width:24px;display:inline-flex;align-items:center;gap:3px;border-radius:6px;cursor:pointer;padding:0 4px;font:inherit;font-size:12px}
+.sbtn svg{width:15px;height:15px}
+.sbtn:hover,.sbtn.on{color:var(--fg);background:var(--hover)}
+.sharebox{margin:0 12px 10px;padding:10px;border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.sharebox .who{display:flex;align-items:center;gap:6px;min-width:0}
+.sharebox .who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sharebox .who i{font-style:normal;color:var(--muted)}
+.sharebox form{display:flex;gap:6px}
+.sharebox .input,.sharebox .btn{height:32px}
+.sharebox .err{color:var(--danger)}
+.sharebox .leave{align-self:flex-start;border:0;background:none;color:var(--danger);font:inherit;cursor:pointer;padding:0}
 .fold{flex:none;border:0;background:none;color:var(--muted);width:22px;height:22px;display:grid;place-items:center;border-radius:6px;cursor:pointer;padding:0}
 .fold svg{width:14px;height:14px;transition:transform .15s}
 .collapsed .fold svg{transform:rotate(-90deg)}
@@ -232,6 +243,7 @@ async function removeCats(ids){
   } catch(e){ say("Не удалилось: " + (e.message || e.code)); }
 }
 let boards = [], cats = [], tasks = [], logs = [], habits = [], showRest = false;
+let me = null, shares = [], shareOpen = null, members = {};
 let db = null, current = null, sortables = [], dragging = false, editing = false;
 try { current = localStorage.getItem("board"); } catch(e){}
 
@@ -243,6 +255,10 @@ try { current = localStorage.getItem("board"); } catch(e){}
 function say(m){ $("status").textContent = m; }
 const byOrder = (a,b) => (a.order ?? 999) - (b.order ?? 999);
 // done before today: hidden from boards, still shown in the journal via doneOn
+const isMine = x => !x._owner || x._owner === me;
+const sharedCat = id => shares.some(s => s.cat_id === id);
+// categories of the open tab: own ones by board, or everything shared with me on the "Общие" tab
+const boardCats = () => current === "shared" ? cats.filter(c => !isMine(c)) : cats.filter(c => c.board === current && isMine(c));
 const stale = t => t.done && t.doneOn && t.doneOn < today();
 const nextOrder = arr => Math.max(0, ...arr.map(x => x.order || 0)) + 1;
 function grip(cls){ const g = document.createElement("span"); g.className = "grip " + (cls||""); g.innerHTML = GRIP; g.title = "Перетащить"; return g; }
@@ -257,16 +273,17 @@ function armDelete(btn, run){
 function renderTabs(){
   const box = $("tabs"); box.textContent = "";
   const list = [...boards].sort(byOrder);
+  if (cats.some(c => !isMine(c))) list.push({id: "shared", name: "Общие"});
   if (!list.find(b => b.id === current) && current !== "log") current = list[0]?.id || null;
   for (const b of [...list, {id: "log", name: "Журнал"}]){
     const t = document.createElement("button"); t.className = "tab"; t.role = "tab"; t.type = "button";
     t.textContent = b.name; t.setAttribute("aria-selected", b.id === current);
     // a tap on the already open tab edits it (rename; empty name deletes an empty tab)
     t.onclick = () => {
-      if (b.id === current && b.id !== "log" && db) return tabInput(t, b);
+      if (b.id === current && b.id !== "log" && b.id !== "shared" && db) return tabInput(t, b);
       current = b.id; try { localStorage.setItem("board", b.id); } catch(e){} render();
     };
-    if (b.id === "log" || !db){ box.append(t); continue; }
+    if (b.id === "log" || b.id === "shared" || !db){ box.append(t); continue; }
     const w = document.createElement("span"); w.className = "tabwrap";
     w.append(t, trashBtn("Удалить вкладку", async () => {
       await removeCats(cats.filter(c => c.board === b.id).map(c => c.id));
@@ -365,7 +382,8 @@ async function markHabit(x, val){
 }
 
 function header(){
-  const scope = current === "log" ? tasks : tasks.filter(t => !stale(t) && cats.find(c => c.id === t.cat)?.board === current);
+  const ids = new Set(boardCats().map(c => c.id));
+  const scope = current === "log" ? tasks : tasks.filter(t => !stale(t) && ids.has(t.cat));
   const done = scope.filter(t => t.done).length;
   $("count").innerHTML = scope.length ? `сделано <b>${done}</b> из ${scope.length}` : "задач пока нет";
   $("fill").style.width = scope.length ? (done/scope.length*100) + "%" : "0";
@@ -395,7 +413,7 @@ async function setDue(t, v){
   try { await db.doc("tasks/" + t.id).update({due: v}); } catch(e){ say("Не сохранилось: " + (e.message || e.code)); }
 }
 function weekCard(){
-  const ids = new Set(cats.filter(c => c.board === current).map(c => c.id));
+  const ids = new Set(boardCats().map(c => c.id));
   const items = tasks.filter(t => ids.has(t.cat) && !stale(t) && inWeek(t)).sort((a,b) => a.due.localeCompare(b.due) || byOrder(a,b));
   if (!items.length) return null;
   let folded = false; try { folded = localStorage.getItem("weekFold") === "1"; } catch(e){}
@@ -421,8 +439,8 @@ function renderBoard(){
   ro?.disconnect();
   sortables.forEach(s => s.destroy()); sortables = [];
   const box = $("cats"); box.textContent = "";
-  const list = cats.filter(c => c.board === current).sort(byOrder);
-  $("addcat").hidden = !db; $("addcatform").hidden = true; $("hint").hidden = !db;
+  const list = boardCats().sort(byOrder);
+  $("addcat").hidden = !db || current === "shared"; $("addcatform").hidden = true; $("hint").hidden = !db || current === "shared";
   if (!list.length){
     const e = document.createElement("div"); e.className = "empty";
     e.textContent = "В этой вкладке пока нет категорий. Создай первую кнопкой ниже.";
@@ -443,9 +461,15 @@ function renderBoard(){
       c.collapsed = !c.collapsed; render();
       try { await db.doc("cats/" + c.id).update({collapsed: c.collapsed}); } catch(e){ say("Не сохранилось: " + (e.message || e.code)); }
     };
-    h.append(grip("cgrip"), fold, h2, cnt);
-    h.append(trashBtn("Удалить категорию", () => removeCats([c.id])));
+    const sb_ = document.createElement("button"); sb_.type = "button";
+    sb_.className = "sbtn" + (shareOpen === c.id ? " on" : ""); sb_.innerHTML = PEOPLE;
+    if (!isMine(c) || sharedCat(c.id)) sb_.append(String(isMine(c) ? shares.filter(s => s.cat_id === c.id).length + 1 : "общая"));
+    sb_.title = isMine(c) ? "Поделиться" : "Участники"; sb_.setAttribute("aria-label", sb_.title);
+    sb_.onclick = () => { shareOpen = shareOpen === c.id ? null : c.id; render(); };
+    h.append(grip("cgrip"), fold, h2, cnt, sb_);
+    if (isMine(c)) h.append(trashBtn("Удалить категорию", () => removeCats([c.id])));
     card.append(h);
+    if (shareOpen === c.id) card.append(shareBox(c));
     const ul = document.createElement("ul"); ul.className = "tasks"; ul.dataset.cat = c.id;
     for (const t of items) ul.append(taskRow(t));
     card.append(ul);
@@ -468,6 +492,57 @@ function renderBoard(){
     handle: ".cgrip", draggable: ".cat", animation: 150, ghostClass: "ghost",
     delayOnTouchOnly: true, delay: 120, onStart(){ dragging = true; }, onEnd: dropCats
   }));
+}
+
+const PEOPLE = SV('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/>');
+async function loadMembers(c){
+  try { members[c.id] = await db.rpc("cat_members", {cat: c.id}); } catch(e){ members[c.id] = {err: e.message}; }
+  render();
+}
+function shareBox(c){
+  const box = document.createElement("div"); box.className = "sharebox";
+  const list = members[c.id];
+  if (!list || list === "loading"){ box.textContent = "Загружаю участников…"; if (!list){ members[c.id] = "loading"; loadMembers(c); } return box; }
+  if (list.err){ const e = document.createElement("div"); e.className = "err"; e.textContent = list.err; box.append(e); return box; }
+  const mineCat = isMine(c);
+  for (const m of [...list].sort((a, b) => b.is_owner - a.is_owner)){
+    const row = document.createElement("div"); row.className = "who";
+    const s = document.createElement("span"); s.textContent = m.email; row.append(s);
+    if (m.is_owner){ const i = document.createElement("i"); i.textContent = "владелец"; row.append(i); }
+    else if (m.user_id === me){ const i = document.createElement("i"); i.textContent = "ты"; row.append(i); }
+    if (mineCat && !m.is_owner){
+      const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "✕";
+      x.setAttribute("aria-label", "Убрать доступ"); x.title = "Убрать доступ";
+      x.onclick = () => armDelete(x, () => unshare(c, m.user_id));
+      row.append(x);
+    }
+    box.append(row);
+  }
+  const err = document.createElement("div"); err.className = "err";
+  if (mineCat){
+    const f = document.createElement("form");
+    const inp = document.createElement("input"); inp.className = "input"; inp.type = "email"; inp.required = true;
+    inp.placeholder = "Почта того, с кем делишься"; inp.autocomplete = "off";
+    inp.onfocus = () => { editing = true; }; inp.onblur = () => { editing = false; };
+    const b = document.createElement("button"); b.className = "btn"; b.textContent = "Поделиться";
+    f.append(inp, b);
+    f.onsubmit = async ev => {
+      ev.preventDefault(); b.disabled = true; err.textContent = "";
+      try { await db.rpc("share_cat", {cat: c.id, p_email: inp.value}); editing = false; delete members[c.id]; await db.reloadShares(); }
+      catch(e){ err.textContent = e.message === "Нет пользователя с такой почтой" ? "Такого пользователя нет. Сначала создай ему аккаунт в Supabase (Authentication → Users → Add user)." : e.message; b.disabled = false; }
+    };
+    box.append(f);
+  } else {
+    const l = document.createElement("button"); l.type = "button"; l.className = "leave"; l.textContent = "Выйти из категории";
+    l.onclick = () => armDelete(l, () => unshare(c, me));
+    box.append(l);
+  }
+  box.append(err);
+  return box;
+}
+async function unshare(c, uid){
+  try { await db.rpc("unshare_cat", {cat: c.id, member: uid}); delete members[c.id]; if (uid === me) shareOpen = null; await db.reloadShares(); }
+  catch(e){ say("Не получилось: " + e.message); }
 }
 
 function taskRow(t){
@@ -542,8 +617,8 @@ function rename(c, h, h2){
 }
 
 async function toggle(t, val){
-  t.done = val; t.doneOn = val ? today() : ""; render();
-  try { await db.doc("tasks/" + t.id).update({done: val, doneOn: t.doneOn}); say(""); }
+  t.done = val; t.doneOn = val ? today() : ""; t.doneBy = val ? me : ""; render();
+  try { await db.doc("tasks/" + t.id).update({done: val, doneOn: t.doneOn, doneBy: t.doneBy}); say(""); }
   catch(e){ say("Не сохранилось: " + (e.message || e.code) + ". Обнови страницу."); }
 }
 
@@ -567,7 +642,7 @@ function renderLog(){
   const byDay = new Map();
   for (const l of logs) byDay.set(l.id, {items: (l.items || []).map(x => ({text: x})), note: l.note || ""});
   for (const t of tasks){
-    if (!t.done || !t.doneOn) continue;
+    if (!t.done || !t.doneOn || (t.doneBy || t._owner || me) !== me) continue;
     if (!byDay.has(t.doneOn)) byDay.set(t.doneOn, {items: [], note: ""});
     const day = byDay.get(t.doneOn);
     if (!day.items.some(i => i.text === t.text)) day.items.push({text: t.text, task: true});
@@ -605,31 +680,42 @@ function renderLog(){
 
 // ---- Supabase: заполни URL и anon key из Project Settings → API ----
 const SB_URL = "https://hhqxiwiodbowvnbrahsf.supabase.co", SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhocXhpd2lvZGJvd3ZuYnJhaHNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNDgyMzQsImV4cCI6MjEwNzcyNDIzNH0.j0_v9nyuqldNVXpQFLU8Z1xDS_9COPgW3c2cqCzOGK4";
-function makeDb(sb){
+function makeDb(sb, onShares){
   const subs = {}, cache = {};
   const emit = c => { const docs = [...cache[c].entries()].map(([id, data]) => ({id, data: () => data})); (subs[c] || []).forEach(f => f({docs})); };
   const chk = r => { if (r.error) throw r.error; return r; };
   const rid = () => Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+  const val = r => ({...r.data, _owner: r.owner});
+  const load = async c => {
+    const {data, error} = await sb.from("docs").select("id,data,owner").eq("coll", c);
+    if (error) throw error;
+    cache[c] = new Map(data.map(r => [r.id, val(r)])); emit(c);
+  };
+  // shares changed (someone shared or removed access): refetch everything visible
+  const reloadShares = async () => {
+    const {data, error} = await sb.from("shares").select("cat_id,user_id,owner");
+    if (!error) onShares(data);
+    await Promise.all(Object.keys(cache).map(load));
+  };
   sb.channel("docs").on("postgres_changes", {event: "*", schema: "public", table: "docs"}, p => {
     const r = p.eventType === "DELETE" ? p.old : p.new; if (!cache[r.coll]) return;
-    if (p.eventType === "DELETE") cache[r.coll].delete(r.id); else cache[r.coll].set(r.id, r.data);
+    if (p.eventType === "DELETE") cache[r.coll].delete(r.id); else cache[r.coll].set(r.id, val(r));
     emit(r.coll);
-  }).subscribe();
+  }).on("postgres_changes", {event: "*", schema: "public", table: "shares"}, () => reloadShares()).subscribe();
   return {
     collection: c => ({
       onSnapshot(cb, err){
         (subs[c] = subs[c] || []).push(cb); cache[c] = cache[c] || new Map();
-        sb.from("docs").select("id,data").eq("coll", c).then(({data, error}) => {
-          if (error) return err && err(error);
-          data.forEach(r => cache[c].set(r.id, r.data)); emit(c);
-        });
+        load(c).catch(e => err && err(e));
       },
       async add(data){
-        const id = rid(); cache[c]?.set(id, data); emit(c);
+        const id = rid(); cache[c]?.set(id, {...data, _owner: me}); emit(c);
         try { chk(await sb.from("docs").insert({coll: c, id, data})); } catch(e){ cache[c]?.delete(id); emit(c); throw e; }
         return {id};
       }
     }),
+    reloadShares,
+    async rpc(n, a){ return chk(await sb.rpc(n, a)).data; },
     // several docs at once: cache first and one redraw, then parallel writes
     async updateMany(c, list){
       for (const [id, f] of list) cache[c]?.set(id, {...(cache[c].get(id) || {}), ...f});
@@ -667,8 +753,10 @@ function loginForm(sb){
   // session gone (logout or failed refresh): back to the login screen
   sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.reload(); });
   $("logout").onclick = () => sb.auth.signOut();
+  me = (await sb.auth.getUser()).data.user?.id;
   $("app").hidden = false;
-  db = makeDb(sb);
+  db = makeDb(sb, v => { shares = v; members = {}; render(); });
+  db.reloadShares();
   const err = e => say("Нет связи с базой: " + (e?.message || "") + " Обнови страницу.");
   for (const [c, set] of [["boards", v => boards = v], ["cats", v => cats = v], ["tasks", v => tasks = v], ["habits", v => habits = v], ["log", v => logs = v]])
     db.collection(c).onSnapshot(s => { set(s.docs.map(d => ({id: d.id, ...d.data()}))); render(); }, err);
