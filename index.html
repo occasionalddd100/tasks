@@ -1,6 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Задачи Марка</title></head><body>
-<title>Задачи Марка</title>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Задачи</title></head><body>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap">
 <style>
@@ -20,6 +19,7 @@
   --primary:#fafafa; --primary-fg:#18181b; --ring:#52525b; --good:#4ade80; --good-soft:#14321f; --danger:#f87171; --p-urgent:#f87171; --p-today:#fbbf24; --p-later:#60a5fa; --p-rep:#a78bfa;
   --shadow:none; color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.5}
 .wrap{max-width:960px;margin:0 auto;padding:28px 16px 64px;display:flex;flex-direction:column;gap:24px}
 header{display:flex;flex-direction:column;gap:12px}
@@ -70,6 +70,12 @@ li.task:hover .x,.card-h:hover .x,.x:focus-visible{opacity:1}
 .empty{color:var(--muted);padding:20px;background:var(--card);border:1px dashed var(--border);border-radius:12px}
 .hint{font-size:13px;color:var(--muted)}
 .status{font-size:13px;color:var(--danger)}
+.login{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:16px}
+.login form{width:100%;max-width:320px;display:flex;flex-direction:column;gap:10px}
+.login .btn{width:100%}
+.login .status{min-height:1.5em;text-align:center}
+.top{display:flex;justify-content:flex-end}
+.out{border:0;background:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;padding:0}
 :focus-visible{outline:2px solid var(--ring);outline-offset:2px}
 .day ul{list-style:none;margin:0;padding:0 16px 14px;display:flex;flex-direction:column;gap:6px}
 .day .card-h{padding:14px 16px 10px}
@@ -131,9 +137,18 @@ li.task:hover .dbtn,.dbtn:focus-visible,.dbtn.set{opacity:1}
 @media (prefers-reduced-motion: reduce){.progress>i{transition:none}}
 </style>
 
-<div class="wrap">
+<div class="login" id="login" hidden>
+  <form id="loginform">
+    <input class="input" type="email" placeholder="Почта" required autocomplete="username">
+    <input class="input" type="password" placeholder="Пароль" required autocomplete="current-password">
+    <button class="btn">Войти</button>
+    <div class="status" id="loginerr"></div>
+  </form>
+</div>
+
+<div class="wrap" id="app" hidden>
   <header>
-    <h1>Задачи Марка</h1>
+    <div class="top"><button class="out" type="button" id="logout">Выйти</button></div>
     <div class="stats">
       <span class="badge" id="count">Загружаю…</span>
       <span class="badge" id="deadline"></span>
@@ -482,15 +497,14 @@ function taskRow(t){
 }
 
 async function writeAll(changes, path, fields){
-  for (const it of changes){
-    try { await db.doc(path + it.id).update(fields(it)); }
-    catch(e){ say("Не сохранилось: " + (e.message || e.code) + ". Обнови страницу."); break; }
-  }
+  if (!changes.length) return;
+  try { await db.updateMany(path.slice(0, -1), changes.map(it => [it.id, fields(it)])); }
+  catch(e){ say("Не сохранилось: " + (e.message || e.code) + ". Обнови страницу."); }
 }
 
 async function dropTasks(){
   const changes = [];
-  document.querySelectorAll("#cats ul.tasks").forEach(ul => {
+  document.querySelectorAll("#cats ul.tasks[data-cat]").forEach(ul => {
     [...ul.querySelectorAll(".task")].forEach((li, i) => {
       const t = tasks.find(x => x.id === li.dataset.id); if (!t) return;
       if (t.cat !== ul.dataset.cat || t.order !== i + 1){ t.cat = ul.dataset.cat; t.order = i + 1; changes.push(t); }
@@ -610,8 +624,19 @@ function makeDb(sb){
           data.forEach(r => cache[c].set(r.id, r.data)); emit(c);
         });
       },
-      async add(data){ const id = rid(); cache[c]?.set(id, data); emit(c); chk(await sb.from("docs").insert({coll: c, id, data})); return {id}; }
+      async add(data){
+        const id = rid(); cache[c]?.set(id, data); emit(c);
+        try { chk(await sb.from("docs").insert({coll: c, id, data})); } catch(e){ cache[c]?.delete(id); emit(c); throw e; }
+        return {id};
+      }
     }),
+    // several docs at once: cache first and one redraw, then parallel writes
+    async updateMany(c, list){
+      for (const [id, f] of list) cache[c]?.set(id, {...(cache[c].get(id) || {}), ...f});
+      emit(c);
+      const rs = await Promise.all(list.map(([id, f]) => sb.rpc("merge_doc", {c, i: id, f})));
+      rs.forEach(chk);
+    },
     doc(path){
       const [c, id] = path.split("/");
       return {
@@ -623,22 +648,26 @@ function makeDb(sb){
 }
 function loginForm(sb){
   return new Promise(done => {
-    const f = document.createElement("form"); f.className = "add-cat-form"; f.style.marginBottom = "16px";
-    f.innerHTML = '<input class="input" type="email" placeholder="Почта" required autocomplete="username"><input class="input" type="password" placeholder="Пароль" required autocomplete="current-password"><button class="btn">Войти</button>';
-    $("count").textContent = "Нужно войти"; document.querySelector("header").after(f);
+    const f = $("loginform"), [em, pw] = f.querySelectorAll("input"), btn = f.querySelector("button");
+    $("login").hidden = false; em.focus();
     f.onsubmit = async e => {
-      e.preventDefault(); const [em, pw] = f.querySelectorAll("input");
-      const {error} = await sb.auth.signInWithPassword({email: em.value, password: pw.value});
-      if (error) return say("Не вошёл: " + error.message);
-      say(""); f.remove(); done();
+      e.preventDefault(); btn.disabled = true; $("loginerr").textContent = "";
+      const {error} = await sb.auth.signInWithPassword({email: em.value.trim(), password: pw.value});
+      btn.disabled = false;
+      if (error) return $("loginerr").textContent = error.message === "Invalid login credentials" ? "Неверная почта или пароль" : "Не вошёл: " + error.message;
+      $("login").hidden = true; done();
     };
   });
 }
 (async () => {
-  if (!window.supabase){ $("count").textContent = "Не загрузилась библиотека Supabase. Проверь интернет или VPN."; return; }
+  if (!window.supabase){ $("login").hidden = false; $("loginerr").textContent = "Не загрузилась библиотека. Проверь интернет или VPN."; return; }
   const sb = window.supabase.createClient(SB_URL, SB_KEY);
   const {data: {session}} = await sb.auth.getSession();
   if (!session) await loginForm(sb);
+  // session gone (logout or failed refresh): back to the login screen
+  sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.reload(); });
+  $("logout").onclick = () => sb.auth.signOut();
+  $("app").hidden = false;
   db = makeDb(sb);
   const err = e => say("Нет связи с базой: " + (e?.message || "") + " Обнови страницу.");
   for (const [c, set] of [["boards", v => boards = v], ["cats", v => cats = v], ["tasks", v => tasks = v], ["habits", v => habits = v], ["log", v => logs = v]])
