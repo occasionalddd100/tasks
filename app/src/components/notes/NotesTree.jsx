@@ -18,14 +18,14 @@ const loadOpen = () => { try { return new Set(JSON.parse(localStorage.getItem(OP
 
 export const noteTitle = n => n.title?.trim() || "Без названия";
 export const itemName = x => x.kind === "project" ? x.name?.trim() || "Без названия" : noteTitle(x);
-const COLL = { note: "notes", project: "boards" };
+const COLL = { note: "notes", project: "projects" };
 
 export default function NotesTree({ view, go, query }) {
   const db = useDb();
   const [open, setOpen] = useState(loadOpen);
   const [renaming, setRenaming] = useState(null);
   const [sharing, setSharing] = useState(null);
-  const t = useMemo(() => tree(db.folders, db.notes, db.boards), [db.folders, db.notes, db.boards]);
+  const t = useMemo(() => tree(db.folders, db.notes, db.projects), [db.folders, db.notes, db.projects]);
 
   useEffect(() => { try { localStorage.setItem(OPEN_KEY, JSON.stringify([...open])); } catch {} }, [open]);
   const toggle = (id, v) => setOpen(s => { const n = new Set(s); (v ?? !n.has(id)) ? n.add(id) : n.delete(id); return n; });
@@ -40,14 +40,14 @@ export default function NotesTree({ view, go, query }) {
   const isActive = x => view[x.kind] === x.id;
   const fileRow = (x, depth) => (
     <FileRow key={x.kind + x.id} x={x} depth={depth} active={isActive(x)} go={go} folders={db.folders}
-      shared={x.kind === "project" && (grantOn("boards", x.id) || !isMine(x))}
-      onShare={() => setSharing({ coll: "boards", id: x.id, name: itemName(x), owner: isMine(x) })} />
+      shared={x.kind === "project" && (grantOn("projects", x.id) || !isMine(x))}
+      onShare={() => setSharing({ coll: "projects", id: x.id, name: itemName(x), owner: isMine(x) })} />
   );
 
   if (query) {
     const q = query.toLowerCase();
     const hits = [
-      ...db.boards.map(b => ({ ...b, kind: "project" })).filter(b => itemName(b).toLowerCase().includes(q)),
+      ...db.projects.map(b => ({ ...b, kind: "project" })).filter(b => itemName(b).toLowerCase().includes(q)),
       ...db.notes.map(n => ({ ...n, kind: "note" })).filter(n => noteTitle(n).toLowerCase().includes(q) || (n.body || "").toLowerCase().includes(q))
         .sort((a, b) => (b.updated || "").localeCompare(a.updated || "")),
     ];

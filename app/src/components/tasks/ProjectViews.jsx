@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRightIcon, MoreHorizontalIcon, Repeat2Icon, UsersIcon, XIcon } from "lucide-react";
-import { useDb, add, update, remove, isMine } from "@/lib/db";
-import { folderPath } from "@/lib/notes";
+import { ArrowLeftIcon, ArrowRightIcon, ChevronRightIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Repeat2Icon, Trash2Icon, UsersIcon, XIcon } from "lucide-react";
+import { useDb, add, update, updateMany, remove, isMine } from "@/lib/db";
+import { folderPath, newTab, deleteTab } from "@/lib/notes";
 import { FileMenu } from "@/components/notes/NotesTree";
 import { today, byOrder, nextOrder, stale, fmtDate, plural, EVERY, habitDue, dayDiff } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
@@ -9,34 +9,50 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import ShareDialog from "@/components/ShareDialog";
+import { confirmAction } from "@/components/Confirm";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import Board from "@/components/tasks/Board";
 
-// a project: one screen of task categories, opened from the sidebar like a note
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+
+// a project: tabs of task categories, opened from the sidebar like a note
 export function ProjectView({ id, fresh, go }) {
   const db = useDb();
-  const board = db.boards.find(b => b.id === id);
-  const [name, setName] = useState(board?.name || "");
+  const project = db.projects.find(p => p.id === id);
+  const [name, setName] = useState(project?.name || "");
   const [sharing, setSharing] = useState(false);
+  const [tab, setTab] = useState(() => store.get("tab:" + id));
+  const [renaming, setRenaming] = useState(false);
   const titleRef = useRef(null), editing = useRef(false);
   useEffect(() => { if (fresh) { titleRef.current?.focus(); titleRef.current?.select(); } }, [id]);
-  useEffect(() => { if (board && !editing.current) setName(board.name || ""); }, [board?.name]);
-  useEffect(() => { if (board) { try { localStorage.setItem("lastProject", id); } catch {} } }, [id, !!board]);
+  useEffect(() => { if (project && !editing.current) setName(project.name || ""); }, [project?.name]);
+  useEffect(() => { if (project) store.set("lastProject", id); }, [id, !!project]);
 
-  const catIds = useMemo(() => new Set(db.cats.filter(c => c.board === id).map(c => c.id)), [db.cats, id]);
+  const tabs = useMemo(() => db.boards.filter(b => b.project === id).sort(byOrder), [db.boards, id]);
+  const board = tabs.find(b => b.id === tab) || tabs[0];
+  const pick = t => { setTab(t); store.set("tab:" + id, t); setRenaming(false); };
+  const catIds = useMemo(() => new Set(db.cats.filter(c => c.board === board?.id).map(c => c.id)), [db.cats, board?.id]);
   const scope = db.tasks.filter(t => !stale(t) && catIds.has(t.cat));
   const done = scope.filter(t => t.done).length;
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
-  if (!board) return (
+  if (!project) return (
     <div className="mx-auto flex max-w-3xl flex-col items-start gap-3 px-6 py-16 text-muted-foreground">
       <p>Проекта нет: его удалили или закрыли к нему доступ.</p>
       <Button variant="outline" onClick={() => go({ journal: true })}>К журналу</Button>
     </div>
   );
 
-  const path = folderPath(db.folders, board.folder);
-  const shared = !isMine(board) || db.grants.some(g => g.coll === "boards" && g.target === id);
-  const saveName = () => { editing.current = false; const n = name.trim(); if (n && n !== board.name) update("boards", id, { name: n }); else setName(board.name); };
+  const path = folderPath(db.folders, project.folder);
+  const shared = !isMine(project) || db.grants.some(g => g.coll === "projects" && g.target === id);
+  const saveName = () => { editing.current = false; const n = name.trim(); if (n && n !== project.name) update("projects", id, { name: n }); else setName(project.name); };
+  const addTab = async () => { const t = await newTab(id, "Новая вкладка", nextOrder(tabs)); if (t) { pick(t); setRenaming(true); } };
+  const removeTab = async b => {
+    const cats = db.cats.filter(c => c.board === b.id).map(c => c.id);
+    const open = db.tasks.filter(t => cats.includes(t.cat) && !t.done).length;
+    if (await confirmAction({ title: `Удалить вкладку «${b.name}»?`, description: cats.length ? `Удалятся категории (${cats.length}) и открытые задачи (${open}). Выполненные останутся в журнале.` : "Вкладка пустая." }))
+      deleteTab(b.id);
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 pt-5 pb-16 md:px-8 md:pt-8">
@@ -47,16 +63,16 @@ export function ProjectView({ id, fresh, go }) {
           </span>
         )) : <span>Проект</span>}
         <span className="ml-auto" />
-        <Button variant="outline" size="sm" onClick={() => setSharing(true)} aria-label={isMine(board) ? "Поделиться" : "Участники"}>
-          <UsersIcon /><span className="max-sm:hidden">{isMine(board) ? "Поделиться" : "Участники"}</span>
+        <Button variant="outline" size="sm" onClick={() => setSharing(true)} aria-label={isMine(project) ? "Поделиться" : "Участники"}>
+          <UsersIcon /><span className="max-sm:hidden">{isMine(project) ? "Поделиться" : "Участники"}</span>
         </Button>
-        <FileMenu x={{ ...board, kind: "project" }} folders={db.folders} after={() => go({ journal: true })}
+        <FileMenu x={{ ...project, kind: "project" }} folders={db.folders} after={() => go({ journal: true })}
           trigger={<Button variant="ghost" size="iconSm" aria-label="Действия с проектом"><MoreHorizontalIcon /></Button>} />
       </div>
       <header className="flex flex-col gap-3">
         <input ref={titleRef} value={name} aria-label="Название проекта" placeholder="Без названия"
           onFocus={() => { editing.current = true; }} onChange={e => setName(e.target.value)} onBlur={saveName}
-          onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setName(board.name); editing.current = false; setTimeout(() => e.target.blur()); } }}
+          onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setName(project.name); editing.current = false; setTimeout(() => e.target.blur()); } }}
           className="w-full bg-transparent text-3xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/60 md:text-4xl" />
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{scope.length ? <>сделано <b>{done}</b> из {scope.length}</> : "задач пока нет"}</Badge>
@@ -66,9 +82,63 @@ export function ProjectView({ id, fresh, go }) {
           <i className="block h-full bg-primary transition-[width] duration-300" style={{ width: scope.length ? (done / scope.length) * 100 + "%" : 0 }} />
         </div>
       </header>
-      <Board board={board} />
-      <ShareDialog open={sharing} onOpenChange={setSharing} coll="boards" target={board.id} name={board.name} isOwner={isMine(board)} />
+
+      <div className="flex items-center gap-2">
+        <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1">
+          <div role="tablist" className="inline-flex gap-1 rounded-lg border bg-muted p-1 whitespace-nowrap">
+            {tabs.map(b => b.id === board?.id && renaming
+              ? <TabRename key={b.id} value={b.name} onDone={n => { setRenaming(false); if (n && n !== b.name) update("boards", b.id, { name: n }); }} />
+              : <Tab key={b.id} active={b.id === board?.id} onClick={() => b.id === board?.id ? setRenaming(true) : pick(b.id)}
+                  title={b.id === board?.id ? "Нажми ещё раз, чтобы переименовать" : undefined}>{b.name}</Tab>)}
+            <Tab onClick={addTab} title="Новая вкладка" aria-label="Новая вкладка"><PlusIcon className="size-4" /></Tab>
+          </div>
+        </div>
+        {board && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label="Действия с вкладкой"><MoreHorizontalIcon /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setTimeout(() => setRenaming(true))}><PencilIcon />Переименовать вкладку</DropdownMenuItem>
+              <DropdownMenuItem disabled={tabs.indexOf(board) === 0} onSelect={() => moveTab(tabs, board, -1)}><ArrowLeftIcon />Сдвинуть влево</DropdownMenuItem>
+              <DropdownMenuItem disabled={tabs.indexOf(board) === tabs.length - 1} onSelect={() => moveTab(tabs, board, 1)}><ArrowRightIcon />Сдвинуть вправо</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={() => removeTab(board)}><Trash2Icon />Удалить вкладку</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+
+      {board ? <Board key={board.id} board={board} /> : <p className="text-sm text-muted-foreground">Вкладок пока нет. Создай первую кнопкой «+».</p>}
+      <ShareDialog open={sharing} onOpenChange={setSharing} coll="projects" target={id} name={project.name} isOwner={isMine(project)} />
     </div>
+  );
+}
+
+// swap a tab with its neighbour and renumber
+function moveTab(tabs, b, dir) {
+  const list = [...tabs], i = list.indexOf(b), j = i + dir;
+  [list[i], list[j]] = [list[j], list[i]];
+  updateMany("boards", list.map((t, k) => [t, k + 1]).filter(([t, o]) => t.order !== o).map(([t, order]) => [t.id, { order }]));
+}
+
+function Tab({ active, className, children, ...props }) {
+  return (
+    <button type="button" role="tab" aria-selected={!!active} {...props}
+      className={cn("inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
+        active && "bg-background text-foreground shadow-sm", className)}>
+      {children}
+    </button>
+  );
+}
+
+function TabRename({ value, onDone }) {
+  const ref = useRef(null), done = useRef(false);
+  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  const finish = v => { if (!done.current) { done.current = true; onDone(v); } };
+  return (
+    <input ref={ref} defaultValue={value} aria-label="Название вкладки"
+      onKeyDown={e => { if (e.key === "Enter") finish(e.currentTarget.value.trim()); if (e.key === "Escape") finish(null); }}
+      onBlur={e => finish(e.currentTarget.value.trim())}
+      className="h-8 w-40 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring/50" />
   );
 }
 

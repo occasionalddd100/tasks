@@ -40,8 +40,8 @@ export default function Shell() {
   };
 
   // the remembered project may be gone; then the journal is home
-  const project = view.project && !(view.home && db.ready && !db.boards.some(b => b.id === view.project)) ? view.project : null;
-  const shown = view.note ? db.notes.find(n => n.id === view.note) : project ? db.boards.find(b => b.id === project) : null;
+  const project = view.project && !(view.home && db.ready && !db.projects.some(b => b.id === view.project)) ? view.project : null;
+  const shown = view.note ? db.notes.find(n => n.id === view.note) : project ? db.projects.find(b => b.id === project) : null;
   const title = shown ? itemName({ ...shown, kind: view.note ? "note" : "project" }) : "Журнал";
   const sidebar = <Sidebar view={{ ...view, project, journal: !view.note && !project }} go={go} email={db.email} />;
 
