@@ -24,10 +24,10 @@ const RU = {
 
 // Milkdown Crepe: WYSIWYG markdown in the spirit of Obsidian's live preview; stores plain markdown.
 // `value` updates from other people are applied only while the local user is not typing.
-export default function Editor({ value, onChange, onReady }) {
+export default function Editor({ value, onChange, onReady, readOnly }) {
   const root = useRef(null), crepe = useRef(null);
-  const last = useRef(value), typedAt = useRef(0), cb = useRef(onChange);
-  cb.current = onChange;
+  const last = useRef(value), typedAt = useRef(0), cb = useRef(onChange), ro = useRef(readOnly);
+  cb.current = onChange; ro.current = readOnly;
 
   useEffect(() => {
     const c = new Crepe({ root: root.current, defaultValue: value || "", featureConfigs: RU });
@@ -39,7 +39,7 @@ export default function Editor({ value, onChange, onReady }) {
       last.current = md; typedAt.current = Date.now(); cb.current(md);
     }));
     let alive = true;
-    c.create().then(() => { last.current = c.getMarkdown(); ready = true; if (alive) { crepe.current = c; onReady?.({ focus: () => c.editor.action(ctx => ctx.get(editorViewCtx).focus()) }); } });
+    c.create().then(() => { last.current = c.getMarkdown(); ready = true; if (alive) { crepe.current = c; c.setReadonly(!!ro.current); onReady?.({ focus: () => c.editor.action(ctx => ctx.get(editorViewCtx).focus()) }); } });
     return () => { alive = false; crepe.current = null; c.destroy(); };
   }, []);
 
@@ -50,6 +50,8 @@ export default function Editor({ value, onChange, onReady }) {
     last.current = value;
     c.editor.action(replaceAll(value || ""));
   }, [value]);
+
+  useEffect(() => { crepe.current?.setReadonly(!!readOnly); }, [readOnly]);
 
   return <div ref={root} className="min-h-[50vh]" />;
 }

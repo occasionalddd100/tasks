@@ -4,6 +4,8 @@ import { useDb, update, isMine } from "@/lib/db";
 import { folderPath } from "@/lib/notes";
 import { FileMenu } from "@/components/notes/NotesTree";
 import { Button } from "@/components/ui/button";
+import { useEditLock } from "@/lib/lock";
+import LockBanner, { useTypingIn } from "@/components/notes/LockBanner";
 
 const Editor = lazy(() => import("@/components/notes/Editor"));
 
@@ -28,7 +30,9 @@ export default function NoteView({ id, fresh, go }) {
   const note = db.notes.find(n => n.id === id);
   const save = useDebouncedSave(id);
   const [title, setTitle] = useState(note?.title || "");
-  const titleRef = useRef(null), editorRef = useRef(null), editingTitle = useRef(false);
+  const titleRef = useRef(null), editorRef = useRef(null), editingTitle = useRef(false), box = useRef(null);
+  const { other, touch } = useEditLock("notes", id);
+  useTypingIn(box, touch, [id, !!note]);
 
   useEffect(() => { if (fresh) titleRef.current?.focus(); }, [id]);
   // follow remote title changes unless the title field is being edited
@@ -47,7 +51,7 @@ export default function NoteView({ id, fresh, go }) {
   const focusEditor = () => editorRef.current?.focus();
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pt-6 pb-10 md:px-10 md:pt-10">
+    <div ref={box} className="mx-auto w-full max-w-3xl px-4 pt-6 pb-10 md:px-10 md:pt-10">
       <div className="mb-6 flex min-h-8 items-center gap-1 text-sm text-muted-foreground">
         {path.length ? path.map((f, i) => (
           <span key={f.id} className="flex min-w-0 items-center gap-1">
@@ -60,8 +64,9 @@ export default function NoteView({ id, fresh, go }) {
         <FileMenu x={{ ...note, kind: "note" }} folders={db.folders} after={() => go({ journal: true })}
           trigger={<Button variant="ghost" size="iconSm" aria-label="Действия с заметкой"><MoreHorizontalIcon /></Button>} />
       </div>
+      <LockBanner other={other} />
       <textarea
-        ref={titleRef} rows={1} value={title} placeholder="Без названия"
+        ref={titleRef} rows={1} value={title} placeholder="Без названия" readOnly={!!other}
         onFocus={() => { editingTitle.current = true; }}
         onBlur={() => { editingTitle.current = false; }}
         onChange={e => { setTitle(e.target.value); save({ title: e.target.value }); }}
@@ -69,7 +74,7 @@ export default function NoteView({ id, fresh, go }) {
         className="field-sizing-content w-full resize-none bg-transparent text-3xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/60 md:text-4xl"
       />
       <Suspense fallback={<p className="py-4 text-sm text-muted-foreground">Загружаю редактор…</p>}>
-        <Editor key={id} value={note.body || ""} onChange={body => save({ body })} onReady={c => { editorRef.current = c; }} />
+        <Editor key={id} value={note.body || ""} onChange={body => save({ body })} readOnly={!!other} onReady={c => { editorRef.current = c; }} />
       </Suspense>
     </div>
   );
