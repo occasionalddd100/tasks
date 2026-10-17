@@ -52,7 +52,7 @@ export default function Board({ board }) {
   const week = useMemo(() => visible.filter(inWeek).sort((a, b) => a.due.localeCompare(b.due) || byOrder(a, b)), [visible]);
   const items = useMemo(() => {
     const m = Object.fromEntries(cats.map(c => [c.id, []]));
-    for (const t of visible) if (!inWeek(t)) m[t.cat].push(t.id);
+    for (const t of visible) m[t.cat].push(t.id);
     return m;
   }, [cats, visible]);
   const people = usePeople(board.project);
