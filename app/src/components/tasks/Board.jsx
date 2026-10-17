@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/Confirm";
-import TaskRow, { descendantsOf } from "@/components/tasks/TaskRow";
+import TaskRow, { descendantsOf, People } from "@/components/tasks/TaskRow";
+import { usePeople } from "@/lib/people";
 import { ActionsContext, ActionsDropdown } from "@/components/ui/actions";
 import InlineInput from "@/components/InlineInput";
 
@@ -54,6 +55,7 @@ export default function Board({ board }) {
     for (const t of visible) if (!inWeek(t)) m[t.cat].push(t.id);
     return m;
   }, [cats, visible]);
+  const people = usePeople(board.project);
   const seen = useRef(null);
   if (!seen.current && db.ready) seen.current = new Set(db.tasks.map(t => t.id));
   const fresh = useMemo(() => new Set(all.filter(t => seen.current && !seen.current.has(t.id)).map(t => t.id)), [all]);
@@ -127,7 +129,7 @@ export default function Board({ board }) {
   const activeCat = active?.startsWith(C) ? cats.find(c => c.id === raw(active)) : null;
 
   return (
-    <Kids.Provider value={kids}><Fresh.Provider value={fresh}>
+    <People.Provider value={people}><Kids.Provider value={kids}><Fresh.Provider value={fresh}>
     <div className="flex flex-col gap-4">
       <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
         <SortableContext items={catList.map(c => C + c.id)} strategy={rectSortingStrategy}>
@@ -145,7 +147,7 @@ export default function Board({ board }) {
       <NewCat board={board} cats={cats} />
       <p className="text-xs text-muted-foreground">Тяни за ⋮⋮, чтобы переставить задачу или категорию. Нажми на текст, чтобы изменить. <span className="max-md:hidden">Правая кнопка мыши открывает меню: заметка, подзадача, приоритет, дата.</span><span className="md:hidden">Долгое нажатие или ⋯ открывает меню.</span></p>
     </div>
-    </Fresh.Provider></Kids.Provider>
+    </Fresh.Provider></Kids.Provider></People.Provider>
   );
 }
 

@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import {
   CalendarIcon, CalendarXIcon, ChevronRightIcon, ClockIcon, CornerDownRightIcon, FileTextIcon, FlagIcon, FlameIcon,
-  GripVerticalIcon, MoreHorizontalIcon, PencilIcon, StickyNoteIcon, SunIcon, Trash2Icon,
+  GripVerticalIcon, MoreHorizontalIcon, UserIcon, UserXIcon, PencilIcon, StickyNoteIcon, SunIcon, Trash2Icon,
 } from "lucide-react";
 import { getDb, update, remove } from "@/lib/db";
 import { today, dueLabel } from "@/lib/tasks";
@@ -13,6 +13,11 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/h
 import { confirmAction } from "@/components/Confirm";
 import InlineInput from "@/components/InlineInput";
 import TaskNoteDialog from "@/components/tasks/TaskNoteDialog";
+import Avatar from "@/components/Avatar";
+import { personName } from "@/lib/people";
+
+// people who can be assigned in the current project
+export const People = createContext([]);
 
 export const PRIO = {
   urgent: { label: "Срочно", icon: FlameIcon, cls: "text-red-500" },
@@ -42,6 +47,15 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
   const p = PRIO[t.prio];
   const late = t.due && t.due < today() && !t.done;
   const hasBody = !!t.body?.trim();
+  const people = useContext(People);
+  const who = t.assignee ? people.find(x => x.user_id === t.assignee) || { user_id: t.assignee, name: "", email: "участник" } : null;
+  const assign = id => update("tasks", t.id, { assignee: id });
+  const assignItems = [
+    ...people.map(x => ({ label: personName(x) + (x.user_id === getDb().me ? " (я)" : ""), icon: ({ className }) => <Avatar person={x} className={cn("size-5 text-[10px]", className)} />,
+      active: t.assignee === x.user_id, onSelect: () => assign(x.user_id) })),
+    people.length > 0 && { sep: true },
+    { label: "Без исполнителя", icon: UserXIcon, disabled: !t.assignee, onSelect: () => assign("") },
+  ];
   const openDate = () => { const i = dateRef.current; if (!i) return; try { i.showPicker(); } catch { i.focus(); i.click(); } };
 
   const items = [
@@ -52,6 +66,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
       ...Object.entries(PRIO).map(([k, v]) => ({ label: v.label, icon: v.icon, iconClass: v.cls, active: t.prio === k, onSelect: () => update("tasks", t.id, { prio: k }) })),
       { label: "Без приоритета", icon: FlagIcon, active: !t.prio, onSelect: () => update("tasks", t.id, { prio: "" }) },
     ] },
+    { label: "Исполнитель", icon: UserIcon, sub: assignItems },
     { label: t.due ? "Изменить дату" : "Поставить дату", icon: CalendarIcon, onSelect: () => setTimeout(openDate, 50) },
     t.due && { label: "Убрать дату", icon: CalendarXIcon, onSelect: () => update("tasks", t.id, { due: "" }) },
     { sep: true },
@@ -119,6 +134,13 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
             <input ref={dateRef} type="date" tabIndex={-1} value={t.due || ""} onChange={e => update("tasks", t.id, { due: e.target.value || "" })}
               className="pointer-events-none absolute inset-0 opacity-0" aria-hidden />
           </button>
+          {who && (
+            <ActionsDropdown align="end" items={assignItems} trigger={
+              <button type="button" className="grid size-6 place-items-center rounded-full" aria-label={"Исполнитель: " + personName(who)}>
+                <Avatar person={who} className="size-5 text-[10px]" />
+              </button>
+            } />
+          )}
           {p && <span className={cn("grid size-6 place-items-center", p.cls)} title={p.label} aria-label={"Приоритет: " + p.label}><p.icon className="size-3.5" /></span>}
           <ActionsDropdown align="end" items={items} trigger={
             <button type="button" aria-label="Действия с задачей"

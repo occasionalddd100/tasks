@@ -6,6 +6,9 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { ConfirmHost } from "@/components/Confirm";
+import Avatar from "@/components/Avatar";
+import ProfileDialog from "@/components/ProfileDialog";
+import { loadMe, useMe } from "@/lib/people";
 import { MotionConfig, motion } from "motion/react";
 import NotesTree, { IconBtn, CreateMenu, itemName } from "@/components/notes/NotesTree";
 import { ProjectView, JournalView } from "@/components/tasks/ProjectViews";
@@ -27,6 +30,7 @@ export default function Shell() {
   const [view, setView] = useState(readHash);
   const [menu, setMenu] = useState(false);
 
+  useEffect(() => { loadMe().catch(() => {}); }, []);
   useEffect(() => {
     const on = () => setView(readHash());
     window.addEventListener("hashchange", on); window.addEventListener("popstate", on);
@@ -71,6 +75,8 @@ export default function Shell() {
 }
 
 function Sidebar({ view, go, email }) {
+  const db = useDb(), me = useMe();
+  const [profile, setProfile] = useState(false);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const create = async kind => {
@@ -103,9 +109,17 @@ function Sidebar({ view, go, email }) {
       <nav className="min-h-0 flex-1 overflow-y-auto pb-4" aria-label="Проекты и заметки">
         <NotesTree view={view} go={go} query={searching ? query.trim() : ""} />
       </nav>
-      <div className="flex items-center gap-2 border-t p-2 pl-4 text-sm">
-        <span className="truncate text-muted-foreground">{email}</span>
-        <Button variant="ghost" size="iconSm" className="ml-auto" aria-label="Выйти" title="Выйти" onClick={() => sb.auth.signOut()}><LogOutIcon /></Button>
+      <div className="flex items-center gap-1 border-t p-2 text-sm">
+        <button type="button" onClick={() => setProfile(true)} title="Профиль: имя и аватарка"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-accent">
+          <Avatar person={{ ...me, email, user_id: db.me }} />
+          <span className="min-w-0">
+            {me?.name && <span className="block truncate font-medium">{me.name}</span>}
+            <span className="block truncate text-xs text-muted-foreground">{email}</span>
+          </span>
+        </button>
+        <ProfileDialog open={profile} onOpenChange={setProfile} />
+        <Button variant="ghost" size="iconSm" className="shrink-0" aria-label="Выйти" title="Выйти" onClick={() => sb.auth.signOut()}><LogOutIcon /></Button>
       </div>
     </div>
   );
