@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftIcon, ArrowRightIcon, ChevronRightIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Repeat2Icon, Trash2Icon, UsersIcon, XIcon } from "lucide-react";
 import { useDb, add, update, updateMany, remove, isMine } from "@/lib/db";
 import { folderPath, newTab, deleteTab } from "@/lib/notes";
@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import ShareDialog from "@/components/ShareDialog";
 import { confirmAction } from "@/components/Confirm";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { ActionsContext, ActionsDropdown } from "@/components/ui/actions";
+import { motion } from "motion/react";
 import Board from "@/components/tasks/Board";
 
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
@@ -54,6 +55,17 @@ export function ProjectView({ id, fresh, go }) {
       deleteTab(b.id);
   };
 
+  const tabItems = b => {
+    const i = tabs.indexOf(b);
+    return [
+      { label: "Переименовать вкладку", icon: PencilIcon, onSelect: () => { pick(b.id); setTimeout(() => setRenaming(true)); } },
+      { label: "Сдвинуть влево", icon: ArrowLeftIcon, disabled: i === 0, onSelect: () => moveTab(tabs, b, -1) },
+      { label: "Сдвинуть вправо", icon: ArrowRightIcon, disabled: i === tabs.length - 1, onSelect: () => moveTab(tabs, b, 1) },
+      { sep: true },
+      { label: "Удалить вкладку", icon: Trash2Icon, variant: "destructive", onSelect: () => removeTab(b) },
+    ];
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 pt-5 pb-16 md:px-8 md:pt-8">
       <div className="flex min-h-8 items-center gap-1 text-sm text-muted-foreground">
@@ -88,23 +100,15 @@ export function ProjectView({ id, fresh, go }) {
           <div role="tablist" className="inline-flex gap-1 rounded-lg border bg-muted p-1 whitespace-nowrap">
             {tabs.map(b => b.id === board?.id && renaming
               ? <TabRename key={b.id} value={b.name} onDone={n => { setRenaming(false); if (n && n !== b.name) update("boards", b.id, { name: n }); }} />
-              : <Tab key={b.id} active={b.id === board?.id} onClick={() => b.id === board?.id ? setRenaming(true) : pick(b.id)}
-                  title={b.id === board?.id ? "Нажми ещё раз, чтобы переименовать" : undefined}>{b.name}</Tab>)}
+              : <ActionsContext key={b.id} items={tabItems(b)}>
+                  <Tab active={b.id === board?.id} onClick={() => b.id === board?.id ? setRenaming(true) : pick(b.id)}
+                    title={b.id === board?.id ? "Нажми ещё раз, чтобы переименовать" : undefined}>{b.name}</Tab>
+                </ActionsContext>)}
             <Tab onClick={addTab} title="Новая вкладка" aria-label="Новая вкладка"><PlusIcon className="size-4" /></Tab>
           </div>
         </div>
-        {board && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label="Действия с вкладкой"><MoreHorizontalIcon /></Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setTimeout(() => setRenaming(true))}><PencilIcon />Переименовать вкладку</DropdownMenuItem>
-              <DropdownMenuItem disabled={tabs.indexOf(board) === 0} onSelect={() => moveTab(tabs, board, -1)}><ArrowLeftIcon />Сдвинуть влево</DropdownMenuItem>
-              <DropdownMenuItem disabled={tabs.indexOf(board) === tabs.length - 1} onSelect={() => moveTab(tabs, board, 1)}><ArrowRightIcon />Сдвинуть вправо</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={() => removeTab(board)}><Trash2Icon />Удалить вкладку</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        {board && <ActionsDropdown align="end" items={tabItems(board)}
+          trigger={<Button variant="ghost" size="icon" className="md:hidden" aria-label="Действия с вкладкой"><MoreHorizontalIcon /></Button>} />}
       </div>
 
       {board ? <Board key={board.id} board={board} /> : <p className="text-sm text-muted-foreground">Вкладок пока нет. Создай первую кнопкой «+».</p>}
@@ -120,15 +124,16 @@ function moveTab(tabs, b, dir) {
   updateMany("boards", list.map((t, k) => [t, k + 1]).filter(([t, o]) => t.order !== o).map(([t, order]) => [t.id, { order }]));
 }
 
-function Tab({ active, className, children, ...props }) {
+const Tab = forwardRef(function Tab({ active, className, children, ...props }, ref) {
   return (
-    <button type="button" role="tab" aria-selected={!!active} {...props}
-      className={cn("inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
-        active && "bg-background text-foreground shadow-sm", className)}>
-      {children}
+    <button ref={ref} type="button" role="tab" aria-selected={!!active} {...props}
+      className={cn("relative inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
+        active && "text-foreground", className)}>
+      {active && <motion.span layoutId="tab-pill" className="absolute inset-0 rounded-md bg-background shadow-sm" transition={{ type: "spring", bounce: 0.15, duration: 0.35 }} />}
+      <span className="relative inline-flex items-center gap-1.5">{children}</span>
     </button>
   );
-}
+});
 
 function TabRename({ value, onDone }) {
   const ref = useRef(null), done = useRef(false);

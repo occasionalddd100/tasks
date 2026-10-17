@@ -115,3 +115,34 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
 }
+
+@keyframes menu-in { from { opacity: 0; transform: scale(0.97) translateY(-2px); } to { opacity: 1; transform: none; } }
+
+/* rendered markdown (task note previews) */
+.md { font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.md > * + * { margin-top: 0.5em; }
+.md h1, .md h2, .md h3, .md h4 { font-weight: 700; line-height: 1.25; }
+.md h1 { font-size: 1.25em; } .md h2 { font-size: 1.15em; } .md h3 { font-size: 1.05em; }
+.md ul { list-style: disc; padding-left: 1.25em; } .md ol { list-style: decimal; padding-left: 1.4em; }
+.md li > input[type=checkbox] { margin-right: 0.4em; vertical-align: -1px; }
+.md ul:has(> li > input[type=checkbox]) { list-style: none; padding-left: 0.2em; }
+.md a { text-decoration: underline; text-underline-offset: 2px; }
+.md code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: var(--muted); padding: 0.1em 0.3em; border-radius: 4px; }
+.md pre { background: var(--muted); padding: 0.6em 0.8em; border-radius: 6px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; }
+.md blockquote { border-left: 3px solid var(--border); padding-left: 0.8em; color: var(--muted-foreground); }
+.md img { max-width: 100%; border-radius: 6px; }
+.md table { border-collapse: collapse; } .md th, .md td { border: 1px solid var(--border); padding: 2px 8px; }
+
+/* subtasks: a rail from the parent's chevron, a rounded elbow to each child, an arrowhead pointing up at the parent */
+.subtree { position: relative; margin-left: 22px; --rail: color-mix(in oklab, var(--muted-foreground) 55%, transparent); }
+.subtree > li { position: relative; }
+.subtree > li:not(:last-of-type)::before { content: ""; position: absolute; left: 8px; top: 0; bottom: 0; border-left: 1.5px solid var(--rail); }
+.subtree > li::after { content: ""; position: absolute; left: 8px; top: 0; height: 16px; width: 30px; border: 0 solid var(--rail); border-left-width: 1.5px; border-bottom-width: 1.5px; border-bottom-left-radius: 7px; pointer-events: none; }
+.subtree > li[data-kids]::after { width: 11px; }
+.subtree::before { content: ""; position: absolute; z-index: 1; left: 4.75px; top: -1px; border: 4.5px solid transparent; border-bottom: 6px solid var(--rail); border-top: 0; }
+.subtree > li:has(> form)::after, .subtree > li:has(> form)::before { display: none; }
+
+@keyframes fade-in { from { opacity: 0 } }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(.98) } }
+@keyframes sheet-in { from { transform: translateX(-100%) } }

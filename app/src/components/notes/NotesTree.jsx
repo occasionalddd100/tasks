@@ -8,10 +8,9 @@ import { tree, newNote, newFolder, newProject, deleteFolder, deleteProject, fold
 import { cn } from "@/lib/utils";
 import { confirmAction } from "@/components/Confirm";
 import ShareDialog from "@/components/ShareDialog";
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
-  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { ActionsContext, ActionsDropdown } from "@/components/ui/actions";
+import { AnimatePresence, motion } from "motion/react";
 
 const OPEN_KEY = "openFolders";
 const loadOpen = () => { try { return new Set(JSON.parse(localStorage.getItem(OPEN_KEY) || "[]")); } catch { return new Set(); } };
@@ -59,49 +58,57 @@ export default function NotesTree({ view, go, query }) {
     );
   }
 
+  const folderItems = (f, sharedWithMe) => {
+    const mine = isMine(f);
+    return [
+      { label: "Новый проект", icon: ListChecksIcon, onSelect: () => create("project", f.id) },
+      { label: "Новая заметка", icon: FileTextIcon, onSelect: () => create("note", f.id) },
+      { label: "Новая папка", icon: FolderPlusIcon, onSelect: () => create("folder", f.id) },
+      { sep: true },
+      { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setRenaming(f.id)) },
+      { label: mine ? "Поделиться" : "Участники", icon: UsersIcon, onSelect: () => setSharing({ coll: "folders", id: f.id, name: f.name, owner: mine }) },
+      !sharedWithMe && moveItem(db.folders.filter(x => !descendants(db.folders, f.id).includes(x.id)), f.parent, parent => update("folders", f.id, { parent })),
+      !sharedWithMe && { sep: true },
+      !sharedWithMe && { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: async () => {
+        const s = folderStats(f.id), parts = [];
+        if (s.projects) parts.push(`проекты (${s.projects})`);
+        if (s.notes) parts.push(`заметки (${s.notes})`);
+        if (s.folders) parts.push(`вложенные папки (${s.folders})`);
+        if (await confirmAction({ title: `Удалить папку «${f.name}»?`, description: parts.length ? `Вместе с ней удалятся ${parts.join(", ")}.` : "Папка пустая." }))
+          deleteFolder(f.id);
+      } },
+    ];
+  };
+
   const renderFolder = (f, depth) => {
-    const isOpen = open.has(f.id), mine = isMine(f), sharedWithMe = !mine && depth === 0;
+    const isOpen = open.has(f.id), sharedWithMe = !isMine(f) && depth === 0;
     const kids = t.folders(f.id), files = t.files(f.id);
+    const items = folderItems(f, sharedWithMe);
     return (
       <li key={f.id}>
-        <Row depth={depth} onClick={() => toggle(f.id)}>
-          <ChevronRightIcon className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-90")} />
-          {isOpen ? <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" /> : <FolderIcon className="size-4 shrink-0 text-muted-foreground" />}
-          {renaming === f.id
-            ? <RenameInput value={f.name} onDone={name => { setRenaming(null); if (name && name !== f.name) update("folders", f.id, { name }); }} />
-            : <span className="truncate">{f.name || "Без названия"}</span>}
-          {(grantOn("folders", f.id) || sharedWithMe) && <UsersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Общая папка" />}
-          <Actions>
-            <CreateMenu onCreate={k => create(k, f.id)} trigger={<IconBtn label="Создать в папке"><PlusIcon /></IconBtn>} />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild><IconBtn label="Действия с папкой"><MoreHorizontalIcon /></IconBtn></DropdownMenuTrigger>
-              <DropdownMenuContent align="start" onClick={e => e.stopPropagation()}>
-                <DropdownMenuItem onSelect={() => setTimeout(() => setRenaming(f.id))}><PencilIcon />Переименовать</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setSharing({ coll: "folders", id: f.id, name: f.name, owner: mine })}><UsersIcon />{mine ? "Поделиться" : "Участники"}</DropdownMenuItem>
-                {!sharedWithMe && <MoveTo folders={db.folders.filter(x => !descendants(db.folders, f.id).includes(x.id))} current={f.parent}
-                  onMove={parent => update("folders", f.id, { parent })} />}
-                {!sharedWithMe && <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onSelect={async () => {
-                    const s = folderStats(f.id), parts = [];
-                    if (s.projects) parts.push(`проекты (${s.projects})`);
-                    if (s.notes) parts.push(`заметки (${s.notes})`);
-                    if (s.folders) parts.push(`вложенные папки (${s.folders})`);
-                    if (await confirmAction({ title: `Удалить папку «${f.name}»?`, description: parts.length ? `Вместе с ней удалятся ${parts.join(", ")}.` : "Папка пустая." }))
-                      deleteFolder(f.id);
-                  }}><Trash2Icon />Удалить</DropdownMenuItem>
-                </>}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </Actions>
-        </Row>
-        {isOpen && (
-          <ul className="flex flex-col gap-px">
-            {kids.map(c => renderFolder(c, depth + 1))}
-            {files.map(x => fileRow(x, depth + 1))}
-            {!kids.length && !files.length && <li className="py-1 text-xs text-muted-foreground" style={{ paddingLeft: 36 + (depth + 1) * 12 }}>Пусто</li>}
-          </ul>
-        )}
+        <ActionsContext items={items}>
+          <Row depth={depth} onClick={() => toggle(f.id)}>
+            <ChevronRightIcon className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform duration-200", isOpen && "rotate-90")} />
+            {isOpen ? <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" /> : <FolderIcon className="size-4 shrink-0 text-muted-foreground" />}
+            {renaming === f.id
+              ? <RenameInput value={f.name} onDone={name => { setRenaming(null); if (name && name !== f.name) update("folders", f.id, { name }); }} />
+              : <span className="truncate">{f.name || "Без названия"}</span>}
+            {(grantOn("folders", f.id) || sharedWithMe) && <UsersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Общая папка" />}
+            <Actions>
+              <CreateMenu onCreate={k => create(k, f.id)} trigger={<IconBtn label="Создать в папке"><PlusIcon /></IconBtn>} />
+              <ActionsDropdown items={items} trigger={<IconBtn label="Действия с папкой" className="md:hidden"><MoreHorizontalIcon /></IconBtn>} />
+            </Actions>
+          </Row>
+        </ActionsContext>
+        <AnimatePresence initial={false}>
+          {isOpen && (
+            <motion.ul className="flex flex-col gap-px overflow-hidden" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18, ease: "easeOut" }}>
+              {kids.map(c => renderFolder(c, depth + 1))}
+              {files.map(x => fileRow(x, depth + 1))}
+              {!kids.length && !files.length && <li className="py-1 text-xs text-muted-foreground" style={{ paddingLeft: 36 + (depth + 1) * 12 }}>Пусто</li>}
+            </motion.ul>
+          )}
+        </AnimatePresence>
       </li>
     );
   };
@@ -138,80 +145,75 @@ export function CreateMenu({ onCreate, trigger }) {
 
 function FileRow({ x, depth, active, go, folders, shared, onShare }) {
   const Icon = x.kind === "project" ? ListChecksIcon : FileTextIcon;
+  const items = fileItems({ x, folders, onShare, after: () => active && go({ journal: true }) });
   return (
     <li>
-      <Row depth={depth} active={active} onClick={() => go({ [x.kind]: x.id })}>
-        <span className="size-3.5 shrink-0" />
-        <Icon className="size-4 shrink-0 text-muted-foreground" />
-        <span className={cn("truncate", !(x.name || x.title)?.trim() && "text-muted-foreground")}>{itemName(x)}</span>
-        {shared && <UsersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Общий проект" />}
-        <Actions>
-          <FileMenu x={x} folders={folders} onShare={onShare} after={() => active && go({ journal: true })} />
-        </Actions>
-      </Row>
+      <ActionsContext items={items}>
+        <Row depth={depth} active={active} onClick={() => go({ [x.kind]: x.id })}>
+          <span className="size-3.5 shrink-0" />
+          <Icon className="size-4 shrink-0 text-muted-foreground" />
+          <span className={cn("truncate", !(x.name || x.title)?.trim() && "text-muted-foreground")}>{itemName(x)}</span>
+          {shared && <UsersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Общий проект" />}
+          <Actions>
+            <ActionsDropdown items={items} trigger={<IconBtn label={x.kind === "project" ? "Действия с проектом" : "Действия с заметкой"} className="md:hidden"><MoreHorizontalIcon /></IconBtn>} />
+          </Actions>
+        </Row>
+      </ActionsContext>
     </li>
   );
 }
 
 // move / share / delete for a note or a project
-export function FileMenu({ x, folders, after, trigger, onShare }) {
+export function fileItems({ x, folders, after, onShare }) {
   const coll = COLL[x.kind], project = x.kind === "project";
   const sharedRoot = project && !isMine(x);
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>{trigger || <IconBtn label={project ? "Действия с проектом" : "Действия с заметкой"}><MoreHorizontalIcon /></IconBtn>}</DropdownMenuTrigger>
-      <DropdownMenuContent align="start" onClick={e => e.stopPropagation()}>
-        {project && onShare && <DropdownMenuItem onSelect={onShare}><UsersIcon />{isMine(x) ? "Поделиться" : "Участники"}</DropdownMenuItem>}
-        <MoveTo folders={folders} current={x.folder} onMove={folder => update(coll, x.id, { folder })} />
-        {!sharedRoot && <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={async () => {
-            const ok = await confirmAction(project
-              ? { title: `Удалить проект «${itemName(x)}»?`, description: "Удалятся его категории и открытые задачи. Выполненные останутся в журнале." }
-              : { title: `Удалить «${itemName(x)}»?`, description: "Заметку нельзя будет вернуть." });
-            if (!ok) return;
-            after?.();
-            project ? deleteProject(x.id) : remove("notes", x.id);
-          }}><Trash2Icon />Удалить</DropdownMenuItem>
-        </>}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+  return [
+    project && onShare && { label: isMine(x) ? "Поделиться" : "Участники", icon: UsersIcon, onSelect: onShare },
+    moveItem(folders, x.folder, folder => update(coll, x.id, { folder })),
+    !sharedRoot && { sep: true },
+    !sharedRoot && { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: async () => {
+      const ok = await confirmAction(project
+        ? { title: `Удалить проект «${itemName(x)}»?`, description: "Удалятся его категории и открытые задачи. Выполненные останутся в журнале." }
+        : { title: `Удалить «${itemName(x)}»?`, description: "Заметку нельзя будет вернуть." });
+      if (!ok) return;
+      after?.();
+      project ? deleteProject(x.id) : remove("notes", x.id);
+    } },
+  ];
 }
 
-function MoveTo({ folders, current, onMove }) {
-  return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger><FolderInputIcon />Переместить в</DropdownMenuSubTrigger>
-      <DropdownMenuSubContent>
-        <DropdownMenuItem disabled={!current} onSelect={() => onMove("")}>Без папки</DropdownMenuItem>
-        {[...folders].sort((a, b) => a.name.localeCompare(b.name, "ru")).map(f => (
-          <DropdownMenuItem key={f.id} disabled={current === f.id} onSelect={() => onMove(f.id)}><FolderIcon />{f.name}</DropdownMenuItem>
-        ))}
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  );
+export function FileMenu({ trigger, ...props }) {
+  const project = props.x.kind === "project";
+  return <ActionsDropdown items={fileItems(props)} trigger={trigger || <IconBtn label={project ? "Действия с проектом" : "Действия с заметкой"}><MoreHorizontalIcon /></IconBtn>} />;
 }
+
+const moveItem = (folders, current, onMove) => ({
+  label: "Переместить в", icon: FolderInputIcon, sub: [
+    { label: "Без папки", disabled: !current, onSelect: () => onMove("") },
+    ...[...folders].sort((a, b) => a.name.localeCompare(b.name, "ru")).map(f => ({ label: f.name, icon: FolderIcon, disabled: current === f.id, onSelect: () => onMove(f.id) })),
+  ],
+});
 
 const Actions = ({ children }) => (
   <span className="ml-auto flex shrink-0 items-center opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100 max-md:opacity-100">{children}</span>
 );
 
-function Row({ depth, active, children, onClick }) {
+// forwards ref and props so it can be a right-click menu trigger
+const Row = forwardRef(function Row({ depth, active, children, onClick, className, style, ...props }, ref) {
   return (
     <div
-      role="button" tabIndex={0} onClick={onClick}
+      ref={ref} role="button" tabIndex={0} {...props} onClick={onClick}
       onKeyDown={e => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); onClick(); } }}
       className={cn(
-        "group/row flex h-8 cursor-pointer items-center gap-1.5 rounded-md pr-1 text-sm outline-none select-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50",
-        active && "bg-accent font-medium"
+        "group/row flex h-8 cursor-pointer items-center gap-1.5 rounded-md pr-1 text-sm outline-none select-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:bg-accent",
+        active && "bg-accent font-medium", className
       )}
-      style={{ paddingLeft: 6 + depth * 12 }}
+      style={{ paddingLeft: 6 + depth * 12, ...style }}
     >
       {children}
     </div>
   );
-}
+});
 
 export const IconBtn = forwardRef(function IconBtn({ label, children, className, onClick, ...props }, ref) {
   return (

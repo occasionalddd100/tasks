@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { ConfirmHost } from "@/components/Confirm";
+import { MotionConfig, motion } from "motion/react";
 import NotesTree, { IconBtn, CreateMenu, itemName } from "@/components/notes/NotesTree";
 import { ProjectView, JournalView } from "@/components/tasks/ProjectViews";
 
@@ -46,6 +47,7 @@ export default function Shell() {
   const sidebar = <Sidebar view={{ ...view, project, journal: !view.note && !project }} go={go} email={db.email} />;
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="flex h-dvh overflow-hidden">
       <aside className="hidden w-64 shrink-0 border-r bg-sidebar md:flex md:flex-col">{sidebar}</aside>
       <Sheet open={menu} onOpenChange={setMenu}><SheetContent>{sidebar}</SheetContent></Sheet>
@@ -56,12 +58,15 @@ export default function Shell() {
           <span className="truncate text-sm font-medium">{title}</span>
         </div>
         {db.error && <p className="m-4 rounded-md border border-destructive/40 p-3 text-sm text-destructive">Нет связи с базой: {db.error}. Обнови страницу.</p>}
-        {view.note
-          ? <Suspense fallback={null}><NoteView key={view.note} id={view.note} fresh={view.fresh} go={go} /></Suspense>
-          : project ? <ProjectView key={project} id={project} fresh={view.fresh} go={go} /> : <JournalView />}
+        <motion.div key={view.note || project || "journal"} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+          {view.note
+            ? <Suspense fallback={null}><NoteView id={view.note} fresh={view.fresh} go={go} /></Suspense>
+            : project ? <ProjectView id={project} fresh={view.fresh} go={go} /> : <JournalView />}
+        </motion.div>
       </main>
       <ConfirmHost />
     </div>
+    </MotionConfig>
   );
 }
 
