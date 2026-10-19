@@ -87,10 +87,9 @@ export default function JournalView() {
       </header>
 
       <QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} />
-      <TodayCard i={info(today())} onOpen={edit => pick(today(), edit)} />
-      <WeekStrip info={info} onPick={pick} />
-      <Memories info={info} mine={mine} onPick={pick} />
       <Heatmap info={info} sel={open?.date} onPick={pick} />
+      <TodayCard i={info(today())} onOpen={edit => pick(today(), edit)} />
+      <Memories info={info} mine={mine} onPick={pick} />
       <Stats info={info} items={items} mine={mine} streak={streak} />
       <Habits habits={db.habits} />
       <DayDialog open={open} setOpen={setOpen} info={info} burst={bursts.fire} />
