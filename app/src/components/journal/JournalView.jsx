@@ -31,6 +31,8 @@ export const MARKS = [
 ];
 
 const iso = d => d.toLocaleDateString("sv-SE");
+// a day's words: the old single note, or its latest diary entry
+const dayText = doc => doc?.memo || doc?.thoughts?.at(-1)?.text || "";
 const dayId = date => getDb().me + ":" + date;
 const MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 const WDS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
@@ -57,7 +59,7 @@ export default function JournalView() {
     items: [...(items.get(date)?.items || []), ...(mine.get(date)?.extra || []).map(text => ({ text, from: "вручную" }))],
     note: items.get(date)?.note || "", doc: mine.get(date),
   });
-  const active = date => { const i = info(date); return i.items.length > 0 || !!i.doc?.mood || !!i.doc?.memo || !!i.doc?.photos?.length; };
+  const active = date => { const i = info(date); return i.items.length > 0 || !!i.doc?.mood || !!dayText(i.doc) || !!i.doc?.photos?.length; };
 
   const streak = useMemo(() => {
     let n = 0, d = new Date();
@@ -70,15 +72,19 @@ export default function JournalView() {
   const todayMood = moodOf(mine.get(today())?.mood);
 
   const pick = (date, edit = false) => setOpen({ date, edit });
+  const memories = useMemories(info, mine);
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
   return (
-    <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 pt-5 pb-16 md:px-8 md:pt-8">
+    <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 pt-5 pb-16 md:px-8 md:pt-8">
       {/* soft glow tinted by today's mood */}
       <motion.div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[42rem] max-w-full -translate-x-1/2 rounded-full blur-3xl"
         animate={{ backgroundColor: todayMood?.color || "#64748b", opacity: todayMood ? 0.18 : 0.08 }} transition={{ duration: 0.8 }} />
       <header className="flex flex-col gap-3">
-        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Журнал</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Журнал</h1>
+          <span className="ml-auto"><MemoriesButton cards={memories} onPick={pick} /></span>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Badge>сегодня: <b>{todayDone}</b> {plural(todayDone, ["дело", "дела", "дел"])}</Badge>
           {streak >= 2 && <Badge><FlameIcon className="size-3.5 text-orange-500" />подряд: <b>{streak}</b> {plural(streak, ["день", "дня", "дней"])}</Badge>}
@@ -87,11 +93,18 @@ export default function JournalView() {
       </header>
 
       <QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} />
-      <Heatmap info={info} sel={open?.date} onPick={pick} />
-      <TodayCard i={info(today())} onOpen={edit => pick(today(), edit)} />
-      <Memories info={info} mine={mine} onPick={pick} />
-      <Stats info={info} items={items} mine={mine} streak={streak} />
-      <Habits habits={db.habits} />
+      {/* desktop: two columns filling the width; phone: one column in the order that matters most */}
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start">
+        <div className="flex flex-col gap-5 max-lg:contents">
+          <div className="max-lg:order-2"><Heatmap info={info} sel={open?.date} onPick={pick} /></div>
+          <div className="max-lg:order-3"><ThoughtsCard i={info(today())} /></div>
+          <div className="max-lg:order-4"><Habits habits={db.habits} /></div>
+        </div>
+        <div className="flex flex-col gap-5 max-lg:contents">
+          <div className="max-lg:order-1"><TodayPanel i={info(today())} onOpen={edit => pick(today(), edit)} /></div>
+          <div className="max-lg:order-5"><Stats info={info} items={items} mine={mine} streak={streak} /></div>
+        </div>
+      </div>
       <DayDialog open={open} setOpen={setOpen} info={info} burst={bursts.fire} />
       {bursts.layer}
     </div>
@@ -286,10 +299,10 @@ function Tip({ date, x, y, h, i }) {
           {mood && <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium" style={{ color: mood.color }}><mood.icon className="size-3.5" />{mood.label}</span>}
         </div>
         {marks.length > 0 && <div className="flex flex-wrap gap-1.5">{marks.map(m => <span key={m.k} className="inline-flex items-center gap-1 text-xs"><m.icon className="size-3" style={{ color: m.color, fill: m.color }} />{m.short}</span>)}</div>}
-        {i.doc?.memo && <p className="line-clamp-4 text-[13px] leading-snug">{i.doc.memo}</p>}
+        {dayText(i.doc) && <p className="line-clamp-4 text-[13px] leading-snug">{dayText(i.doc)}</p>}
         {i.items.length > 0
           ? <div className="text-xs text-muted-foreground"><b className="font-semibold text-good">{i.items.length}</b> {plural(i.items.length, ["дело", "дела", "дел"])}: {i.items.slice(0, 3).map(x => x.text).join(" · ")}{i.items.length > 3 && " …"}</div>
-          : !i.doc?.memo && !mood && <div className="text-xs text-muted-foreground">Пустой день. Нажми, чтобы записать.</div>}
+          : !dayText(i.doc) && !mood && <div className="text-xs text-muted-foreground">Пустой день. Нажми, чтобы записать.</div>}
       </div>
     </motion.div>,
     document.body
@@ -355,7 +368,10 @@ function DayEditor({ date, info, burst }) {
           </div>
         </div>
 
-        <Memo key={id} date={date} value={doc?.memo || ""} save={save} />
+        <div>
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-muted-foreground"><SparklesIcon className="size-3.5" />{isToday ? "Мысли за сегодня" : "Мысли и записи"}</p>
+          <Thoughts date={date} doc={doc} />
+        </div>
         <Photos date={date} photos={doc?.photos || []} save={save} />
 
         <ExtraDone date={date} extra={doc?.extra || []} save={save} />
@@ -582,7 +598,7 @@ function DayDialog({ open, setOpen, info, burst }) {
 function DayRead({ date, i, onEdit }) {
   const mood = moodOf(i.doc?.mood), marks = MARKS.filter(m => i.doc?.marks?.includes(m.k)), photos = i.doc?.photos || [];
   const [lb, setLb] = useState(null);
-  const empty = !mood && !marks.length && !i.doc?.memo && !photos.length;
+  const empty = !mood && !marks.length && !dayText(i.doc) && !photos.length;
   return (
     <div className="flex flex-col gap-4">
       {photos.length > 0 && (
@@ -602,7 +618,7 @@ function DayRead({ date, i, onEdit }) {
           {marks.map(m => <span key={m.k} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm" style={{ borderColor: m.color }}><m.icon className="size-3.5" style={{ color: m.color, fill: m.color }} />{m.label}</span>)}
         </div>
       )}
-      {i.doc?.memo && <p className="text-[16px] leading-relaxed whitespace-pre-wrap">{i.doc.memo}</p>}
+      {dayText(i.doc) && <Thoughts date={date} doc={i.doc} readOnly />}
       {empty && (
         <button type="button" onClick={onEdit} className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground">
           <SparklesIcon className="size-5" />{date === today() ? "Написать о сегодня" : "Этот день пока без записи. Добавить?"}
@@ -757,7 +773,7 @@ function Stats({ info, items, mine, streak }) {
   const delta = s.week - s.prev;
 
   return (
-    <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <section className="grid grid-cols-2 gap-3">
       <Tile label="Серия" value={streak} unit={plural(streak, ["день", "дня", "дней"])} hint="подряд с делами или отметкой" icon={FlameIcon} tint="#f97316" />
       <Tile label="Сделано за 7 дней" value={s.week} hint={delta === 0 ? "как на прошлой неделе" : `${delta > 0 ? "+" : ""}${delta} к прошлой неделе`}
         icon={delta >= 0 ? TrendingUpIcon : TrendingDownIcon} tint={delta >= 0 ? "#10b981" : "#f59e0b"} />
@@ -778,7 +794,7 @@ function Stats({ info, items, mine, streak }) {
           {s.rated < 30 && <span>{30 - s.rated} без отметки</span>}
         </div>
       </div>
-      <div className="col-span-2 flex items-center justify-around gap-2 rounded-2xl border bg-card p-3 shadow-xs md:col-span-4">
+      <div className="col-span-2 flex items-center justify-around gap-2 rounded-2xl border bg-card p-3 shadow-xs">
         <Count icon={HeartIcon} color="#ec4899" n={s.hearts} label={plural(s.hearts, ["важное событие", "важных события", "важных событий"])} />
         <Count icon={StarIcon} color="#eab308" n={s.stars} label={plural(s.stars, ["достижение", "достижения", "достижений"])} />
         <Count icon={ImagePlusIcon} color="#38bdf8" n={s.photos} label="фото за год" />
@@ -842,7 +858,7 @@ function Spark({ values }) {
 
 /* ───────────── overview ───────────── */
 
-const hasEntry = i => !!(i.doc?.mood || i.doc?.memo || i.doc?.photos?.length || i.doc?.marks?.length);
+const hasEntry = i => !!(i.doc?.mood || dayText(i.doc) || i.doc?.photos?.length || i.doc?.marks?.length);
 
 function Cover({ photo, mood, sharp, className, children }) {
   return (
@@ -855,127 +871,160 @@ function Cover({ photo, mood, sharp, className, children }) {
   );
 }
 
-function TodayCard({ i, onOpen }) {
-  const mood = moodOf(i.doc?.mood), photos = i.doc?.photos || [], marks = MARKS.filter(m => i.doc?.marks?.includes(m.k));
-  const filled = hasEntry(i), photo = photos[0];
-  return (
-    <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}
-      className="group relative overflow-hidden rounded-3xl border bg-card shadow-sm">
-      <Cover photo={photo} mood={mood} className={cn(photo ? "min-h-56 md:min-h-64" : "min-h-0")}>
-        <div className={cn("relative flex h-full flex-col gap-3 p-5 md:p-6", photo && "min-h-56 justify-end text-white md:min-h-64")}>
-          <div className="flex items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <div className={cn("text-xs font-medium tracking-wide uppercase", photo ? "text-white/70" : "text-muted-foreground")}>Сегодня</div>
-              <div className="text-2xl font-bold tracking-tight">{fmtDate(today()).replace("Сегодня · ", "")}</div>
-            </div>
-            {photo && (
-              <motion.div initial={{ opacity: 0, scale: 0.8, rotate: 6 }} animate={{ opacity: 1, scale: 1, rotate: 3 }} transition={{ type: "spring", bounce: 0.4 }}
-                className="size-14 shrink-0 overflow-hidden rounded-xl border-2 border-white/80 shadow-lg md:size-20">
-                <Thumb path={photo.path} className="size-full object-cover" />
-              </motion.div>
-            )}
-            {mood && (
-              <motion.div initial={{ scale: 0, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", bounce: 0.5 }}
-                className="grid size-14 shrink-0 place-items-center rounded-2xl shadow-lg" style={{ background: mood.color }}>
-                <mood.icon className="size-8 text-white" strokeWidth={2.2} />
-              </motion.div>
-            )}
-          </div>
-          {filled ? <>
-            {(mood || marks.length > 0) && <div className="flex flex-wrap gap-2 text-sm font-medium">
-              {mood && <span style={photo ? undefined : { color: mood.color }}>{mood.label} день</span>}
-              {marks.map(m => <span key={m.k} className="inline-flex items-center gap-1"><m.icon className="size-3.5" style={{ color: m.color, fill: m.color }} />{m.short}</span>)}
-            </div>}
-            {i.doc?.memo && <p className={cn("line-clamp-3 text-[15px] leading-relaxed", photo ? "text-white/90" : "text-foreground/90")}>{i.doc.memo}</p>}
-          </> : <p className="text-[15px] text-muted-foreground">Пиши прямо по ходу дня: что делаешь, что происходит, какое настроение. Дополнять можно сколько угодно раз, до самого вечера.</p>}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <motion.button type="button" whileTap={{ scale: 0.96 }} onClick={() => onOpen(true)}
-              className={cn("inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition-colors",
-                photo ? "bg-white text-black hover:bg-white/90" : "bg-primary text-primary-foreground hover:bg-primary/90")}>
-              {filled ? <><PencilIcon className="size-4" />Дополнить</> : <><SparklesIcon className="size-4" />Написать о сегодня</>}
-            </motion.button>
-            {filled && <button type="button" onClick={() => onOpen(false)} className={cn("h-10 rounded-xl px-3 text-sm font-medium", photo ? "text-white/85 hover:bg-white/10" : "text-muted-foreground hover:bg-accent")}>Открыть</button>}
-            <span className={cn("ml-auto text-sm", photo ? "text-white/75" : "text-muted-foreground")}>
-              <b className={photo ? "text-white" : "text-good"}>{i.items.length}</b> {plural(i.items.length, ["дело", "дела", "дел"])}{photos.length > 0 && ` · ${photos.length} фото`}
-            </span>
-          </div>
-        </div>
-      </Cover>
-    </motion.section>
-  );
-}
-
-// the last 7 days at a glance
-function WeekStrip({ info, onPick }) {
-  const days = Array.from({ length: 7 }, (_, k) => addDays(k - 6));
-  return (
-    <section>
-      <h2 className="mb-2 px-1 text-[15px] font-semibold">Последние 7 дней</h2>
-      <div className="grid grid-cols-7 gap-1.5 md:gap-2.5">
-        {days.map((d, k) => {
-          const i = info(d), mood = moodOf(i.doc?.mood), photo = i.doc?.photos?.[0], mark = MARKS.find(m => i.doc?.marks?.includes(m.k));
-          const wd = WDS[(new Date(d).getDay() + 6) % 7];
-          return (
-            <motion.button key={d} type="button" onClick={() => onPick(d)} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: k * 0.04 }}
-              whileHover={{ y: -3 }} className="group overflow-hidden rounded-xl border bg-card text-left shadow-xs md:rounded-2xl">
-              <Cover photo={photo} mood={mood} sharp className="aspect-[3/4]">
-                <div className={cn("relative flex h-full flex-col p-1.5 md:p-2.5", photo && "text-white")}>
-                  <span className={cn("text-[10px] font-medium uppercase md:text-xs", photo ? "text-white/75" : "text-muted-foreground")}>{d === today() ? "сег" : wd}</span>
-                  <span className="text-base leading-none font-bold md:text-2xl">{+d.slice(8)}</span>
-                  <span className="mt-auto flex items-center gap-1">
-                    {mood && <mood.icon className="size-4 md:size-5" style={{ color: photo ? "#fff" : mood.color }} />}
-                    {mark && <mark.icon className="size-3 md:size-4" style={{ color: mark.color, fill: mark.color }} />}
-                  </span>
-                  {i.items.length > 0 && <span className={cn("text-[10px] md:text-xs", photo ? "text-white/80" : "text-muted-foreground")}>✓ {i.items.length}</span>}
-                </div>
-              </Cover>
-              <div className="h-1" style={{ background: mood?.color || "var(--muted)" }} />
-            </motion.button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 // "on this day", but smart: same date a week/month/quarter/year ago, then the brightest recent days
-function Memories({ info, mine, onPick }) {
-  const cards = useMemo(() => {
+function useMemories(info, mine) {
+  return useMemo(() => {
     const out = [], seen = new Set();
     const back = (k, unit) => { const d = new Date(); unit === "d" ? d.setDate(d.getDate() - k) : d.setMonth(d.getMonth() - k); return iso(d); };
     for (const [d, label] of [[back(7, "d"), "Неделю назад"], [back(1, "m"), "Месяц назад"], [back(3, "m"), "3 месяца назад"], [back(6, "m"), "Полгода назад"], [back(12, "m"), "Год назад"]]) {
       const i = info(d); if (hasEntry(i)) { out.push({ d, label, i }); seen.add(d); }
     }
-    const score = x => (x.photos?.length ? 3 : 0) + (x.marks?.includes("heart") ? 3 : 0) + (x.marks?.includes("star") ? 2 : 0) + (x.mood === 5 ? 2 : x.mood === 4 ? 1 : 0) + (x.memo ? 1 : 0);
+    const score = x => (x.photos?.length ? 3 : 0) + (x.marks?.includes("heart") ? 3 : 0) + (x.marks?.includes("star") ? 2 : 0) + (x.mood === 5 ? 2 : x.mood === 4 ? 1 : 0) + (dayText(x) ? 1 : 0);
     const from = addDays(-90), now = today();
     const best = [...mine.values()].filter(x => x.date >= from && x.date < now && !seen.has(x.date) && score(x) >= 3).sort((a, b) => score(b) - score(a) || b.date.localeCompare(a.date)).slice(0, 8);
     for (const x of best) out.push({ d: x.date, label: x.marks?.includes("heart") ? "Важный день" : x.marks?.includes("star") ? "Достижение" : x.photos?.length ? "Яркий момент" : "Хороший день", i: info(x.date) });
     return out;
   }, [mine]);
-  if (!cards.length) return null;
+}
+
+const SEEN = "seenMemories";
+const loadSeen = () => { try { return new Set(JSON.parse(localStorage.getItem(SEEN) || "[]")); } catch { return new Set(); } };
+
+// header button: glows while there are memories not opened yet
+function MemoriesButton({ cards, onPick }) {
+  const [open, setOpen] = useState(false);
+  const [seen, setSeen] = useState(loadSeen);
+  const fresh = cards.filter(c => !seen.has(c.d + c.label)).length;
+  const show = () => {
+    setOpen(true);
+    const n = new Set([...seen, ...cards.map(c => c.d + c.label)]);
+    setSeen(n); try { localStorage.setItem(SEEN, JSON.stringify([...n].slice(-200))); } catch {}
+  };
   return (
-    <section>
-      <h2 className="mb-2 flex items-center gap-2 px-1 text-[15px] font-semibold"><SparklesIcon className="size-4 text-amber-500" />Воспоминания</h2>
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] md:-mx-1 md:px-1">
-        {cards.map(({ d, label, i }, k) => {
-          const mood = moodOf(i.doc?.mood), photo = i.doc?.photos?.[0];
-          return (
-            <motion.button key={d} type="button" onClick={() => onPick(d)} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 + k * 0.06 }}
-              whileHover={{ y: -4 }} className="group w-64 shrink-0 snap-start overflow-hidden rounded-2xl border bg-card text-left shadow-sm md:w-72">
-              <Cover photo={photo} mood={mood} className="h-44 md:h-48">
-                <div className={cn("relative flex h-full flex-col gap-1 p-3.5", photo && "text-white")}>
-                  <span className={cn("self-start rounded-full px-2.5 py-0.5 text-[11px] font-semibold backdrop-blur", photo ? "bg-white/20" : "bg-background/70")}>{label}</span>
-                  <div className="mt-auto flex items-center gap-1.5">
-                    <span className="text-sm font-semibold">{fmtDate(d)}</span>
-                    {mood && <mood.icon className="ml-auto size-4 shrink-0" style={{ color: photo ? "#fff" : mood.color }} />}
-                  </div>
-                  {i.doc?.memo && <p className={cn("line-clamp-2 text-[13px] leading-snug", photo ? "text-white/85" : "text-muted-foreground")}>{i.doc.memo}</p>}
-                </div>
-              </Cover>
-            </motion.button>
-          );
-        })}
+    <>
+      <motion.button type="button" onClick={show} whileTap={{ scale: 0.95 }}
+        className={cn("relative inline-flex h-9 items-center gap-2 overflow-hidden rounded-full border px-3.5 text-sm font-medium transition-colors",
+          fresh ? "border-amber-400/60 bg-amber-400/10 text-foreground" : "bg-card text-muted-foreground hover:text-foreground")}>
+        {fresh > 0 && <motion.span aria-hidden className="absolute inset-0 rounded-full" style={{ background: "radial-gradient(circle at 30% 50%, #fbbf2455, transparent 70%)" }}
+          animate={{ opacity: [0.3, 1, 0.3], scale: [1, 1.08, 1] }} transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }} />}
+        <motion.span className="relative" animate={fresh ? { rotate: [0, -12, 12, 0], scale: [1, 1.2, 1] } : {}} transition={{ duration: 1.2, repeat: fresh ? Infinity : 0, repeatDelay: 1.5 }}>
+          <SparklesIcon className={cn("size-4", fresh ? "text-amber-500" : "")} />
+        </motion.span>
+        <span className="relative">Воспоминания</span>
+        {fresh > 0 && <span className="relative grid h-5 min-w-5 place-items-center rounded-full bg-amber-500 px-1.5 text-[11px] font-bold text-white tabular-nums">{fresh}</span>}
+      </motion.button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-4xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl">
+          <DialogTitle className="flex items-center gap-2"><SparklesIcon className="size-5 text-amber-500" />Воспоминания</DialogTitle>
+          {!cards.length && <p className="text-sm text-muted-foreground">Пока пусто. Сюда попадают тот же день неделю, месяц, полгода и год назад, если в нём есть запись, и самые яркие дни за 3 месяца: с сердцем, звездой, фото или отличным настроением.</p>}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {cards.map(({ d, label, i }, k) => {
+              const mood = moodOf(i.doc?.mood), photo = i.doc?.photos?.[0], text = dayText(i.doc);
+              return (
+                <motion.button key={d} type="button" onClick={() => { setOpen(false); onPick(d); }} initial={{ opacity: 0, y: 16, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.05 + k * 0.05 }}
+                  whileHover={{ y: -4 }} className="group overflow-hidden rounded-2xl border bg-card text-left shadow-sm">
+                  <Cover photo={photo} mood={mood} className="h-44">
+                    <div className={cn("relative flex h-full flex-col gap-1 p-3.5", photo && "text-white")}>
+                      <span className={cn("self-start rounded-full px-2.5 py-0.5 text-[11px] font-semibold backdrop-blur", photo ? "bg-white/20" : "bg-background/70")}>{label}</span>
+                      <div className="mt-auto flex items-center gap-1.5">
+                        <span className="text-sm font-semibold">{fmtDate(d)}</span>
+                        {mood && <mood.icon className="ml-auto size-4 shrink-0" style={{ color: photo ? "#fff" : mood.color }} />}
+                      </div>
+                      {text && <p className={cn("line-clamp-2 text-[13px] leading-snug", photo ? "text-white/85" : "text-muted-foreground")}>{text}</p>}
+                    </div>
+                  </Cover>
+                </motion.button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/* ───────────── today & thoughts ───────────── */
+
+// today's tasks front and centre: done and still open, with the day's mood next to it
+function TodayPanel({ i, onOpen }) {
+  const mood = moodOf(i.doc?.mood), photo = i.doc?.photos?.[0];
+  return (
+    <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="flex items-center gap-3 border-b px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Сегодня</div>
+          <div className="truncate text-lg font-bold tracking-tight">{fmtDate(today()).replace("Сегодня · ", "")}</div>
+        </div>
+        {photo && <button type="button" onClick={() => onOpen(false)} className="size-10 shrink-0 overflow-hidden rounded-lg border"><Thumb path={photo.path} className="size-full object-cover" /></button>}
+        <button type="button" onClick={() => onOpen(!mood)} title={mood ? "Открыть день" : "Отметить настроение"}
+          className="grid size-10 shrink-0 place-items-center rounded-xl border transition-transform hover:scale-105" style={mood ? { background: mood.color, borderColor: mood.color } : undefined}>
+          {mood ? <mood.icon className="size-6 text-white" /> : <SmileIcon className="size-5 text-muted-foreground" />}
+        </button>
+        <button type="button" onClick={() => onOpen(false)} className="h-10 shrink-0 rounded-xl border px-3 text-sm font-medium hover:bg-accent">Открыть<span className="max-sm:hidden"> день</span></button>
       </div>
+      <div className="p-4"><DayTasks date={today()} /></div>
+    </motion.section>
+  );
+}
+
+// diary: short entries through the day, each with its time; the old single note shows first
+function Thoughts({ date, doc, readOnly }) {
+  const [text, setText] = useState("");
+  const ta = useRef(null);
+  const list = [...(doc?.memo ? [{ id: "memo", text: doc.memo }] : []), ...(doc?.thoughts || [])];
+  const cur = () => getDb().days.find(d => d.id === dayId(date));
+  const add = () => {
+    const v = text.trim(); if (!v) return;
+    put("days", dayId(date), { date, thoughts: [...(cur()?.thoughts || []), { id: Math.random().toString(36).slice(2, 9), at: new Date().toISOString(), text: v }] });
+    setText(""); setTimeout(() => ta.current?.focus());
+  };
+  const del = id => put("days", dayId(date), id === "memo" ? { date, memo: "" } : { date, thoughts: (cur()?.thoughts || []).filter(x => x.id !== id) });
+  useEffect(() => { const el = ta.current; if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 180) + "px"; } }, [text]);
+  const time = x => x.at ? new Date(x.at).toTimeString().slice(0, 5) : "";
+
+  return (
+    <div className="flex flex-col gap-3">
+      {list.length > 0 ? (
+        <ol className="relative flex flex-col">
+          <AnimatePresence initial={false}>
+            {list.map((x, k) => (
+              <motion.li key={x.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
+                className="group relative grid grid-cols-[2.6rem_1fr_auto] gap-x-2 pb-3 last:pb-0">
+                <span className="pt-0.5 text-right text-xs text-muted-foreground tabular-nums">{time(x)}</span>
+                <div className="relative border-l pl-3.5">
+                  <span aria-hidden className="absolute top-[7px] -left-[4.5px] size-2 rounded-full bg-[var(--ink)] ring-4 ring-card" />
+                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{x.text}</p>
+                </div>
+                {!readOnly ? (
+                  <button type="button" onClick={() => del(x.id)} aria-label="Удалить запись"
+                    className="grid size-6 place-items-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100 max-md:opacity-50">
+                    <XIcon className="size-3.5" />
+                  </button>
+                ) : <span />}
+              </motion.li>
+            ))}
+          </AnimatePresence>
+        </ol>
+      ) : readOnly ? null : <p className="text-sm text-muted-foreground/80">Пиши сюда в течение дня: мысли, события, что почувствовал. Каждая запись встанет в ленту со временем.</p>}
+      {!readOnly && (
+        <div className="flex items-end gap-2 rounded-xl border bg-background p-1.5 pl-3 focus-within:ring-2 focus-within:ring-ring/40">
+          <textarea ref={ta} value={text} rows={1} onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); add(); } }}
+            placeholder="Мысль, событие, что угодно…" aria-label="Новая запись в дневник"
+            className="min-h-9 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/60" />
+          <button type="button" onClick={add} disabled={!text.trim()} className="h-9 shrink-0 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-30">Записать</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ThoughtsCard({ i }) {
+  const n = (i.doc?.thoughts?.length || 0) + (i.doc?.memo ? 1 : 0);
+  return (
+    <section className="rounded-2xl border bg-card p-4 shadow-xs">
+      <h2 className="mb-3 flex items-center gap-2 text-[15px] font-semibold"><SparklesIcon className="size-4 text-[var(--ink)]" />Мысли за сегодня{n > 0 && <span className="text-sm font-normal text-muted-foreground">{n}</span>}</h2>
+      <Thoughts date={today()} doc={i.doc} />
     </section>
   );
 }
