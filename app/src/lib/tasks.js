@@ -6,8 +6,8 @@ export const dayDiff = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5)
 export const byOrder = (a, b) => (a.order ?? 999) - (b.order ?? 999);
 export const nextOrder = arr => Math.max(0, ...arr.map(x => x.order || 0)) + 1;
 
-// done before today: hidden from boards, still shown in the journal via doneOn
-export const stale = t => t.done && t.doneOn && t.doneOn < today();
+// done and hidden by hand, or done before today: moves to the board's "Выполненные" block, still shown in the journal via doneOn
+export const stale = t => t.done && (t.hidden || (t.doneOn && t.doneOn < today()));
 // dated tasks due within the next 7 days (or overdue) move into the "На неделе" card
 export const inWeek = t => t.due && t.due <= addDays(6);
 

@@ -40,7 +40,7 @@ export default function NoteView({ id, fresh, go }) {
   const [title, setTitle] = useState(note?.title || "");
   const titleRef = useRef(null), editorRef = useRef(null), editingTitle = useRef(false), box = useRef(null);
   const { other, touch } = useEditLock("notes", id);
-  const [width, setWidth] = usePref("noteWidth", "narrow");
+  const [width, setWidth] = usePref("noteWidthV2", "wide");
   const [mode, setMode] = usePref("noteMode", "edit");
   const reading = mode === "read" && !fresh;
   const toggleMode = () => setMode(reading ? "edit" : "read");

@@ -5,7 +5,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarIcon, ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GripVerticalIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CalendarIcon, CheckCheckIcon, ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GripVerticalIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useDb, getDb, add, update, updateMany, remove } from "@/lib/db";
 import { byOrder, nextOrder, stale, inWeek } from "@/lib/tasks";
@@ -40,6 +40,7 @@ export default function Board({ board }) {
   const cats = useMemo(() => db.cats.filter(c => c.board === board.id).sort(byOrder), [db.cats, board.id]);
   const catSet = useMemo(() => new Set(cats.map(c => c.id)), [cats]);
   const all = useMemo(() => db.tasks.filter(t => catSet.has(t.cat) && !stale(t)), [db.tasks, catSet]);
+  const archive = useMemo(() => db.tasks.filter(t => catSet.has(t.cat) && stale(t)).sort((a, b) => (b.doneOn || "").localeCompare(a.doneOn || "") || byOrder(a, b)), [db.tasks, catSet]);
   // a subtask lives under its parent; if the parent is hidden (old and done) it shows as a normal task
   const { visible, kids } = useMemo(() => {
     const ids = new Set(all.map(t => t.id)), kids = new Map(), visible = [];
@@ -143,6 +144,7 @@ export default function Board({ board }) {
           {activeCat && <div className="rounded-xl border bg-card px-4 py-3 font-semibold shadow-lg">{activeCat.name}</div>}
         </DragOverlay>
       </DndContext>
+      {archive.length > 0 && <DoneCard tasks={archive} cats={cats} />}
       {!cats.length && <p className="text-sm text-muted-foreground">Во вкладке пока нет категорий. Создай первую кнопкой ниже.</p>}
       <NewCat board={board} cats={cats} />
       <p className="text-xs text-muted-foreground">Тяни за ⋮⋮, чтобы переставить задачу или категорию. Нажми на текст, чтобы изменить. <span className="max-md:hidden">Правая кнопка мыши открывает меню: заметка, подзадача, приоритет, дата.</span><span className="md:hidden">Долгое нажатие или ⋯ открывает меню.</span></p>
@@ -185,6 +187,35 @@ function WeekCard({ tasks }) {
         {folded && <div className="h-2" />}
       </section>
     </div>
+  );
+}
+
+// done tasks hidden by hand or done before today, newest first; unchecking one returns it to its category
+function DoneCard({ tasks, cats }) {
+  const [folded, setFolded] = useState(() => { try { return localStorage.getItem("doneFold") !== "0"; } catch { return true; } });
+  const [limit, setLimit] = useState(30);
+  const toggle = () => { setFolded(f => { try { localStorage.setItem("doneFold", f ? "0" : "1"); } catch {} return !f; }); };
+  const catName = useMemo(() => new Map(cats.map(c => [c.id, c.name])), [cats]);
+  return (
+    <section className="rounded-xl border bg-card/60 shadow-xs">
+      <header className="flex items-center gap-1.5 px-3 py-2.5">
+        <FoldBtn folded={folded} onClick={toggle} />
+        <h2 className="flex cursor-pointer items-center gap-2 text-[15px] font-semibold text-muted-foreground" onClick={toggle}><CheckCheckIcon className="size-4" />Выполненные</h2>
+        <span className="text-[13px] text-muted-foreground tabular-nums">{tasks.length}</span>
+      </header>
+      <AnimatePresence initial={false}>
+        {!folded && (
+          <motion.div {...fold} className="overflow-hidden">
+            <ul className="px-2 pb-2">
+              {tasks.slice(0, limit).map(t => (
+                <li key={t.id} title={catName.get(t.cat)}><TaskRow t={t} /></li>
+              ))}
+            </ul>
+            {tasks.length > limit && <Button variant="ghost" size="sm" className="mx-3 mb-3 text-muted-foreground" onClick={() => setLimit(l => l + 30)}>Показать ещё ({tasks.length - limit})</Button>}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
   );
 }
 

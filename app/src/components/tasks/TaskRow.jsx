@@ -1,10 +1,10 @@
 import { createContext, useContext, useRef, useState } from "react";
 import {
-  AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CalendarXIcon, ChevronRightIcon, ClockIcon, CornerDownRightIcon, FileTextIcon, FlagIcon, FlameIcon,
+  AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CalendarXIcon, ChevronRightIcon, ClockIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlagIcon, FlameIcon,
   GripVerticalIcon, MoreHorizontalIcon, UserIcon, UserXIcon, PencilIcon, StickyNoteIcon, SunIcon, Trash2Icon,
 } from "lucide-react";
-import { getDb, update, remove } from "@/lib/db";
-import { today, dueLabel } from "@/lib/tasks";
+import { getDb, update, updateMany, remove } from "@/lib/db";
+import { today, dueLabel, stale } from "@/lib/tasks";
 import { renderMd } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -32,6 +32,12 @@ export function descendantsOf(id) {
   return out.slice(1);
 }
 
+// a done task (and its done subtasks) goes down into the "Выполненные" block right away
+export function hideTask(t) {
+  const { tasks } = getDb(), done = new Set(tasks.filter(x => x.done).map(x => x.id));
+  updateMany("tasks", [t.id, ...descendantsOf(t.id).filter(id => done.has(id))].map(id => [id, { hidden: true }]));
+}
+
 export async function deleteTask(t) {
   const kids = descendantsOf(t.id);
   if (kids.length && !await confirmAction({ title: `Удалить «${t.text}»?`, description: `Вместе с ней удалятся подзадачи (${kids.length}).` })) return;
@@ -43,7 +49,8 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const dateRef = useRef(null), timeRef = useRef(null);
 
-  const toggle = v => update("tasks", t.id, v ? { done: true, doneOn: today(), doneBy: getDb().me } : { done: false, doneOn: "", doneBy: "" });
+  const toggle = v => update("tasks", t.id, v ? { done: true, doneOn: today(), doneBy: getDb().me } : { done: false, doneOn: "", doneBy: "", hidden: false });
+  const canHide = t.done && !stale(t) && !overlay;
   const p = PRIO[t.prio];
   const late = t.due && !t.done && (t.due < today() || (t.due === today() && t.time && t.time < new Date().toTimeString().slice(0, 5)));
   const hasBody = !!t.body?.trim();
@@ -61,6 +68,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
   const when = t.due ? dueLabel(t.due) + (t.time ? " " + t.time : "") : "";
 
   const items = [
+    canHide && { label: "Скрыть в выполненные", icon: EyeOffIcon, onSelect: () => hideTask(t) },
     { label: hasBody ? "Открыть заметку" : "Добавить заметку", icon: FileTextIcon, onSelect: () => setNoteOpen(true) },
     onAddSub && { label: "Добавить подзадачу", icon: CornerDownRightIcon, onSelect: onAddSub },
     { sep: true },
@@ -140,6 +148,12 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
             <input ref={timeRef} type="time" tabIndex={-1} value={t.time || ""} onChange={e => update("tasks", t.id, { time: e.target.value || "" })}
               className="pointer-events-none absolute inset-0 opacity-0" aria-hidden />
           </button>
+          {canHide && (
+            <button type="button" onClick={() => hideTask(t)} title="Скрыть в выполненные" aria-label={"Скрыть в выполненные: " + t.text}
+              className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-background hover:text-foreground md:opacity-0 md:group-hover/task:opacity-100 md:focus-visible:opacity-100">
+              <EyeOffIcon className="size-3.5" />
+            </button>
+          )}
           {who && (
             <ActionsDropdown align="end" items={assignItems} trigger={
               <button type="button" className="grid size-6 place-items-center rounded-full" aria-label={"Исполнитель: " + personName(who)}>
