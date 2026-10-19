@@ -319,17 +319,17 @@ function DayEditor({ date, info, burst }) {
       <div className="flex flex-col gap-5">
         <div>
           <p className="mb-2 text-sm font-medium text-muted-foreground">Как прошёл день?</p>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-5 gap-2 max-sm:gap-1.5">
             {MOODS.map(m => {
               const on = doc?.mood === m.v;
               return (
                 <motion.button key={m.v} type="button" onClick={e => setMood(m.v, e)} whileTap={{ scale: 0.9 }} aria-pressed={on}
-                  className={cn("relative flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-xs font-medium transition-colors", on ? "border-transparent text-foreground" : "text-muted-foreground hover:bg-accent/60")}>
+                  className={cn("relative flex min-w-0 flex-col items-center gap-1 rounded-xl border px-0.5 py-2.5 text-xs font-medium transition-colors max-sm:text-[10.5px]", on ? "border-transparent text-foreground" : "text-muted-foreground hover:bg-accent/60")}>
                   {on && <motion.span layoutId="mood-pill" className="absolute inset-0 rounded-xl" style={{ background: m.color + "26", boxShadow: `inset 0 0 0 1.5px ${m.color}` }} transition={{ type: "spring", bounce: 0.3, duration: 0.4 }} />}
                   <motion.span className="relative" animate={on ? { scale: [1, 1.35, 1], rotate: m.v === 1 ? [0, -8, 8, 0] : [0, 0] } : { scale: 1 }} transition={{ duration: 0.45 }}>
-                    <m.icon className="size-7" style={{ color: m.color }} strokeWidth={on ? 2.4 : 1.8} />
+                    <m.icon className="size-7 max-sm:size-6" style={{ color: m.color }} strokeWidth={on ? 2.4 : 1.8} />
                   </motion.span>
-                  <span className="relative">{m.label}</span>
+                  <span className="relative max-w-full truncate">{m.label}</span>
                 </motion.button>
               );
             })}
@@ -393,13 +393,13 @@ function DayDialog({ open, setOpen, info, burst }) {
   const isToday = date === today();
   return (
     <Dialog open={!!open} onOpenChange={o => !o && setOpen(null)}>
-      <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto p-0 sm:max-w-2xl">
+      <DialogContent className="max-h-[92vh] max-h-[92dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-x-hidden overflow-y-auto p-0 sm:max-w-2xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[env(safe-area-inset-bottom)]">
         {date && <>
           <motion.div aria-hidden className="sticky top-0 z-10 h-1" animate={{ backgroundColor: mood?.color || "transparent" }} />
           <div className="flex items-center gap-1 border-b px-3 py-2.5 pr-12">
             <button type="button" onClick={() => go(-1)} className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent" aria-label="Предыдущий день"><ChevronLeftIcon className="size-4" /></button>
             <button type="button" onClick={() => go(1)} disabled={isToday} className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent disabled:opacity-30" aria-label="Следующий день"><ChevronRightIcon className="size-4" /></button>
-            <DialogTitle className="ml-1 min-w-0 flex-1 truncate text-base">{fmtDate(date)}</DialogTitle>
+            <DialogTitle className="ml-1 min-w-0 flex-1 truncate text-base">{fmtDate(date).replace("Сегодня · ", "")}{isToday && <span className="ml-2 text-xs font-medium text-muted-foreground max-[380px]:hidden">сегодня</span>}</DialogTitle>
             {edit
               ? <button type="button" onClick={() => setEdit(false)} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"><CheckIcon className="size-4" />Готово</button>
               : <button type="button" onClick={() => setEdit(true)} className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm font-medium hover:bg-accent"><PencilIcon className="size-3.5" />Изменить</button>}
@@ -542,13 +542,13 @@ function Lightbox({ photos, index, setIndex, onDelete }) {
   const step = n => setIndex(i => (i + n + photos.length) % photos.length);
   return (
     <Dialog open={!!p} onOpenChange={o => !o && setIndex(null)}>
-      <DialogContent className="max-w-[min(64rem,calc(100%-1rem))] gap-3 border-none bg-black/90 p-3 text-white sm:max-w-[min(64rem,calc(100%-2rem))]"
+      <DialogContent className="grid-cols-[minmax(0,1fr)] max-w-[min(64rem,calc(100%-1rem))] gap-3 border-none bg-black/90 p-3 text-white sm:max-w-[min(64rem,calc(100%-2rem))]"
         onKeyDown={e => { if (e.key === "ArrowRight") step(1); if (e.key === "ArrowLeft") step(-1); }}>
         <DialogTitle className="sr-only">Фото дня</DialogTitle>
         <div className="relative grid min-h-60 place-items-center">
           <AnimatePresence mode="wait">
             {url && <motion.img key={p?.path} src={url} alt="" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-              className="max-h-[78vh] w-auto rounded-lg object-contain" />}
+              className="max-h-[78vh] max-w-full w-auto rounded-lg object-contain" />}
           </AnimatePresence>
           {photos.length > 1 && <>
             <button type="button" onClick={() => step(-1)} className="absolute left-1 grid size-10 place-items-center rounded-full bg-black/40 hover:bg-black/60" aria-label="Предыдущее"><ChevronLeftIcon /></button>
