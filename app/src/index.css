@@ -116,6 +116,15 @@
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
 }
 
+/* journal year grid */
+@keyframes cell-in { from { opacity: 0; transform: scale(0.2); } to { opacity: 1; transform: none; } }
+@keyframes today-pulse { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.2; } }
+@keyframes storm { 0%, 100% { filter: drop-shadow(0 0 0 #be123c00); } 50% { filter: drop-shadow(0 0 3px #be123c); } }
+.cell { transform-box: fill-box; transform-origin: center; animation: cell-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1.15) both; transition: opacity 0.15s; }
+.cell:hover { opacity: 0.75; }
+.cell.terrible { animation: cell-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1.15) both, storm 2.4s ease-in-out 1s infinite; }
+.today-ring { animation: today-pulse 2s ease-in-out infinite; }
+
 @keyframes menu-in { from { opacity: 0; transform: scale(0.97) translateY(-2px); } to { opacity: 1; transform: none; } }
 
 /* rendered markdown (task note previews) */

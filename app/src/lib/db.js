@@ -6,7 +6,7 @@ const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 export const sb = createClient(SB_URL, SB_KEY);
 
-export const COLLS = ["projects", "boards", "cats", "tasks", "habits", "log", "folders", "notes"];
+export const COLLS = ["projects", "boards", "cats", "tasks", "habits", "log", "folders", "notes", "days"];
 
 // One table `docs` (coll, id, data jsonb, owner). The store keeps every visible doc in memory,
 // applies writes optimistically and follows realtime changes from other people.
@@ -75,6 +75,18 @@ export async function add(coll, data) {
   try { chk(await sb.from("docs").insert({ coll, id, data: strip(data) })); }
   catch (e) { cache[coll].delete(id); emit(coll); fail("Не сохранилось", e); return null; }
   return id;
+}
+
+// a doc with a known id (journal day = "<me>:<date>"): merge into it, or create it on first write
+export async function put(coll, id, fields) {
+  if (cache[coll].has(id)) return updateMany(coll, [[id, fields]]);
+  cache[coll].set(id, { ...fields, id, _owner: state.me }); emit(coll);
+  try { chk(await sb.from("docs").insert({ coll, id, data: fields })); }
+  catch (e) {
+    // created meanwhile on another device: merge instead
+    if (e.code === "23505") { try { chk(await sb.rpc("merge_doc", { c: coll, i: id, f: fields })); return; } catch (e2) { e = e2; } }
+    cache[coll].delete(id); emit(coll); fail("Не сохранилось", e);
+  }
 }
 
 export async function update(coll, id, fields) {

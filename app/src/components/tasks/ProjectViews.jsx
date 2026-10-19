@@ -147,45 +147,11 @@ function TabRename({ value, onDone }) {
   );
 }
 
-// home screen: recurring tasks and what got done, day by day
-export function JournalView() {
-  const db = useDb();
-  const days = useJournal(db);
-  const streak = useMemo(() => {
-    let n = 0; const d = new Date();
-    for (;;) {
-      const k = d.toLocaleDateString("sv-SE");
-      if (days.get(k)?.items.length) { n++; d.setDate(d.getDate() - 1); }
-      else if (n === 0 && k === today()) d.setDate(d.getDate() - 1);
-      else break;
-    }
-    return n;
-  }, [days]);
-  const deadline = Math.ceil((new Date("2026-10-31T23:59:00+03:00") - new Date()) / 864e5);
-  const todayDone = days.get(today())?.items.length || 0;
-
-  if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
-  return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 pt-5 pb-16 md:px-8 md:pt-8">
-      <header className="flex flex-col gap-3">
-        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Журнал</h1>
-        <div className="flex flex-wrap gap-2">
-          <Badge>сегодня: <b>{todayDone}</b> {plural(todayDone, ["дело", "дела", "дел"])}</Badge>
-          {deadline >= 0 && <Badge>до 31.10: <b>{deadline}</b> {plural(deadline, ["день", "дня", "дней"])}</Badge>}
-          {streak >= 2 && <Badge>дней подряд с делами: <b>{streak}</b></Badge>}
-        </div>
-      </header>
-      <Habits habits={db.habits} />
-      <Journal days={days} />
-    </div>
-  );
-}
-
-const Badge = ({ children }) => (
+export const Badge = ({ children }) => (
   <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-0.5 text-[13px] font-medium text-muted-foreground tabular-nums [&_b]:font-semibold [&_b]:text-foreground">{children}</span>
 );
 
-function Habits({ habits }) {
+export function Habits({ habits }) {
   const [showRest, setShowRest] = useState(false);
   const [text, setText] = useState(""), [every, setEvery] = useState("1");
   const list = [...habits].sort(byOrder), now = list.filter(habitDue), rest = list.filter(h => !habitDue(h));
@@ -243,7 +209,7 @@ function HabitRow({ h, waiting, onMark }) {
 }
 
 // journal: log notes + tasks I completed + recurring marks, grouped by day
-function useJournal(db) {
+export function useJournal(db) {
   return useMemo(() => {
     const byDay = new Map();
     const day = k => { if (!byDay.has(k)) byDay.set(k, { items: [], note: "" }); return byDay.get(k); };
@@ -256,29 +222,4 @@ function useJournal(db) {
     for (const h of db.habits) for (const k of h.history || []) day(k).items.push({ text: h.text, from: "повторяющаяся" });
     return byDay;
   }, [db.log, db.tasks, db.habits, db.me]);
-}
-
-function Journal({ days }) {
-  const keys = [...days.keys()].filter(k => days.get(k).items.length || days.get(k).note).sort().reverse();
-  if (!keys.length) return <p className="text-sm text-muted-foreground">Тут будет журнал по дням: что сделал. Отмеченные задачи попадают сюда сами.</p>;
-  return (
-    <div className="flex flex-col gap-4">
-      {keys.map(k => {
-        const d = days.get(k);
-        return (
-          <section key={k} className="rounded-xl border bg-card p-4 shadow-xs">
-            <div className="mb-2 flex items-center gap-2">
-              <h2 className="text-[15px] font-semibold">{fmtDate(k)}</h2>
-              <span className="rounded-full bg-good/15 px-2 py-0.5 text-xs font-semibold text-good tabular-nums">{d.items.length} {plural(d.items.length, ["дело", "дела", "дел"])}</span>
-              {dayDiff(k, today()) === 1 && <span className="text-xs text-muted-foreground">вчера</span>}
-            </div>
-            <ul className="flex list-disc flex-col gap-1 pl-5 text-[15px] marker:text-muted-foreground">
-              {d.items.map((it, i) => <li key={i}>{it.text}{it.from && <span className="text-xs text-muted-foreground"> · {it.from}</span>}</li>)}
-            </ul>
-            {d.note && <p className="mt-3 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{d.note}</p>}
-          </section>
-        );
-      })}
-    </div>
-  );
 }

@@ -12,7 +12,8 @@ import { loadMe, useMe } from "@/lib/people";
 import { importFiles, fromDrop } from "@/lib/importMd";
 import { MotionConfig, motion } from "motion/react";
 import NotesTree, { IconBtn, CreateMenu, itemName } from "@/components/notes/NotesTree";
-import { ProjectView, JournalView } from "@/components/tasks/ProjectViews";
+import { ProjectView } from "@/components/tasks/ProjectViews";
+import JournalView from "@/components/journal/JournalView";
 
 const NoteView = lazy(() => import("@/components/notes/NoteView"));
 
