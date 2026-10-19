@@ -6,13 +6,13 @@ import {
   SmileIcon, SparklesIcon, StarIcon, Trash2Icon, ZapIcon, FlameIcon, CalendarDaysIcon, TrendingUpIcon, TrendingDownIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useDb, getDb, put } from "@/lib/db";
+import { useDb, getDb, put, update } from "@/lib/db";
 import { today, addDays, dayDiff, fmtDate, plural, MONTHS } from "@/lib/tasks";
 import { usePhotoUrl, uploadPhoto, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 import { Badge, Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { PencilIcon, PlusIcon, XIcon } from "lucide-react";
+import { PencilIcon, PlusIcon, XIcon, ListChecksIcon, CornerDownRightIcon } from "lucide-react";
 
 // how the day went: 5 moods, each with its colour; "Ужасный" is a stormy crimson that glows
 export const MOODS = [
@@ -359,7 +359,8 @@ function DayEditor({ date, info, burst }) {
         <Photos date={date} photos={doc?.photos || []} save={save} />
 
         <ExtraDone date={date} extra={doc?.extra || []} save={save} />
-        <DoneList items={items.filter(it => it.from !== "вручную")} note={note} future={future} title="Из задач и привычек" />
+        <DayTasks date={date} />
+        <DoneList items={items.filter(it => it.from !== "вручную" && it.from !== "из задач")} note={note} future={future} title="Привычки и прочее" hideEmpty />
       </div>
   );
 }
@@ -432,7 +433,96 @@ function ExtraDone({ date, extra, save }) {
   );
 }
 
-function DoneList({ items, note, future, title = "Сделано" }) {
+// the day's tasks from projects: done that day, and still open (due that day, or overdue/urgent for today),
+// grouped by project, subtasks indented under their parent
+function DayTasks({ date }) {
+  const db = useDb();
+  const now = today();
+  const data = useMemo(() => {
+    const catOf = new Map(db.cats.map(c => [c.id, c])), boardOf = new Map(db.boards.map(b => [b.id, b])), projOf = new Map(db.projects.map(p => [p.id, p]));
+    const byId = new Map(db.tasks.map(t => [t.id, t]));
+    const mineDone = t => (t.doneBy || t._owner || db.me) === db.me;
+    const mineOpen = t => t.assignee ? t.assignee === db.me : t._owner === db.me;
+    const done = db.tasks.filter(t => t.done && t.doneOn === date && mineDone(t));
+    const open = db.tasks.filter(t => !t.done && mineOpen(t) && byId.size && (
+      date === now ? (t.due && t.due <= now) || t.prio === "urgent" : t.due === date));
+    const pick = new Map([...done, ...open].map(t => [t.id, t]));
+    // parents of listed subtasks come along as context rows, so nesting stays visible
+    for (const t of [...pick.values()]) for (let p = byId.get(t.parent); p && !pick.has(p.id); p = byId.get(p.parent)) pick.set(p.id, { ...p, ctx: true });
+    const project = t => projOf.get(boardOf.get(catOf.get(t.cat)?.board)?.project);
+    const groups = new Map();
+    for (const t of pick.values()) {
+      const p = project(t), k = p?.id || "";
+      if (!groups.has(k)) groups.set(k, { name: p?.name || "Без проекта", id: k, list: [] });
+      groups.get(k).list.push(t);
+    }
+    // order inside a project: parents before kids, by board order
+    const tree = list => {
+      const ids = new Set(list.map(t => t.id)), kids = new Map(), roots = [];
+      for (const t of [...list].sort((a, b) => (a.order ?? 999) - (b.order ?? 999))) {
+        if (t.parent && ids.has(t.parent)) { if (!kids.has(t.parent)) kids.set(t.parent, []); kids.get(t.parent).push(t); } else roots.push(t);
+      }
+      const out = [], walk = (t, d) => { out.push({ t, d }); (kids.get(t.id) || []).forEach(k => walk(k, d + 1)); };
+      roots.forEach(t => walk(t, 0));
+      return out;
+    };
+    return { done: done.length, open: open.length, groups: [...groups.values()].map(g => ({ ...g, rows: tree(g.list) })) };
+  }, [db.tasks, db.cats, db.boards, db.projects, db.me, date]);
+  const toggle = t => update("tasks", t.id, t.done ? { done: false, doneOn: "", doneBy: "", hidden: false } : { done: true, doneOn: today(), doneBy: db.me });
+  const canTick = date === now;
+
+  return (
+    <div>
+      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        Задачи
+        {data.done > 0 && <span className="rounded-full bg-good/15 px-2 py-0.5 text-xs font-semibold text-good tabular-nums">✓ {data.done}</span>}
+        {data.open > 0 && <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums">○ {data.open}</span>}
+      </p>
+      {!data.groups.length && <p className="text-sm text-muted-foreground/80">{date > now ? "На этот день задач нет." : "В этот день задач не было."}</p>}
+      <div className="flex flex-col gap-2">
+        {data.groups.map(g => (
+          <section key={g.id} className="overflow-hidden rounded-xl border bg-background">
+            <a href={g.id ? "#project=" + g.id : undefined} className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground">
+              <ListChecksIcon className="size-3.5" />{g.name}
+              <span className="ml-auto font-normal tabular-nums">{g.rows.filter(r => r.t.done && !r.t.ctx).length} / {g.rows.filter(r => !r.t.ctx).length}</span>
+            </a>
+            <ul className="py-1">
+              {g.rows.map(({ t, d }) => {
+                const late = !t.done && t.due && t.due < now;
+                if (t.ctx) return (
+                  <li key={t.id} className="flex items-center gap-2 py-1 pr-3 text-[13px] text-muted-foreground" style={{ paddingLeft: 12 + d * 22 }}>
+                    <CornerDownRightIcon className="size-3.5 shrink-0 -scale-x-100 rotate-180 opacity-60" /><span className="truncate">{t.text}</span>
+                  </li>
+                );
+                return (
+                  <li key={t.id} className="relative flex items-start gap-2 py-1 pr-3" style={{ paddingLeft: 12 + d * 22 }}>
+                    {d > 0 && <span aria-hidden className="absolute top-0 bottom-0 w-px bg-border" style={{ left: 12 + (d - 1) * 22 + 8 }} />}
+                    <button type="button" disabled={!canTick} onClick={() => toggle(t)} aria-label={(t.done ? "Снять отметку: " : "Отметить: ") + t.text}
+                      className={cn("mt-0.5 grid size-[18px] shrink-0 place-items-center rounded-full border-2 transition-colors disabled:cursor-default",
+                        t.done ? "border-good bg-good text-white" : "border-muted-foreground/40 enabled:hover:border-good")}>
+                      {t.done && <CheckIcon className="size-3" strokeWidth={3} />}
+                    </button>
+                    <div className="min-w-0 flex-1 text-[14px] leading-snug">
+                      <span className={cn(t.done && "text-muted-foreground line-through decoration-muted-foreground/50")}>{t.text}</span>
+                      {(t.due || t.prio) && !t.done && (
+                        <span className={cn("ml-2 text-xs", late ? "text-destructive" : "text-muted-foreground")}>
+                          {late ? "просрочено" : t.prio === "urgent" ? "срочно" : ""}{t.time ? " · " + t.time : ""}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DoneList({ items, note, future, title = "Сделано", hideEmpty }) {
+  if (hideEmpty && !items.length && !note) return null;
   return (
         <div>
           <p className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -440,12 +530,13 @@ function DoneList({ items, note, future, title = "Сделано" }) {
             {items.length > 0 && <span className="rounded-full bg-good/15 px-2 py-0.5 text-xs font-semibold text-good tabular-nums">{items.length}</span>}
           </p>
           {items.length ? (
-            <ul className="flex flex-wrap gap-1.5">
+            <ul className="flex flex-col divide-y rounded-xl border bg-background">
               {items.map((it, k) => (
-                <motion.li key={k} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: Math.min(k * 0.025, 0.4) }}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-lg border bg-background px-2 py-1 text-[13px]" title={it.from}>
+                <motion.li key={k} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(k * 0.025, 0.4) }}
+                  className="flex items-center gap-2 px-3 py-1.5 text-[14px]" title={it.from}>
                   <CheckIcon className={cn("size-3.5 shrink-0", it.from === "повторяющаяся" ? "text-violet-500" : "text-good")} />
-                  <span className="truncate">{it.text}</span>
+                  <span className="min-w-0 flex-1">{it.text}</span>
+                  {it.from && <span className="shrink-0 text-xs text-muted-foreground">{it.from}</span>}
                 </motion.li>
               ))}
             </ul>
@@ -517,7 +608,8 @@ function DayRead({ date, i, onEdit }) {
           <SparklesIcon className="size-5" />{date === today() ? "Написать о сегодня" : "Этот день пока без записи. Добавить?"}
         </button>
       )}
-      <DoneList items={i.items} note={i.note} future={date > today()} />
+      <DayTasks date={date} />
+      <DoneList items={i.items.filter(it => it.from !== "из задач")} note={i.note} future={date > today()} title="Ещё сделано" hideEmpty />
       <Lightbox photos={photos} index={lb} setIndex={setLb} />
     </div>
   );
