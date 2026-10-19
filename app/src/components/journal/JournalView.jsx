@@ -679,11 +679,12 @@ function Spark({ values }) {
 
 const hasEntry = i => !!(i.doc?.mood || i.doc?.memo || i.doc?.photos?.length || i.doc?.marks?.length);
 
-function Cover({ photo, mood, className, children }) {
+function Cover({ photo, mood, sharp, className, children }) {
   return (
     <div className={cn("relative overflow-hidden", className)} style={!photo ? { background: mood ? `linear-gradient(135deg, ${mood.color}55, ${mood.color}11)` : undefined } : undefined}>
-      {photo && <Thumb path={photo.path} className="absolute inset-0 size-full scale-110 object-cover blur-md brightness-[0.55] saturate-[1.2] transition-transform duration-700 group-hover:scale-[1.16]" />}
-      {photo && <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/20" />}
+      {photo && <Thumb path={photo.path} className={cn("absolute inset-0 size-full object-cover transition-transform duration-700",
+        sharp ? "group-hover:scale-105" : "scale-110 blur-md brightness-[0.55] saturate-[1.2] group-hover:scale-[1.16]")} />}
+      {photo && <div className={cn("absolute inset-0 bg-gradient-to-t", sharp ? "from-black/70 via-transparent to-black/45" : "from-black/75 via-black/35 to-black/20")} />}
       {children}
     </div>
   );
@@ -752,7 +753,7 @@ function WeekStrip({ info, onPick }) {
           return (
             <motion.button key={d} type="button" onClick={() => onPick(d)} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: k * 0.04 }}
               whileHover={{ y: -3 }} className="group overflow-hidden rounded-xl border bg-card text-left shadow-xs md:rounded-2xl">
-              <Cover photo={photo} mood={mood} className="aspect-[3/4]">
+              <Cover photo={photo} mood={mood} sharp className="aspect-[3/4]">
                 <div className={cn("relative flex h-full flex-col p-1.5 md:p-2.5", photo && "text-white")}>
                   <span className={cn("text-[10px] font-medium uppercase md:text-xs", photo ? "text-white/75" : "text-muted-foreground")}>{d === today() ? "сег" : wd}</span>
                   <span className="text-base leading-none font-bold md:text-2xl">{+d.slice(8)}</span>

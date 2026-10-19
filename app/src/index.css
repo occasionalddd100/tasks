@@ -27,6 +27,7 @@
   --ring: oklch(0.708 0 0);
   --sidebar: oklch(0.985 0 0);
   --good: oklch(0.6 0.15 150);
+  --ink: oklch(0.52 0.12 232);
   --warn: oklch(0.7 0.16 70);
 }
 .dark {
@@ -50,6 +51,7 @@
   --ring: oklch(0.556 0 0);
   --sidebar: oklch(0.18 0 0);
   --good: oklch(0.72 0.15 150);
+  --ink: oklch(0.74 0.1 220);
   --warn: oklch(0.8 0.15 75);
 }
 
@@ -112,6 +114,28 @@
 .milkdown .ProseMirror :is(h1, h2, h3, h4) { font-weight: 700; letter-spacing: -0.01em; }
 .dark .milkdown { --crepe-color-inline-code: oklch(0.75 0.15 25); }
 
+/* Velocity-like reading feel: roomy text, dash bullets, indent guides, accent bold and links */
+.milkdown .ProseMirror { font-size: 17px; line-height: 1.72; }
+.milkdown .ProseMirror > * + * { margin-top: 0.15em; }
+.milkdown .ProseMirror h1 { font-size: 2em; margin-top: 1em; }
+.milkdown .ProseMirror h2 { font-size: 1.55em; margin-top: 1.1em; }
+.milkdown .ProseMirror h3 { font-size: 1.25em; margin-top: 1em; }
+.milkdown .ProseMirror :is(h1, h2, h3, h4) { font-weight: 650; letter-spacing: -0.015em; line-height: 1.25; }
+.milkdown .ProseMirror strong { color: var(--ink); font-weight: 650; }
+.milkdown .ProseMirror a { color: var(--ink); text-decoration: none; border-bottom: 1px solid color-mix(in oklch, var(--ink) 40%, transparent); }
+.milkdown .ProseMirror a:hover { border-bottom-color: var(--ink); }
+.milkdown .milkdown-list-item-block .label.bullet svg { display: none; }
+.milkdown .milkdown-list-item-block .label.bullet::before { content: "—"; color: var(--muted-foreground); opacity: 0.75; font-size: 0.95em; line-height: 1; }
+.milkdown .milkdown-list-item-block li.list-item { gap: 6px; }
+.milkdown .milkdown-list-item-block .children ul,
+.milkdown .milkdown-list-item-block .children ol { position: relative; }
+.milkdown .milkdown-list-item-block .children :is(ul, ol)::before {
+  content: ""; position: absolute; left: -18px; top: 4px; bottom: 4px; width: 1px;
+  background: color-mix(in oklch, var(--foreground) 13%, transparent);
+}
+.milkdown .ProseMirror blockquote { border-left: 2px solid var(--ink); padding-left: 1em; color: var(--muted-foreground); }
+.milkdown .ProseMirror hr { border-color: var(--border); margin: 1.5em 0; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
 }
@@ -132,10 +156,16 @@
 .md > * + * { margin-top: 0.5em; }
 .md h1, .md h2, .md h3, .md h4 { font-weight: 700; line-height: 1.25; }
 .md h1 { font-size: 1.25em; } .md h2 { font-size: 1.15em; } .md h3 { font-size: 1.05em; }
-.md ul { list-style: disc; padding-left: 1.25em; } .md ol { list-style: decimal; padding-left: 1.4em; }
+.md ul { list-style: none; padding-left: 1.25em; }
+.md ul > li { position: relative; }
+.md ul > li::before { content: "—"; position: absolute; left: -1.25em; color: var(--muted-foreground); opacity: 0.75; }
+.md ul ul, .md ol ol, .md ul ol, .md ol ul { border-left: 1px solid color-mix(in oklch, var(--foreground) 13%, transparent); margin-left: -0.75em; padding-left: 2em; }
+.md strong { color: var(--ink); font-weight: 650; }
+.md blockquote { border-left: 2px solid var(--ink); padding-left: 0.8em; color: var(--muted-foreground); } .md ol { list-style: decimal; padding-left: 1.4em; }
 .md li > input[type=checkbox] { margin-right: 0.4em; vertical-align: -1px; }
 .md ul:has(> li > input[type=checkbox]) { list-style: none; padding-left: 0.2em; }
-.md a { text-decoration: underline; text-underline-offset: 2px; }
+.md ul > li:has(> input[type=checkbox])::before { content: none; }
+.md a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 .md code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: var(--muted); padding: 0.1em 0.3em; border-radius: 4px; }
 .md pre { background: var(--muted); padding: 0.6em 0.8em; border-radius: 6px; overflow-x: auto; }
 .md pre code { background: none; padding: 0; }

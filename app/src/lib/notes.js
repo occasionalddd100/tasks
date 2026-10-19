@@ -11,7 +11,8 @@ export function tree(folders, notes, projects) {
   for (const f of folders) put(kids, f.parent && fids.has(f.parent) ? f.parent : "", f);
   for (const n of notes) put(files, n.folder && fids.has(n.folder) ? n.folder : "", { ...n, kind: "note" });
   for (const b of projects) put(files, b.folder && fids.has(b.folder) ? b.folder : "", { ...b, kind: "project" });
-  kids.forEach(l => l.sort(byName));
+  // folders keep a manual order once dragged; the rest follow by name
+  kids.forEach(l => l.sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9) || byName(a, b)));
   files.forEach(l => l.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "project" ? -1 : 1) || byName(a, b)));
   return { folders: p => kids.get(p) || [], files: p => files.get(p) || [] };
 }

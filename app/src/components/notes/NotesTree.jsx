@@ -1,9 +1,9 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRightIcon, FileTextIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, MoreHorizontalIcon,
-  PencilIcon, PlusIcon, Trash2Icon, UploadIcon, FolderUpIcon, UsersIcon, FolderInputIcon, ListChecksIcon,
+  PencilIcon, PlusIcon, Trash2Icon, UploadIcon, FolderUpIcon, UsersIcon, FolderInputIcon, ListChecksIcon, PinIcon, PinOffIcon, ArrowUpIcon, ArrowDownIcon,
 } from "lucide-react";
-import { useDb, update, remove, isMine } from "@/lib/db";
+import { useDb, getDb, update, updateMany, remove, isMine, put } from "@/lib/db";
 import { tree, newNote, newFolder, newProject, deleteFolder, deleteProject, folderStats, descendants } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 import { confirmAction } from "@/components/Confirm";
@@ -20,12 +20,62 @@ export const noteTitle = n => n.title?.trim() || "Без названия";
 export const itemName = x => x.kind === "project" ? x.name?.trim() || "Без названия" : noteTitle(x);
 const COLL = { note: "notes", project: "projects" };
 
+// pins are personal: one prefs doc per user, "<coll>:<id>" keys
+const prefsId = () => getDb().me + ":prefs";
+export const usePins = db => db.prefs.find(p => p.id === db.me + ":prefs")?.pinned || [];
+export function togglePin(key) {
+  const cur = getDb().prefs.find(p => p.id === prefsId())?.pinned || [];
+  put("prefs", prefsId(), { pinned: cur.includes(key) ? cur.filter(k => k !== key) : [...cur, key] });
+}
+const pinItem = (pins, key) => ({ label: pins.includes(key) ? "Открепить" : "Закрепить", icon: pins.includes(key) ? PinOffIcon : PinIcon, onSelect: () => togglePin(key) });
+
 export default function NotesTree({ view, go, query }) {
   const db = useDb();
   const [open, setOpen] = useState(loadOpen);
   const [renaming, setRenaming] = useState(null);
   const [sharing, setSharing] = useState(null);
   const t = useMemo(() => tree(db.folders, db.notes, db.projects), [db.folders, db.notes, db.projects]);
+  const pins = usePins(db);
+
+  // drag & drop: onto a folder = put inside, onto its top/bottom edge = place before/after it
+  const dragged = useRef(null);
+  const [over, setOver] = useState(null); // { key, zone }
+  const [dragging, setDragging] = useState(false);
+  const moveFolder = (id, parent, before) => {
+    if (descendants(db.folders, id).includes(parent)) return;
+    const sibs = t.folders(parent).filter(f => f.id !== id);
+    let at = before ? sibs.findIndex(f => f.id === before.id) + (before.after ? 1 : 0) : sibs.length;
+    if (at < 0) at = sibs.length;
+    const me = db.folders.find(f => f.id === id); if (!me) return;
+    sibs.splice(at, 0, me);
+    updateMany("folders", sibs.map((f, i) => [f.id, f.id === id ? { order: i + 1, parent } : { order: i + 1 }]).filter(([fid, ch]) => fid === id || db.folders.find(f => f.id === fid)?.order !== ch.order));
+  };
+  const dropOn = (target, zone) => {
+    const d = dragged.current; setOver(null); setDragging(false); dragged.current = null;
+    if (!d || (d.coll === "folders" && d.id === target?.id)) return;
+    const into = !target ? "" : target.kind === "folder" ? (zone === "inside" ? target.id : target.parent || "") : (target.folder || "");
+    if (d.coll === "folders") moveFolder(d.id, into, target?.kind === "folder" && zone !== "inside" ? { id: target.id, after: zone === "after" } : null);
+    else update(d.coll, d.id, { folder: into });
+    if (into) toggle(into, true);
+  };
+  const dnd = (x, coll) => {
+    const key = coll + ":" + x.id, folder = coll === "folders";
+    return {
+      draggable: isMine(x),
+      onDragStart: e => { dragged.current = { coll, id: x.id }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", key); setTimeout(() => setDragging(true)); },
+      onDragEnd: () => { dragged.current = null; setOver(null); setDragging(false); },
+      onDragOver: e => {
+        if (!dragged.current) return;
+        e.preventDefault(); e.stopPropagation();
+        const r = e.currentTarget.getBoundingClientRect(), y = (e.clientY - r.top) / r.height;
+        const zone = !folder ? "inside" : dragged.current.coll !== "folders" ? "inside" : y < 0.28 ? "before" : y > 0.72 ? "after" : "inside";
+        if (over?.key !== key || over?.zone !== zone) setOver({ key, zone });
+      },
+      onDragLeave: e => { if (!e.currentTarget.contains(e.relatedTarget) && over?.key === key) setOver(null); },
+      onDrop: e => { e.preventDefault(); e.stopPropagation(); dropOn({ ...x, kind: folder ? "folder" : x.kind }, over?.zone || "inside"); },
+      dropZone: over?.key === key ? over.zone : null,
+    };
+  };
 
   useEffect(() => { try { localStorage.setItem(OPEN_KEY, JSON.stringify([...open])); } catch {} }, [open]);
   const toggle = (id, v) => setOpen(s => { const n = new Set(s); (v ?? !n.has(id)) ? n.add(id) : n.delete(id); return n; });
@@ -39,7 +89,7 @@ export default function NotesTree({ view, go, query }) {
   const grantOn = (coll, id) => db.grants.some(g => g.coll === coll && g.target === id);
   const isActive = x => view[x.kind] === x.id;
   const fileRow = (x, depth) => (
-    <FileRow key={x.kind + x.id} x={x} depth={depth} active={isActive(x)} go={go} folders={db.folders}
+    <FileRow key={x.kind + x.id} x={x} depth={depth} active={isActive(x)} go={go} folders={db.folders} dnd={dnd(x, COLL[x.kind])} pins={pins}
       shared={x.kind === "project" && (grantOn("projects", x.id) || !isMine(x))}
       onShare={() => setSharing({ coll: "projects", id: x.id, name: itemName(x), owner: isMine(x) })} />
   );
@@ -67,6 +117,9 @@ export default function NotesTree({ view, go, query }) {
       { label: "Новая папка", icon: FolderPlusIcon, onSelect: () => create("folder", f.id) },
       { sep: true },
       { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setRenaming(f.id)) },
+      pinItem(pins, "folders:" + f.id),
+      !sharedWithMe && { label: "Выше", icon: ArrowUpIcon, onSelect: () => { const sib = t.folders(f.parent || ""), i = sib.findIndex(x => x.id === f.id); if (i > 0) moveFolder(f.id, f.parent || "", { id: sib[i - 1].id, after: false }); } },
+      !sharedWithMe && { label: "Ниже", icon: ArrowDownIcon, onSelect: () => { const sib = t.folders(f.parent || ""), i = sib.findIndex(x => x.id === f.id); if (i < sib.length - 1) moveFolder(f.id, f.parent || "", { id: sib[i + 1].id, after: true }); } },
       { label: mine ? "Поделиться" : "Участники", icon: UsersIcon, onSelect: () => setSharing({ coll: "folders", id: f.id, name: f.name, owner: mine }) },
       !sharedWithMe && moveItem(db.folders.filter(x => !descendants(db.folders, f.id).includes(x.id)), f.parent, parent => update("folders", f.id, { parent })),
       !sharedWithMe && { sep: true },
@@ -81,19 +134,21 @@ export default function NotesTree({ view, go, query }) {
     ];
   };
 
-  const renderFolder = (f, depth) => {
-    const isOpen = open.has(f.id), sharedWithMe = !isMine(f) && depth === 0;
+  const renderFolder = (f, depth, pinned) => {
+    const isOpen = open.has(f.id), sharedWithMe = !isMine(f) && depth === 0 && !pinned;
+    const { dropZone, ...drag } = dnd(f, "folders");
     const kids = t.folders(f.id), files = t.files(f.id);
     const items = folderItems(f, sharedWithMe);
     return (
-      <li key={f.id}>
+      <li key={(pinned ? "pin" : "") + f.id}>
         <ActionsContext items={items}>
-          <Row depth={depth} onClick={() => toggle(f.id)}>
+          <Row depth={depth} onClick={() => toggle(f.id)} {...drag} drop={dropZone}>
             <ChevronRightIcon className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform duration-200", isOpen && "rotate-90")} />
             {isOpen ? <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" /> : <FolderIcon className="size-4 shrink-0 text-muted-foreground" />}
             {renaming === f.id
               ? <RenameInput value={f.name} onDone={name => { setRenaming(null); if (name && name !== f.name) update("folders", f.id, { name }); }} />
               : <span className="truncate">{f.name || "Без названия"}</span>}
+            {pinned && <PinIcon className="size-3 shrink-0 text-muted-foreground" />}
             {(grantOn("folders", f.id) || sharedWithMe) && <UsersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Общая папка" />}
             <Actions>
               <CreateMenu folder={f.id} onCreate={k => create(k, f.id)} trigger={<IconBtn label="Создать в папке"><PlusIcon /></IconBtn>} />
@@ -115,13 +170,30 @@ export default function NotesTree({ view, go, query }) {
   };
 
   const roots = t.folders(""), files = t.files("");
+  const pinned = pins.map(k => {
+    const [coll, id] = k.split(":");
+    const x = db[coll]?.find(d => d.id === id);
+    return x && { coll, x };
+  }).filter(Boolean);
   return (
     <>
+      {pinned.length > 0 && (
+        <ul className="mb-2 flex flex-col gap-px border-b px-2 pb-2">
+          {pinned.map(({ coll, x }) => coll === "folders" ? renderFolder(x, 0, true) : <FileRow key={"pin" + x.id} x={{ ...x, kind: coll === "notes" ? "note" : "project" }} depth={0} pinned
+            active={isActive({ ...x, kind: coll === "notes" ? "note" : "project" })} go={go} folders={db.folders} dnd={dnd(x, coll)} pins={pins} />)}
+        </ul>
+      )}
       <ul className="flex flex-col gap-px px-2">
         {roots.map(f => renderFolder(f, 0))}
         {files.map(x => fileRow(x, 0))}
         {!roots.length && !files.length && (
           <li className="px-2 py-1.5 text-sm text-muted-foreground">Пока пусто. Создай проект или заметку кнопкой «+».</li>
+        )}
+        {dragging && (
+          <li onDragOver={e => { e.preventDefault(); setOver({ key: "root", zone: "inside" }); }} onDragLeave={() => setOver(null)} onDrop={e => { e.preventDefault(); dropOn(null); }}
+            className={cn("mt-1 rounded-md border border-dashed px-2 py-2 text-center text-xs text-muted-foreground transition-colors", over?.key === "root" && "border-foreground/40 bg-accent text-foreground")}>
+            Сюда, чтобы вынести из папки
+          </li>
         )}
       </ul>
       {sharing && (
@@ -153,16 +225,18 @@ export function CreateMenu({ onCreate, trigger, folder = "" }) {
   );
 }
 
-function FileRow({ x, depth, active, go, folders, shared, onShare }) {
+function FileRow({ x, depth, active, go, folders, shared, onShare, dnd = {}, pins = [], pinned }) {
   const Icon = x.kind === "project" ? ListChecksIcon : FileTextIcon;
-  const items = fileItems({ x, folders, onShare, after: () => active && go({ journal: true }) });
+  const { dropZone, ...drag } = dnd;
+  const items = [pinItem(pins, COLL[x.kind] + ":" + x.id), ...fileItems({ x, folders, onShare, after: () => active && go({ journal: true }) })];
   return (
     <li>
       <ActionsContext items={items}>
-        <Row depth={depth} active={active} onClick={() => go({ [x.kind]: x.id })}>
+        <Row depth={depth} active={active} onClick={() => go({ [x.kind]: x.id })} {...drag} drop={dropZone && "file"}>
           <span className="size-3.5 shrink-0" />
           <Icon className="size-4 shrink-0 text-muted-foreground" />
           <span className={cn("truncate", !(x.name || x.title)?.trim() && "text-muted-foreground")}>{itemName(x)}</span>
+          {pinned && <PinIcon className="size-3 shrink-0 text-muted-foreground" />}
           {shared && <UsersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Общий проект" />}
           <Actions>
             <ActionsDropdown items={items} trigger={<IconBtn label={x.kind === "project" ? "Действия с проектом" : "Действия с заметкой"} className="md:hidden"><MoreHorizontalIcon /></IconBtn>} />
@@ -209,14 +283,16 @@ const Actions = ({ children }) => (
 );
 
 // forwards ref and props so it can be a right-click menu trigger
-const Row = forwardRef(function Row({ depth, active, children, onClick, className, style, ...props }, ref) {
+const Row = forwardRef(function Row({ depth, active, drop, children, onClick, className, style, ...props }, ref) {
   return (
     <div
       ref={ref} role="button" tabIndex={0} {...props} onClick={onClick}
       onKeyDown={e => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); onClick(); } }}
       className={cn(
         "group/row flex h-8 cursor-pointer items-center gap-1.5 rounded-md pr-1 text-sm outline-none select-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:bg-accent",
-        active && "bg-accent font-medium", className
+        active && "bg-accent font-medium",
+        drop === "inside" && "bg-primary/10 ring-1 ring-primary/40", drop === "file" && "bg-accent/60",
+        drop === "before" && "shadow-[inset_0_2px_0_var(--ring)]", drop === "after" && "shadow-[inset_0_-2px_0_var(--ring)]", className
       )}
       style={{ paddingLeft: 6 + depth * 12, ...style }}
     >

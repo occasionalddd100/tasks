@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Crepe, CrepeFeature } from "@milkdown/crepe";
-import { replaceAll } from "@milkdown/kit/utils";
+import { replaceAll, $prose } from "@milkdown/kit/utils";
+import { keymap } from "@milkdown/kit/prose/keymap";
+import { sinkListItem, liftListItem } from "@milkdown/kit/prose/schema-list";
 import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import { toast } from "sonner";
 
@@ -10,6 +12,22 @@ const toDataUrl = file => new Promise((resolve, reject) => {
   if (file.size > MAX_IMAGE) { toast.error("Картинка больше 1 МБ, вставь ссылкой"); return reject(new Error("too big")); }
   const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file);
 });
+
+// Tab / Shift+Tab nest and un-nest list items like Obsidian; tables and code blocks keep their own Tab
+const inTable = state => { const $f = state.selection.$from; for (let d = $f.depth; d > 0; d--) if (/table/.test($f.node(d).type.name)) return true; return false; };
+const inList = state => { const $f = state.selection.$from; for (let d = $f.depth; d > 0; d--) if ($f.node(d).type.name === "list_item") return true; return false; };
+const listTabs = $prose(() => keymap({
+  Tab: (state, dispatch) => {
+    if (inTable(state)) return false;
+    if (inList(state)) { sinkListItem(state.schema.nodes.list_item)(state, dispatch); return true; }
+    dispatch?.(state.tr.insertText("\t")); return true;
+  },
+  "Shift-Tab": (state, dispatch) => {
+    if (inTable(state)) return false;
+    if (inList(state)) liftListItem(state.schema.nodes.list_item)(state, dispatch);
+    return true;
+  },
+}));
 
 const RU = {
   [CrepeFeature.Placeholder]: { text: "Пиши здесь. «/» откроет меню блоков" },
@@ -33,6 +51,7 @@ export default function Editor({ value, onChange, onReady, readOnly }) {
     const c = new Crepe({ root: root.current, defaultValue: value || "", featureConfigs: RU });
     // Obsidian-style "-" bullets; opening a note must not rewrite it
     c.editor.config(ctx => ctx.update(remarkStringifyOptionsCtx, o => ({ ...o, bullet: "-" })));
+    c.editor.use(listTabs);
     let ready = false;
     c.on(l => l.markdownUpdated((_, md) => {
       if (!ready || md === last.current) return;
