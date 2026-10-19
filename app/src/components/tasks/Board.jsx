@@ -8,7 +8,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { CalendarIcon, CheckCheckIcon, ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GripVerticalIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useDb, getDb, add, update, updateMany, remove } from "@/lib/db";
-import { byOrder, nextOrder, stale, inWeek } from "@/lib/tasks";
+import { byOrder, nextOrder, stale, inWeek, fmtDate } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -207,8 +207,17 @@ function DoneCard({ tasks, cats }) {
         {!folded && (
           <motion.div {...fold} className="overflow-hidden">
             <ul className="px-2 pb-2">
-              {tasks.slice(0, limit).map(t => (
-                <li key={t.id} title={catName.get(t.cat)}><TaskRow t={t} /></li>
+              {tasks.slice(0, limit).map((t, i, arr) => (
+                <li key={t.id} title={catName.get(t.cat)}>
+                  {(i === 0 || arr[i - 1].doneOn !== t.doneOn) && (
+                    <div className="flex items-center gap-3 px-2 pt-3 pb-1 text-xs text-muted-foreground">
+                      <span className="h-px flex-1 bg-border" />
+                      <span className="shrink-0">{t.doneOn ? fmtDate(t.doneOn) : "Без даты"}</span>
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                  )}
+                  <TaskRow t={t} />
+                </li>
               ))}
             </ul>
             {tasks.length > limit && <Button variant="ghost" size="sm" className="mx-3 mb-3 text-muted-foreground" onClick={() => setLimit(l => l + 30)}>Показать ещё ({tasks.length - limit})</Button>}
