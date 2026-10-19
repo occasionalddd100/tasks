@@ -18,13 +18,12 @@ import JournalView from "@/components/journal/JournalView";
 const NoteView = lazy(() => import("@/components/notes/NoteView"));
 
 // view lives in the URL hash (#note=<id>, #project=<id>, #journal) so back/forward works;
-// with no hash the last opened project is shown
+// with no hash (opening the site or the app) the journal is home
 const readHash = () => {
   const m = location.hash.match(/^#(note|project)=([\w-]+)/);
   if (m) return { [m[1]]: m[2] };
   if (location.hash === "#journal") return { journal: true };
-  let last = null; try { last = localStorage.getItem("lastProject"); } catch {}
-  return last ? { project: last, home: true } : { journal: true };
+  return { journal: true };
 };
 
 export default function Shell() {

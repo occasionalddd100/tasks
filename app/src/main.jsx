@@ -27,3 +27,19 @@ if (!isApp && "serviceWorker" in navigator && location.protocol === "https:") {
     }), 4000);
   });
 }
+
+// the Android app's WebView may keep an old page for a while: on start and whenever the app comes back,
+// ask for a fresh index.html and reload if it points to a newer build
+const mine = document.querySelector('script[src*="assets/index-"]')?.getAttribute("src")?.match(/index-[\w-]+\.js/)?.[0];
+const checkUpdate = () => {
+  if (!mine || location.protocol !== "https:") return;
+  fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" }).then(r => r.text()).then(html => {
+    const live = html.match(/index-[\w-]+\.js/)?.[0];
+    let tried = null; try { tried = sessionStorage.getItem("reloadedFor"); } catch {}
+    if (!live || live === mine || tried === live) return; // tried once already: don't loop on a stale cache
+    try { sessionStorage.setItem("reloadedFor", live); } catch {}
+    location.replace(location.pathname + "?v=" + Date.now() + location.hash); // the query skips the cached page
+  }).catch(() => {});
+};
+setTimeout(checkUpdate, 3000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
