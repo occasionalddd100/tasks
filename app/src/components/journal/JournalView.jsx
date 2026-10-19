@@ -31,6 +31,7 @@ export const MARKS = [
 
 const iso = d => d.toLocaleDateString("sv-SE");
 const dayId = date => getDb().me + ":" + date;
+const MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 const WDS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
 
 // journal days merged: done items (tasks, habits, old log) + my mood/marks/memo/photos
@@ -115,9 +116,81 @@ function cellLook(i) {
   return { fill, mark, mood, n };
 }
 
+const RANGES = [["1", "Месяц"], ["3", "3 месяца"], ["12", "Год"]];
+
 function Heatmap({ info, sel, onPick }) {
-  const box = useRef(null);
   const [tip, setTip] = useState(null);
+  const [range, setRange] = useState(() => { try { return localStorage.getItem("journalRange") || "3"; } catch { return "3"; } });
+  const pickRange = r => { setRange(r); setTip(null); try { localStorage.setItem("journalRange", r); } catch {} };
+  const hover = (date, e) => { const r = e.currentTarget.getBoundingClientRect(); setTip({ date, x: r.left + r.width / 2, y: r.top }); };
+  const months = useMemo(() => {
+    const t = new Date(), out = [];
+    for (let k = +range - 1; k >= 0; k--) { const d = new Date(t.getFullYear(), t.getMonth() - k, 1); out.push([d.getFullYear(), d.getMonth()]); }
+    return out;
+  }, [range]);
+  return (
+    <section className="rounded-2xl border bg-card/80 p-4 shadow-xs backdrop-blur">
+      <div className="mb-3 flex items-center gap-2">
+        <CalendarDaysIcon className="size-4 text-muted-foreground" />
+        <h2 className="text-[15px] font-semibold">Дни</h2>
+        <div role="tablist" className="ml-auto inline-flex gap-0.5 rounded-lg border bg-muted p-0.5">
+          {RANGES.map(([k, l]) => (
+            <button key={k} type="button" role="tab" aria-selected={range === k} onClick={() => pickRange(k)}
+              className={cn("relative h-7 rounded-md px-2.5 text-xs font-medium transition-colors", range === k ? "text-foreground" : "text-muted-foreground hover:text-foreground")}>
+              {range === k && <motion.span layoutId="range-pill" className="absolute inset-0 rounded-md bg-background shadow-sm" transition={{ type: "spring", bounce: 0.15, duration: 0.35 }} />}
+              <span className="relative">{l}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div key={range} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
+          {range === "12"
+            ? <YearGrid info={info} sel={sel} onPick={onPick} hover={hover} leave={() => setTip(null)} />
+            : <div className={cn("grid gap-4", range === "3" ? "grid-cols-3 max-sm:gap-2" : "mx-auto max-w-md")}>
+                {months.map(([y, m]) => <MonthGrid key={y + "-" + m} y={y} m={m} big={range === "1"} info={info} sel={sel} onPick={onPick} hover={hover} leave={() => setTip(null)} />)}
+              </div>}
+        </motion.div>
+      </AnimatePresence>
+      <Legend />
+      {tip && <Tip {...tip} i={info(tip.date)} />}
+    </section>
+  );
+}
+
+// one month as a calendar: weeks in rows, Monday first
+function MonthGrid({ y, m, big, info, sel, onPick, hover, leave }) {
+  const now = today();
+  const first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), pad = (first.getDay() + 6) % 7;
+  const cells = [...Array(pad).fill(null), ...Array.from({ length: days }, (_, k) => iso(new Date(y, m, k + 1)))];
+  return (
+    <div className="min-w-0">
+      <div className={cn("mb-1.5 font-semibold capitalize", big ? "text-center text-[15px]" : "text-[13px] max-sm:text-xs")}>
+        {MONTHS_NOM[m]}{y !== new Date().getFullYear() && " " + y}
+      </div>
+      <div className={cn("grid grid-cols-7", big ? "gap-1.5" : "gap-1 max-sm:gap-[3px]")}>
+        {WDS.map(w => <span key={w} className={cn("text-center text-muted-foreground", big ? "pb-1 text-xs" : "text-[10px] max-sm:hidden")}>{w}</span>)}
+        {cells.map((date, k) => {
+          if (!date) return <span key={"p" + k} />;
+          const future = date > now, i = info(date), { fill, mark, mood } = cellLook(i);
+          return (
+            <button key={date} type="button" disabled={future} onClick={() => onPick(date)} onMouseEnter={e => hover(date, e)} onMouseLeave={leave}
+              aria-label={fmtDate(date) + (mood ? ", " + mood.label : "")}
+              className={cn("cell relative grid aspect-square place-items-center rounded-[22%] transition-[opacity,transform] hover:scale-110 disabled:pointer-events-none disabled:opacity-35",
+                mood?.v === 1 && "terrible", date === sel && "ring-2 ring-foreground ring-offset-2 ring-offset-card", date === now && date !== sel && "ring-1 ring-foreground/70 ring-offset-1 ring-offset-card")}
+              style={{ background: mark ? "transparent" : fill, animationDelay: Math.min(k * 12, 500) + "ms" }}>
+              {mark && <svg viewBox="0 0 13 13" className="absolute inset-0 size-full"><path d={SHAPES[mark.k]} style={{ fill }} /></svg>}
+              {big && <span className={cn("relative text-xs font-medium tabular-nums", mood || mark || i.items.length >= 5 ? "text-white drop-shadow" : "text-muted-foreground")}>{+date.slice(8)}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function YearGrid({ info, sel, onPick, hover, leave }) {
+  const box = useRef(null);
   const weeks = useMemo(() => {
     const t = new Date(), start = new Date(t);
     start.setDate(t.getDate() - ((t.getDay() + 6) % 7) - 52 * 7);
@@ -134,12 +207,6 @@ function Heatmap({ info, sel, onPick }) {
   let lastMonth = -1;
 
   return (
-    <section className="rounded-2xl border bg-card/80 p-4 shadow-xs backdrop-blur">
-      <div className="mb-3 flex items-center gap-2">
-        <CalendarDaysIcon className="size-4 text-muted-foreground" />
-        <h2 className="text-[15px] font-semibold">Год по дням</h2>
-        <span className="ml-auto text-xs text-muted-foreground max-sm:hidden">нажми на день, чтобы открыть</span>
-      </div>
       <div ref={box} className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
         <svg width={W} height={H} className="block select-none" role="grid" aria-label="Дни за год">
           {weeks.map((wk, x) => {
@@ -155,8 +222,8 @@ function Heatmap({ info, sel, onPick }) {
               className: cn("cell cursor-pointer", mood?.v === 1 && "terrible"),
               style: { fill, animationDelay: Math.min(x * 14, 700) + "ms" },
               onClick: () => onPick(date),
-              onMouseEnter: e => { const r = e.currentTarget.getBoundingClientRect(); setTip({ date, x: r.left + r.width / 2, y: r.top }); },
-              onMouseLeave: () => setTip(null),
+              onMouseEnter: e => hover(date, e),
+              onMouseLeave: leave,
               role: "gridcell", "aria-label": fmtDate(date) + (mood ? ", " + mood.label : ""),
             };
             return (
@@ -169,9 +236,6 @@ function Heatmap({ info, sel, onPick }) {
           }))}
         </svg>
       </div>
-      <Legend />
-      {tip && <Tip {...tip} i={info(tip.date)} />}
-    </section>
   );
 }
 
