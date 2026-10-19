@@ -59,7 +59,7 @@ export default function Shell() {
       <Sheet open={menu} onOpenChange={setMenu}><SheetContent>{sidebar}</SheetContent></Sheet>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b bg-background/90 px-2 backdrop-blur md:hidden">
+        <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b bg-background/90 px-2 md:hidden" style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
           <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}><MenuIcon /></Button>
           <span className="truncate text-sm font-medium">{title}</span>
         </div>

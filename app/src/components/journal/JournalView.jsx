@@ -12,7 +12,7 @@ import { usePhotoUrl, uploadPhoto, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 import { Badge, Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { PencilIcon, PlusIcon, XIcon, ListChecksIcon, CornerDownRightIcon } from "lucide-react";
+import { PencilIcon, PlusIcon, XIcon, ListChecksIcon, CornerDownRightIcon, CalendarCheckIcon, NotebookPenIcon, BarChart3Icon } from "lucide-react";
 
 // how the day went: 5 moods, each with its colour; "Ужасный" is a stormy crimson that glows
 export const MOODS = [
@@ -72,14 +72,17 @@ export default function JournalView() {
   const todayMood = moodOf(mine.get(today())?.mood);
 
   const pick = (date, edit = false) => setOpen({ date, edit });
+  const [tab, setTabRaw] = useState(() => { try { return localStorage.getItem("journalTab") || "day"; } catch { return "day"; } });
+  const setTab = t => { setTabRaw(t); try { localStorage.setItem("journalTab", t); } catch {} };
+  const only = t => tab !== t && "max-lg:hidden"; // on the phone each tab shows its own blocks
   const memories = useMemories(info, mine);
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
   return (
-    <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 pt-5 pb-16 md:px-8 md:pt-8">
+    <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 pt-5 pb-28 md:px-8 md:pt-8 lg:pb-16">
       {/* soft glow tinted by today's mood */}
-      <motion.div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[42rem] max-w-full -translate-x-1/2 rounded-full blur-3xl"
-        animate={{ backgroundColor: todayMood?.color || "#64748b", opacity: todayMood ? 0.18 : 0.08 }} transition={{ duration: 0.8 }} />
+      <motion.div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[42rem] max-w-full -translate-x-1/2 rounded-full"
+        style={{ filter: "blur(64px)", WebkitFilter: "blur(64px)" }} animate={{ backgroundColor: todayMood?.color || "#64748b", opacity: todayMood ? 0.18 : 0.08 }} transition={{ duration: 0.8 }} />
       <header className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Журнал</h1>
@@ -92,22 +95,54 @@ export default function JournalView() {
         </div>
       </header>
 
-      <QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} />
-      {/* desktop: two columns filling the width; phone: one column in the order that matters most */}
+      <div className={cn(only("day"))}><QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} /></div>
+      {/* desktop: two columns filling the width; phone: tabs switched from the bottom bar */}
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start">
         <div className="flex flex-col gap-5 max-lg:contents">
-          <div className="max-lg:order-2"><Heatmap info={info} sel={open?.date} onPick={pick} /></div>
-          <div className="max-lg:order-3"><ThoughtsCard i={info(today())} /></div>
-          <div className="max-lg:order-4"><Habits habits={db.habits} /></div>
+          <div className={cn("max-lg:order-2", only("days"))}><Heatmap info={info} sel={open?.date} onPick={pick} /></div>
+          <div className={cn("max-lg:order-3", only("thoughts"))}><ThoughtsCard i={info(today())} /></div>
+          <div className={cn("max-lg:order-5", only("stats"))}><Habits habits={db.habits} /></div>
         </div>
         <div className="flex flex-col gap-5 max-lg:contents">
-          <div className="max-lg:order-1"><TodayPanel i={info(today())} onOpen={edit => pick(today(), edit)} /></div>
-          <div className="max-lg:order-5"><Stats info={info} items={items} mine={mine} streak={streak} /></div>
+          <div className={cn("max-lg:order-1", only("day"))}><TodayPanel i={info(today())} onOpen={edit => pick(today(), edit)} /></div>
+          <div className={cn("max-lg:order-4", only("stats"))}><Stats info={info} items={items} mine={mine} streak={streak} /></div>
         </div>
       </div>
+      <BottomNav tab={tab} setTab={setTab} thoughts={(mine.get(today())?.thoughts?.length || 0)} />
       <DayDialog open={open} setOpen={setOpen} info={info} burst={bursts.fire} />
       {bursts.layer}
     </div>
+  );
+}
+
+const TABS = [
+  { k: "day", label: "Сегодня", icon: CalendarCheckIcon },
+  { k: "thoughts", label: "Мысли", icon: NotebookPenIcon },
+  { k: "days", label: "Дни", icon: CalendarDaysIcon },
+  { k: "stats", label: "Итоги", icon: BarChart3Icon },
+];
+
+// phone only: tabs at the thumb, instead of one long scroll
+function BottomNav({ tab, setTab, thoughts }) {
+  return (
+    <nav style={GLASS} className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/85 pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <div className="mx-auto grid max-w-md grid-cols-4">
+        {TABS.map(({ k, label, icon: Icon }) => {
+          const on = tab === k;
+          return (
+            <button key={k} type="button" onClick={() => { setTab(k); document.querySelector("main")?.scrollTo?.({ top: 0 }); window.scrollTo({ top: 0 }); }}
+              className={cn("relative flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors", on ? "text-foreground" : "text-muted-foreground")}>
+              {on && <motion.span layoutId="navpill" className="absolute top-2 h-8 w-14 rounded-full bg-accent" transition={{ type: "spring", stiffness: 500, damping: 35 }} />}
+              <span className="relative">
+                <Icon className="size-5" />
+                {k === "thoughts" && thoughts > 0 && <span className="absolute -top-1.5 -right-2.5 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--ink)] px-1 text-[10px] font-bold text-white">{thoughts}</span>}
+              </span>
+              <span className="relative">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -147,7 +182,7 @@ function Heatmap({ info, sel, onPick: pick }) {
     return out;
   }, [range]);
   return (
-    <section className="rounded-2xl border bg-card/80 p-4 shadow-xs backdrop-blur">
+    <section className="rounded-2xl border bg-card/80 p-4 shadow-xs" style={GLASS}>
       <div className="mb-3 flex items-center gap-2">
         <CalendarDaysIcon className="size-4 text-muted-foreground" />
         <h2 className="text-[15px] font-semibold">Дни</h2>
@@ -707,11 +742,11 @@ function Photos({ date, photos, save }) {
   );
 }
 
-function Thumb({ path, className }) {
+function Thumb({ path, className, style }) {
   const url = usePhotoUrl(path);
   const [loaded, setLoaded] = useState(false);
   return url
-    ? <img src={url} alt="" loading="lazy" onLoad={() => setLoaded(true)} className={cn(className, "transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")} />
+    ? <img src={url} alt="" loading="lazy" style={style} onLoad={() => setLoaded(true)} className={cn(className, "transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")} />
     : <div className={cn(className, "animate-pulse bg-muted")} />;
 }
 
@@ -860,11 +895,15 @@ function Spark({ values }) {
 
 const hasEntry = i => !!(i.doc?.mood || dayText(i.doc) || i.doc?.photos?.length || i.doc?.marks?.length);
 
+// written out plainly (not Tailwind's filter variables) so the blur also works in the phone app's WebView
+const SOFT = { filter: "blur(12px) brightness(0.55) saturate(1.2)", WebkitFilter: "blur(12px) brightness(0.55) saturate(1.2)" };
+const GLASS = { backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" };
+
 function Cover({ photo, mood, sharp, className, children }) {
   return (
     <div className={cn("relative overflow-hidden", className)} style={!photo ? { background: mood ? `linear-gradient(135deg, ${mood.color}55, ${mood.color}11)` : undefined } : undefined}>
       {photo && <Thumb path={photo.path} className={cn("absolute inset-0 size-full object-cover transition-transform duration-700",
-        sharp ? "group-hover:scale-105" : "scale-110 blur-md brightness-[0.55] saturate-[1.2] group-hover:scale-[1.16]")} />}
+        sharp ? "group-hover:scale-105" : "scale-110 group-hover:scale-[1.16]")} style={sharp ? undefined : SOFT} />}
       {photo && <div className={cn("absolute inset-0 bg-gradient-to-t", sharp ? "from-black/70 via-transparent to-black/45" : "from-black/75 via-black/35 to-black/20")} />}
       {children}
     </div>
@@ -925,7 +964,7 @@ function MemoriesButton({ cards, onPick }) {
                   whileHover={{ y: -4 }} className="group overflow-hidden rounded-2xl border bg-card text-left shadow-sm">
                   <Cover photo={photo} mood={mood} className="h-44">
                     <div className={cn("relative flex h-full flex-col gap-1 p-3.5", photo && "text-white")}>
-                      <span className={cn("self-start rounded-full px-2.5 py-0.5 text-[11px] font-semibold backdrop-blur", photo ? "bg-white/20" : "bg-background/70")}>{label}</span>
+                      <span style={GLASS} className={cn("self-start rounded-full px-2.5 py-0.5 text-[11px] font-semibold", photo ? "bg-white/20" : "bg-background/70")}>{label}</span>
                       <div className="mt-auto flex items-center gap-1.5">
                         <span className="text-sm font-semibold">{fmtDate(d)}</span>
                         {mood && <mood.icon className="ml-auto size-4 shrink-0" style={{ color: photo ? "#fff" : mood.color }} />}
