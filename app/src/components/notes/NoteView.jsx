@@ -100,7 +100,7 @@ export default function NoteView({ id, fresh, go }) {
         className="field-sizing-content w-full resize-none bg-transparent text-3xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/60 md:text-4xl"
       />
       <Suspense fallback={<p className="py-4 text-sm text-muted-foreground">Загружаю редактор…</p>}>
-        <Editor key={id} value={note.body || ""} onChange={body => save({ body })} readOnly={!!other || reading} onReady={c => { editorRef.current = c; }} />
+        <Editor key={id} foldKey={"fold:" + id} value={note.body || ""} onChange={body => save({ body })} readOnly={!!other || reading} onReady={c => { editorRef.current = c; }} />
       </Suspense>
     </div>
   );

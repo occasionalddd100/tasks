@@ -21,7 +21,7 @@ export const People = createContext([]);
 
 export const PRIO = {
   urgent: { label: "Срочно", icon: FlameIcon, cls: "text-red-500" },
-  today: { label: "Сегодня", icon: SunIcon, cls: "text-amber-500" },
+  today: { label: "Ближайшее", icon: SunIcon, cls: "text-amber-500" },
   later: { label: "Позже", icon: ClockIcon, cls: "text-blue-500" },
 };
 

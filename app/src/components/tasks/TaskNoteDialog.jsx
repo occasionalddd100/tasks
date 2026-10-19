@@ -28,7 +28,7 @@ export default function TaskNoteDialog({ t, open, onOpenChange }) {
         <LockBanner other={other} />
         <div ref={setBox} className="-mx-2 min-h-0 flex-1 overflow-y-auto px-2 [&_.milkdown_.ProseMirror]:!pb-10">
           <Suspense fallback={<p className="py-4 text-sm text-muted-foreground">Загружаю редактор…</p>}>
-            {open && <Editor value={t.body || ""} onChange={onChange} readOnly={!!other} onReady={e => !other && e.focus()} />}
+            {open && <Editor foldKey={"fold:" + t.id} value={t.body || ""} onChange={onChange} readOnly={!!other} onReady={e => !other && e.focus()} />}
           </Suspense>
         </div>
       </DialogContent>

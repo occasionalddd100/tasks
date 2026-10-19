@@ -133,6 +133,30 @@
   content: ""; position: absolute; left: -18px; top: 4px; bottom: 4px; width: 1px;
   background: color-mix(in oklch, var(--foreground) 13%, transparent);
 }
+/* sections under headings: indent + guide lines per level, foldable headings, "##" on the active heading */
+.milkdown .ProseMirror { --step: 24px; }
+@media (max-width: 640px) { .milkdown .ProseMirror { --step: 14px; } }
+.milkdown .ProseMirror > .pm-sec { margin-left: calc(var(--d, 0) * var(--step)); position: relative; }
+.milkdown .ProseMirror > .pm-sec:not(.pm-h)::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: calc(var(--d, 0) * var(--step) * -1); width: calc(var(--d, 0) * var(--step)); pointer-events: none;
+  background: repeating-linear-gradient(to right, color-mix(in oklch, var(--foreground) 11%, transparent) 0 1px, transparent 1px var(--step));
+  background-position: 6px 0;
+}
+.milkdown .ProseMirror > .pm-hidden { display: none !important; }
+.pm-fold-layer { position: absolute; inset: 0; pointer-events: none; }
+.pm-fold-layer .pm-fold {
+  position: absolute; pointer-events: auto; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 5px;
+  color: var(--muted-foreground); opacity: 0.25; transition: opacity 0.15s, background 0.15s; cursor: pointer;
+}
+.milkdown:hover .pm-fold-layer .pm-fold { opacity: 0.6; }
+.pm-fold-layer .pm-fold svg { transition: transform 0.2s; transform: rotate(90deg); }
+.pm-fold-layer .pm-fold.is-folded { opacity: 1 !important; color: var(--ink); }
+.pm-fold-layer .pm-fold.is-folded svg { transform: rotate(0deg); }
+.pm-fold-layer .pm-fold:hover { opacity: 1 !important; background: var(--accent); color: var(--foreground); }
+.milkdown .ProseMirror .pm-folded::after { content: "…"; margin-left: 0.4em; padding: 0 0.45em; border-radius: 6px; font-size: 0.6em; vertical-align: middle; background: var(--muted); color: var(--muted-foreground); }
+.milkdown .ProseMirror .pm-h.pm-cur::before { content: attr(data-hashes); color: var(--muted-foreground); opacity: 0.55; font-weight: 500; margin-right: 0.3em; }
+.milkdown .ProseMirror h1.pm-h { border-bottom: 1px solid var(--border); padding-bottom: 0.15em; }
+
 .milkdown .ProseMirror blockquote { border-left: 2px solid var(--ink); padding-left: 1em; color: var(--muted-foreground); }
 .milkdown .ProseMirror hr { border-color: var(--border); margin: 1.5em 0; }
 
