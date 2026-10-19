@@ -4,6 +4,7 @@ import "./index.css";
 import App from "./App.jsx";
 import { toast } from "sonner";
 import { isApp } from "@/lib/native";
+import { freshReload } from "@/lib/reload";
 
 // follow the system theme
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -35,11 +36,11 @@ const checkUpdate = () => {
   if (!mine || location.protocol !== "https:") return;
   fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" }).then(r => r.text()).then(html => {
     const live = html.match(/index-[\w-]+\.js/)?.[0];
-    let tried = null; try { tried = sessionStorage.getItem("reloadedFor"); } catch {}
-    if (!live || live === mine || tried === live) return; // tried once already: don't loop on a stale cache
-    try { sessionStorage.setItem("reloadedFor", live); } catch {}
-    location.replace(location.pathname + "?v=" + Date.now() + location.hash); // the query skips the cached page
+    if (live && live !== mine) freshReload(live);
   }).catch(() => {});
 };
 setTimeout(checkUpdate, 3000);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
+
+// an old cached page asks for code files the newer build no longer has: fetch the new page instead of a black screen
+window.addEventListener("vite:preloadError", e => { if (freshReload("chunk:" + (mine || ""))) e.preventDefault(); });

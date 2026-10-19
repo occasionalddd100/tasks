@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useState } from "react";
+import { freshReload } from "@/lib/reload";
 import { BookOpenIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject } from "@/lib/notes";
@@ -15,7 +16,27 @@ import NotesTree, { IconBtn, CreateMenu, itemName } from "@/components/notes/Not
 import { ProjectView } from "@/components/tasks/ProjectViews";
 import JournalView from "@/components/journal/JournalView";
 
-const NoteView = lazy(() => import("@/components/notes/NoteView"));
+const NoteView = lazy(() => import("@/components/notes/NoteView").catch(e => {
+  if (freshReload("chunk:note")) return new Promise(() => {}); // the page is reloading
+  throw e;
+}));
+
+// a note that fails to open shows a way out instead of an empty screen
+class NoteGuard extends Component {
+  state = { err: null };
+  static getDerivedStateFromError(err) { return { err }; }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <p className="text-sm text-muted-foreground">Не получилось открыть заметку.<br /><span className="text-xs opacity-70">{String(this.state.err?.message || this.state.err).slice(0, 160)}</span></p>
+        <button type="button" onClick={() => { try { sessionStorage.removeItem("reloadedFor"); } catch {} freshReload("manual" + Date.now()); }} className="h-9 rounded-lg border px-4 text-sm font-medium hover:bg-accent">Обновить</button>
+      </div>
+    );
+  }
+}
+
+const Loading = () => <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground"><span className="animate-pulse">Открываю заметку…</span></div>;
 
 // view lives in the URL hash (#note=<id>, #project=<id>, #journal) so back/forward works;
 // with no hash (opening the site or the app) the journal is home
@@ -65,7 +86,7 @@ export default function Shell() {
         {db.error && <p className="m-4 rounded-md border border-destructive/40 p-3 text-sm text-destructive">Нет связи с базой: {db.error}. Обнови страницу.</p>}
         <motion.div key={view.note || project || "journal"} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
           {view.note
-            ? <Suspense fallback={null}><NoteView id={view.note} fresh={view.fresh} go={go} /></Suspense>
+            ? <NoteGuard key={view.note}><Suspense fallback={<Loading />}><NoteView id={view.note} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
             : project ? <ProjectView id={project} fresh={view.fresh} go={go} /> : <JournalView />}
         </motion.div>
       </main>
