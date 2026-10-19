@@ -12,7 +12,7 @@ import { usePhotoUrl, uploadPhoto, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 import { Badge, Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { PencilIcon } from "lucide-react";
+import { PencilIcon, PlusIcon, XIcon } from "lucide-react";
 
 // how the day went: 5 moods, each with its colour; "Ужасный" is a stormy crimson that glows
 export const MOODS = [
@@ -52,7 +52,11 @@ export default function JournalView() {
   const [open, setOpen] = useState(null); // { date, edit }
   const bursts = useConfetti();
 
-  const info = date => ({ items: items.get(date)?.items || [], note: items.get(date)?.note || "", doc: mine.get(date) });
+  // done items: tasks, habits, old log, plus what I wrote down by hand for that day
+  const info = date => ({
+    items: [...(items.get(date)?.items || []), ...(mine.get(date)?.extra || []).map(text => ({ text, from: "вручную" }))],
+    note: items.get(date)?.note || "", doc: mine.get(date),
+  });
   const active = date => { const i = info(date); return i.items.length > 0 || !!i.doc?.mood || !!i.doc?.memo || !!i.doc?.photos?.length; };
 
   const streak = useMemo(() => {
@@ -62,7 +66,7 @@ export default function JournalView() {
     return n;
   }, [items, mine]);
   const deadline = Math.ceil((new Date("2026-10-31T23:59:00+03:00") - new Date()) / 864e5);
-  const todayDone = items.get(today())?.items.length || 0;
+  const todayDone = info(today()).items.length;
   const todayMood = moodOf(mine.get(today())?.mood);
 
   const pick = (date, edit = false) => setOpen({ date, edit });
@@ -354,16 +358,53 @@ function DayEditor({ date, info, burst }) {
         <Memo key={id} date={date} value={doc?.memo || ""} save={save} />
         <Photos date={date} photos={doc?.photos || []} save={save} />
 
-        <DoneList items={items} note={note} future={future} />
+        <ExtraDone date={date} extra={doc?.extra || []} save={save} />
+        <DoneList items={items.filter(it => it.from !== "вручную")} note={note} future={future} title="Из задач и привычек" />
       </div>
   );
 }
 
-function DoneList({ items, note, future }) {
+// things done that aren't tasks: typed straight into the day
+function ExtraDone({ date, extra, save }) {
+  const [text, setText] = useState("");
+  const submit = e => {
+    e.preventDefault(); const v = text.trim(); if (!v) return;
+    setText(""); save({ extra: [...(getDb().days.find(d => d.id === dayId(date))?.extra || []), v] });
+  };
+  const del = k => save({ extra: extra.filter((_, i) => i !== k) });
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-muted-foreground">Что ещё сделал</p>
+      {extra.length > 0 && (
+        <ul className="mb-2 flex flex-wrap gap-1.5">
+          <AnimatePresence initial={false}>
+            {extra.map((t, k) => (
+              <motion.li key={t + k} layout initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.85 }}
+                className="group inline-flex max-w-full items-center gap-1.5 rounded-lg border border-good/40 bg-good/10 py-1 pr-1 pl-2 text-[13px]">
+                <CheckIcon className="size-3.5 shrink-0 text-good" />
+                <span className="truncate">{t}</span>
+                <button type="button" onClick={() => del(k)} aria-label={"Убрать: " + t} className="grid size-5 place-items-center rounded text-muted-foreground hover:bg-background hover:text-foreground">
+                  <XIcon className="size-3" />
+                </button>
+              </motion.li>
+            ))}
+          </AnimatePresence>
+        </ul>
+      )}
+      <form onSubmit={submit} className="flex gap-2">
+        <input value={text} onChange={e => setText(e.target.value)} placeholder="Например: поработал над приложением 3 часа"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-dashed bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground/60 focus:border-solid focus:ring-2 focus:ring-ring/40" />
+        <button type="submit" disabled={!text.trim()} className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-40"><PlusIcon className="size-4" />Добавить</button>
+      </form>
+    </div>
+  );
+}
+
+function DoneList({ items, note, future, title = "Сделано" }) {
   return (
         <div>
           <p className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            Сделано
+            {title}
             {items.length > 0 && <span className="rounded-full bg-good/15 px-2 py-0.5 text-xs font-semibold text-good tabular-nums">{items.length}</span>}
           </p>
           {items.length ? (
@@ -576,7 +617,7 @@ function Stats({ info, items, mine, streak }) {
     const moods = d30.map(d => mine.get(d)?.mood || 0);
     const rated = moods.filter(Boolean);
     const avg = rated.length ? rated.reduce((a, b) => a + b, 0) / rated.length : 0;
-    const cnt = d => items.get(d)?.items.length || 0;
+    const cnt = d => info(d).items.length;
     const week = d14.slice(7).reduce((a, d) => a + cnt(d), 0), prev = d14.slice(0, 7).reduce((a, d) => a + cnt(d), 0);
     const dist = MOODS.map(m => ({ ...m, n: moods.filter(v => v === m.v).length }));
     const year = String(new Date().getFullYear());
