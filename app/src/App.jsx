@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
-import { sb, start, stop, setErrorHandler } from "@/lib/db";
+import { sb, start, stop, setErrorHandler, subscribe } from "@/lib/db";
+import { startNative } from "@/lib/native";
 import Login from "@/components/Login";
 import Shell from "@/components/Shell";
 
@@ -18,7 +19,7 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { if (session?.user) start(session.user); }, [session?.user?.id]);
+  useEffect(() => { if (session?.user) start(session.user).then(() => startNative(subscribe)); }, [session?.user?.id]);
 
   return (
     <>

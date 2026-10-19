@@ -1,0 +1,12 @@
+{
+  "appId": "io.github.occasionalddd100.tasks",
+  "appName": "Задачи",
+  "webDir": "cap-www",
+  "server": {
+    "url": "https://occasionalddd100.github.io/tasks/",
+    "errorPath": "index.html"
+  },
+  "plugins": {
+    "LocalNotifications": { "smallIcon": "ic_stat_notify", "iconColor": "#171717" }
+  }
+}

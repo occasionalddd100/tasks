@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Задачи</string>
+    <string name="title_activity_main">Задачи</string>
+    <string name="package_name">io.github.occasionalddd100.tasks</string>
+    <string name="custom_url_scheme">io.github.occasionalddd100.tasks</string>
+</resources>

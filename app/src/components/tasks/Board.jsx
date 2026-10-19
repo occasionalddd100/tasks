@@ -49,7 +49,7 @@ export default function Board({ board }) {
     }
     return { visible, kids };
   }, [all]);
-  const week = useMemo(() => visible.filter(inWeek).sort((a, b) => a.due.localeCompare(b.due) || byOrder(a, b)), [visible]);
+  const week = useMemo(() => visible.filter(inWeek).sort((a, b) => a.due.localeCompare(b.due) || (a.time || "99").localeCompare(b.time || "99") || byOrder(a, b)), [visible]);
   const items = useMemo(() => {
     const m = Object.fromEntries(cats.map(c => [c.id, []]));
     for (const t of visible) m[t.cat].push(t.id);

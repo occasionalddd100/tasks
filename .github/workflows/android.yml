@@ -1,0 +1,41 @@
+name: Android APK
+
+# The app loads the site live, so a new APK is only needed when native parts change.
+on:
+  push:
+    branches: [main]
+    paths: ["app/android/**", "app/capacitor.config.json", "app/package.json", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npx cap sync android
+      - name: Build release APK
+        working-directory: app/android
+        run: ./gradlew assembleRelease -PversionCode=${{ github.run_number }} -PversionName=1.${{ github.run_number }}
+      - run: cp android/app/build/outputs/apk/release/app-release.apk tasks.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Задачи ${{ github.run_number }}
+          files: app/tasks.apk
+          make_latest: true

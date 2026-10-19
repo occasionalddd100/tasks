@@ -27,6 +27,7 @@ export function useDb() {
   return useSyncExternalStore(f => (listeners.add(f), () => listeners.delete(f)), () => state);
 }
 export const getDb = () => state;
+export const subscribe = f => (listeners.add(f), () => listeners.delete(f));
 
 const chk = r => { if (r.error) throw r.error; return r; };
 const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);

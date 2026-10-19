@@ -1,6 +1,6 @@
 import { createContext, useContext, useRef, useState } from "react";
 import {
-  CalendarIcon, CalendarXIcon, ChevronRightIcon, ClockIcon, CornerDownRightIcon, FileTextIcon, FlagIcon, FlameIcon,
+  AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CalendarXIcon, ChevronRightIcon, ClockIcon, CornerDownRightIcon, FileTextIcon, FlagIcon, FlameIcon,
   GripVerticalIcon, MoreHorizontalIcon, UserIcon, UserXIcon, PencilIcon, StickyNoteIcon, SunIcon, Trash2Icon,
 } from "lucide-react";
 import { getDb, update, remove } from "@/lib/db";
@@ -41,11 +41,11 @@ export async function deleteTask(t) {
 export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
   const [editing, setEditing] = useState(null); // "text" | "note"
   const [noteOpen, setNoteOpen] = useState(false);
-  const dateRef = useRef(null);
+  const dateRef = useRef(null), timeRef = useRef(null);
 
   const toggle = v => update("tasks", t.id, v ? { done: true, doneOn: today(), doneBy: getDb().me } : { done: false, doneOn: "", doneBy: "" });
   const p = PRIO[t.prio];
-  const late = t.due && t.due < today() && !t.done;
+  const late = t.due && !t.done && (t.due < today() || (t.due === today() && t.time && t.time < new Date().toTimeString().slice(0, 5)));
   const hasBody = !!t.body?.trim();
   const people = useContext(People);
   const who = t.assignee ? people.find(x => x.user_id === t.assignee) || { user_id: t.assignee, name: "", email: "участник" } : null;
@@ -56,7 +56,9 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
     people.length > 0 && { sep: true },
     { label: "Без исполнителя", icon: UserXIcon, disabled: !t.assignee, onSelect: () => assign("") },
   ];
-  const openDate = () => { const i = dateRef.current; if (!i) return; try { i.showPicker(); } catch { i.focus(); i.click(); } };
+  const openPicker = ref => { const i = ref.current; if (!i) return; try { i.showPicker(); } catch { i.focus(); i.click(); } };
+  const openDate = () => openPicker(dateRef), openTime = () => openPicker(timeRef);
+  const when = t.due ? dueLabel(t.due) + (t.time ? " " + t.time : "") : "";
 
   const items = [
     { label: hasBody ? "Открыть заметку" : "Добавить заметку", icon: FileTextIcon, onSelect: () => setNoteOpen(true) },
@@ -68,7 +70,9 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
     ] },
     { label: "Исполнитель", icon: UserIcon, sub: assignItems },
     { label: t.due ? "Изменить дату" : "Поставить дату", icon: CalendarIcon, onSelect: () => setTimeout(openDate, 50) },
-    t.due && { label: "Убрать дату", icon: CalendarXIcon, onSelect: () => update("tasks", t.id, { due: "" }) },
+    t.due && { label: t.time ? "Изменить время" : "Поставить время", icon: AlarmClockIcon, onSelect: () => setTimeout(openTime, 50) },
+    t.time && { label: "Убрать время", icon: AlarmClockOffIcon, onSelect: () => update("tasks", t.id, { time: "" }) },
+    t.due && { label: "Убрать дату", icon: CalendarXIcon, onSelect: () => update("tasks", t.id, { due: "", time: "" }) },
     { sep: true },
     { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setEditing("text")) },
     { label: t.note ? "Изменить подпись" : "Добавить подпись", icon: StickyNoteIcon, onSelect: () => setTimeout(() => setEditing("note")) },
@@ -127,11 +131,13 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
       </div>
       {!overlay && (
         <div className="flex shrink-0 items-center">
-          <button type="button" onClick={openDate} title={t.due ? "Дата: " + t.due : "Поставить дату"} aria-label={t.due ? "Дата " + dueLabel(t.due) : "Поставить дату"}
+          <button type="button" onClick={openDate} title={t.due ? "Срок: " + t.due + (t.time ? " " + t.time : "") : "Поставить дату"} aria-label={t.due ? "Срок " + when : "Поставить дату"}
             className={cn("relative grid h-6 min-w-6 place-items-center rounded px-1 text-xs text-muted-foreground hover:bg-background",
               !t.due && "opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100 max-md:hidden", t.due && "bg-muted", late && "text-destructive")}>
-            {t.due ? dueLabel(t.due) : <CalendarIcon className="size-3.5" />}
-            <input ref={dateRef} type="date" tabIndex={-1} value={t.due || ""} onChange={e => update("tasks", t.id, { due: e.target.value || "" })}
+            {t.due ? when : <CalendarIcon className="size-3.5" />}
+            <input ref={dateRef} type="date" tabIndex={-1} value={t.due || ""} onChange={e => update("tasks", t.id, e.target.value ? { due: e.target.value } : { due: "", time: "" })}
+              className="pointer-events-none absolute inset-0 opacity-0" aria-hidden />
+            <input ref={timeRef} type="time" tabIndex={-1} value={t.time || ""} onChange={e => update("tasks", t.id, { time: e.target.value || "" })}
               className="pointer-events-none absolute inset-0 opacity-0" aria-hidden />
           </button>
           {who && (
