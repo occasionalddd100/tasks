@@ -323,7 +323,7 @@ function DayEditor({ date, info, burst }) {
   return (
       <div className="flex flex-col gap-5">
         <div>
-          <p className="mb-2 text-sm font-medium text-muted-foreground">Как прошёл день?</p>
+          <p className="mb-2 text-sm font-medium text-muted-foreground">{isToday ? "Как идёт день?" : "Как прошёл день?"}</p>
           <div className="grid grid-cols-5 gap-2 max-sm:gap-1.5">
             {MOODS.map(m => {
               const on = doc?.mood === m.v;
@@ -515,7 +515,7 @@ function DayRead({ date, i, onEdit }) {
       {i.doc?.memo && <p className="text-[16px] leading-relaxed whitespace-pre-wrap">{i.doc.memo}</p>}
       {empty && (
         <button type="button" onClick={onEdit} className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground">
-          <SparklesIcon className="size-5" />{date === today() ? "Записать, как прошёл день" : "Этот день пока без записи. Добавить?"}
+          <SparklesIcon className="size-5" />{date === today() ? "Написать о сегодня" : "Этот день пока без записи. Добавить?"}
         </button>
       )}
       <DoneList items={i.items} note={i.note} future={date > today()} />
@@ -534,10 +534,10 @@ function Memo({ date, value, save }) {
   const change = v => { setText(v); pending.current = v; clearTimeout(timer.current); timer.current = setTimeout(flush, 700); };
   return (
     <label className="block">
-      <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-muted-foreground"><SparklesIcon className="size-3.5" />Что запомнилось</span>
+      <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-muted-foreground"><SparklesIcon className="size-3.5" />{date === today() ? "Заметки о сегодня" : "Что запомнилось"}</span>
       <textarea ref={ta} value={text} rows={3} onChange={e => change(e.target.value)}
         onFocus={() => { focused.current = true; }} onBlur={() => { focused.current = false; flush(); }}
-        placeholder="Пара строк о дне: что было, что почувствовал, что хочется не забыть"
+        placeholder={date === today() ? "Что происходит, о чём думаешь, что хочется не забыть. Можно дописывать в течение дня" : "Пара строк о дне: что было, что почувствовал, что хочется не забыть"}
         className="w-full resize-none rounded-xl border bg-background px-3 py-2.5 text-[15px] leading-relaxed outline-none transition-shadow placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-ring/40" />
     </label>
   );
@@ -796,12 +796,12 @@ function TodayCard({ i, onOpen }) {
               {marks.map(m => <span key={m.k} className="inline-flex items-center gap-1"><m.icon className="size-3.5" style={{ color: m.color, fill: m.color }} />{m.short}</span>)}
             </div>}
             {i.doc?.memo && <p className={cn("line-clamp-3 text-[15px] leading-relaxed", photo ? "text-white/90" : "text-foreground/90")}>{i.doc.memo}</p>}
-          </> : <p className="text-[15px] text-muted-foreground">День ещё не записан. Отметь, как он прошёл, и что запомнилось.</p>}
+          </> : <p className="text-[15px] text-muted-foreground">Пиши прямо по ходу дня: что делаешь, что происходит, какое настроение. Дополнять можно сколько угодно раз, до самого вечера.</p>}
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <motion.button type="button" whileTap={{ scale: 0.96 }} onClick={() => onOpen(true)}
               className={cn("inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition-colors",
                 photo ? "bg-white text-black hover:bg-white/90" : "bg-primary text-primary-foreground hover:bg-primary/90")}>
-              {filled ? <><PencilIcon className="size-4" />Дополнить день</> : <><SparklesIcon className="size-4" />Записать день</>}
+              {filled ? <><PencilIcon className="size-4" />Дополнить</> : <><SparklesIcon className="size-4" />Написать о сегодня</>}
             </motion.button>
             {filled && <button type="button" onClick={() => onOpen(false)} className={cn("h-10 rounded-xl px-3 text-sm font-medium", photo ? "text-white/85 hover:bg-white/10" : "text-muted-foreground hover:bg-accent")}>Открыть</button>}
             <span className={cn("ml-auto text-sm", photo ? "text-white/75" : "text-muted-foreground")}>
