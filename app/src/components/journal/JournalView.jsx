@@ -682,8 +682,8 @@ const hasEntry = i => !!(i.doc?.mood || i.doc?.memo || i.doc?.photos?.length || 
 function Cover({ photo, mood, className, children }) {
   return (
     <div className={cn("relative overflow-hidden", className)} style={!photo ? { background: mood ? `linear-gradient(135deg, ${mood.color}55, ${mood.color}11)` : undefined } : undefined}>
-      {photo && <Thumb path={photo.path} className="absolute inset-0 size-full object-cover transition-transform duration-700 group-hover:scale-105" />}
-      {photo && <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />}
+      {photo && <Thumb path={photo.path} className="absolute inset-0 size-full scale-110 object-cover blur-md brightness-[0.55] saturate-[1.2] transition-transform duration-700 group-hover:scale-[1.16]" />}
+      {photo && <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/20" />}
       {children}
     </div>
   );
@@ -702,6 +702,12 @@ function TodayCard({ i, onOpen }) {
               <div className={cn("text-xs font-medium tracking-wide uppercase", photo ? "text-white/70" : "text-muted-foreground")}>Сегодня</div>
               <div className="text-2xl font-bold tracking-tight">{fmtDate(today()).replace("Сегодня · ", "")}</div>
             </div>
+            {photo && (
+              <motion.div initial={{ opacity: 0, scale: 0.8, rotate: 6 }} animate={{ opacity: 1, scale: 1, rotate: 3 }} transition={{ type: "spring", bounce: 0.4 }}
+                className="size-14 shrink-0 overflow-hidden rounded-xl border-2 border-white/80 shadow-lg md:size-20">
+                <Thumb path={photo.path} className="size-full object-cover" />
+              </motion.div>
+            )}
             {mood && (
               <motion.div initial={{ scale: 0, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", bounce: 0.5 }}
                 className="grid size-14 shrink-0 place-items-center rounded-2xl shadow-lg" style={{ background: mood.color }}>
