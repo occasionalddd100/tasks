@@ -1,14 +1,15 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRightIcon, FileTextIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, MoreHorizontalIcon,
-  PencilIcon, PlusIcon, Trash2Icon, UsersIcon, FolderInputIcon, ListChecksIcon,
+  PencilIcon, PlusIcon, Trash2Icon, UploadIcon, FolderUpIcon, UsersIcon, FolderInputIcon, ListChecksIcon,
 } from "lucide-react";
 import { useDb, update, remove, isMine } from "@/lib/db";
 import { tree, newNote, newFolder, newProject, deleteFolder, deleteProject, folderStats, descendants } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 import { confirmAction } from "@/components/Confirm";
 import ShareDialog from "@/components/ShareDialog";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { importFiles, fromInput } from "@/lib/importMd";
 import { ActionsContext, ActionsDropdown } from "@/components/ui/actions";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -95,7 +96,7 @@ export default function NotesTree({ view, go, query }) {
               : <span className="truncate">{f.name || "Без названия"}</span>}
             {(grantOn("folders", f.id) || sharedWithMe) && <UsersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Общая папка" />}
             <Actions>
-              <CreateMenu onCreate={k => create(k, f.id)} trigger={<IconBtn label="Создать в папке"><PlusIcon /></IconBtn>} />
+              <CreateMenu folder={f.id} onCreate={k => create(k, f.id)} trigger={<IconBtn label="Создать в папке"><PlusIcon /></IconBtn>} />
               <ActionsDropdown items={items} trigger={<IconBtn label="Действия с папкой" className="md:hidden"><MoreHorizontalIcon /></IconBtn>} />
             </Actions>
           </Row>
@@ -130,16 +131,25 @@ export default function NotesTree({ view, go, query }) {
   );
 }
 
-export function CreateMenu({ onCreate, trigger }) {
+export function CreateMenu({ onCreate, trigger, folder = "" }) {
+  const files = useRef(null), dir = useRef(null);
+  const pick = async e => { const input = e.target, list = fromInput(input.files); if (list.length) await importFiles(list, folder); input.value = ""; };
   return (
+    <>
+    <input ref={files} type="file" multiple accept=".md,.markdown,.txt,text/markdown" className="hidden" onClick={e => e.stopPropagation()} onChange={pick} />
+    <input ref={dir} type="file" webkitdirectory="" className="hidden" onClick={e => e.stopPropagation()} onChange={pick} />
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent align="start" onClick={e => e.stopPropagation()}>
         <DropdownMenuItem onSelect={() => onCreate("project")}><ListChecksIcon />Проект с задачами</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCreate("note")}><FileTextIcon />Заметка</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCreate("folder")}><FolderPlusIcon />Папка</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => files.current?.click()}><UploadIcon />Загрузить .md файлы</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => dir.current?.click()}><FolderUpIcon />Загрузить папку</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   );
 }
 

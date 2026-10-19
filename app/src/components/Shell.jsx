@@ -9,6 +9,7 @@ import { ConfirmHost } from "@/components/Confirm";
 import Avatar from "@/components/Avatar";
 import ProfileDialog from "@/components/ProfileDialog";
 import { loadMe, useMe } from "@/lib/people";
+import { importFiles, fromDrop } from "@/lib/importMd";
 import { MotionConfig, motion } from "motion/react";
 import NotesTree, { IconBtn, CreateMenu, itemName } from "@/components/notes/NotesTree";
 import { ProjectView, JournalView } from "@/components/tasks/ProjectViews";
@@ -77,6 +78,7 @@ export default function Shell() {
 function Sidebar({ view, go, email }) {
   const db = useDb(), me = useMe();
   const [profile, setProfile] = useState(false);
+  const [dropping, setDropping] = useState(false);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const create = async kind => {
@@ -106,8 +108,12 @@ function Sidebar({ view, go, email }) {
             className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/50" />
         </div>
       )}
-      <nav className="min-h-0 flex-1 overflow-y-auto pb-4" aria-label="Проекты и заметки">
+      <nav className={cn("min-h-0 flex-1 overflow-y-auto pb-4 transition-colors", dropping && "bg-accent/60 ring-2 ring-ring/40 ring-inset")} aria-label="Проекты и заметки"
+        onDragOver={e => { if ([...e.dataTransfer.types].includes("Files")) { e.preventDefault(); setDropping(true); } }}
+        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDropping(false); }}
+        onDrop={async e => { e.preventDefault(); setDropping(false); importFiles(await fromDrop(e.dataTransfer)); }}>
         <NotesTree view={view} go={go} query={searching ? query.trim() : ""} />
+        {dropping && <p className="px-4 py-2 text-sm text-muted-foreground">Отпусти, чтобы импортировать .md</p>}
       </nav>
       <div className="flex items-center gap-1 border-t p-2 text-sm">
         <button type="button" onClick={() => setProfile(true)} title="Профиль: имя и аватарка"
