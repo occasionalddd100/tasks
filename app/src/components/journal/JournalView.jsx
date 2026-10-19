@@ -86,6 +86,7 @@ export default function JournalView() {
         </div>
       </header>
 
+      <QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} />
       <TodayCard i={info(today())} onOpen={edit => pick(today(), edit)} />
       <WeekStrip info={info} onPick={pick} />
       <Memories info={info} mine={mine} onPick={pick} />
@@ -361,6 +362,38 @@ function DayEditor({ date, info, burst }) {
         <ExtraDone date={date} extra={doc?.extra || []} save={save} />
         <DoneList items={items.filter(it => it.from !== "вручную")} note={note} future={future} title="Из задач и привычек" />
       </div>
+  );
+}
+
+// the fastest way in: one line at the top, Enter writes it into today
+function QuickDone({ extra, burst }) {
+  const [text, setText] = useState("");
+  const [flash, setFlash] = useState(null);
+  const submit = e => {
+    e.preventDefault(); const v = text.trim(); if (!v) return;
+    const date = today(), cur = getDb().days.find(d => d.id === dayId(date))?.extra || [];
+    put("days", dayId(date), { date, extra: [...cur, v] });
+    setText(""); setFlash(v); setTimeout(() => setFlash(f => f === v ? null : f), 2200);
+    burst({ currentTarget: e.currentTarget.querySelector("button") }, ["#10b981", "#84cc16", "#38bdf8"]);
+  };
+  return (
+    <form onSubmit={submit} className="relative">
+      <div className="flex items-center gap-2 rounded-2xl border bg-card p-1.5 pl-4 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring/40">
+        <CheckIcon className="size-5 shrink-0 text-good" />
+        <input value={text} onChange={e => setText(e.target.value)} placeholder="Что сделал? Например: поработал над приложением" aria-label="Что сделал сегодня"
+          className="h-10 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/60" />
+        <button type="submit" disabled={!text.trim()} className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-30">
+          <PlusIcon className="size-4" /><span className="max-sm:hidden">Записать</span>
+        </button>
+      </div>
+      <AnimatePresence>
+        {flash && (
+          <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-1.5 px-2 text-xs text-good">
+            Записал в сегодня: «{flash}» · всего вручную: {extra.length}
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </form>
   );
 }
 
