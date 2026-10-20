@@ -93,7 +93,8 @@ export default function NotesTree({ view, go, query }) {
   };
   const grantOn = (coll, id) => db.grants.some(g => g.coll === coll && g.target === id);
   const isActive = x => view[x.kind] === x.id;
-  const fileRow = (x, depth) => (
+  // a pinned item shows only in the pinned block on top, not a second time in the tree
+  const fileRow = (x, depth) => pins.includes(COLL[x.kind] + ":" + x.id) ? null : (
     <FileRow key={x.kind + x.id} x={x} depth={depth} active={isActive(x)} go={go} folders={db.folders} dnd={dnd(x, COLL[x.kind])} pins={pins}
       shared={x.kind !== "note" && (grantOn(COLL[x.kind], x.id) || !isMine(x))}
       onShare={() => setSharing({ coll: COLL[x.kind], id: x.id, name: itemName(x), owner: isMine(x) })} />
@@ -143,6 +144,7 @@ export default function NotesTree({ view, go, query }) {
   };
 
   const renderFolder = (f, depth, pinned) => {
+    if (!pinned && pins.includes("folders:" + f.id)) return null;
     const isOpen = open.has(f.id), sharedWithMe = !isMine(f) && depth === 0 && !pinned;
     const { dropZone, ...drag } = dnd(f, "folders");
     const kids = t.folders(f.id), files = t.files(f.id);
