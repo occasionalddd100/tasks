@@ -3,7 +3,7 @@ import * as Pop from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "motion/react";
 import {
   CheckIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
-  SearchIcon, StickyNoteIcon, BookOpenIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
+  SearchIcon, StickyNoteIcon, ArrowUpIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
   FolderPlusIcon, FolderIcon, CopyIcon, MaximizeIcon, ZoomInIcon, ZoomOutIcon, FolderOpenIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
 } from "lucide-react";
 import ShareDialog from "@/components/ShareDialog";
@@ -70,7 +70,7 @@ export default function StashView({ id, fresh, go }) {
   const searchRef = useRef(null), addRef = useRef(null);
   const focus = r => { scrollTop(); setTimeout(() => r.current?.focus(), 250); };
   useNavItems([
-    { k: "journal", label: "Журнал", icon: BookOpenIcon },
+    { k: "top", label: "Наверх", icon: ArrowUpIcon, onClick: scrollTop },
     { k: "search", label: "Поиск", icon: SearchIcon, onClick: () => focus(searchRef) },
     { k: "add", label: "Добавить", icon: PlusIcon, accent: true, onClick: () => focus(addRef) },
     { k: "boards", label: cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски", icon: Columns3Icon, active: fan, onClick: () => setFan(v => !v) },
