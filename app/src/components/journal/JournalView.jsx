@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { Badge, Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useNavItems, scrollTop } from "@/components/MobileNav";
-import { PencilIcon, PlusIcon, XIcon, ListChecksIcon, CornerDownRightIcon, CalendarCheckIcon, NotebookPenIcon, BarChart3Icon } from "lucide-react";
+import { ClipboardPasteIcon, PencilIcon, PlusIcon, XIcon, ListChecksIcon, CornerDownRightIcon, CalendarCheckIcon, NotebookPenIcon, BarChart3Icon } from "lucide-react";
 
 // how the day went: 5 moods, each with its colour; "Ужасный" is a stormy crimson that glows
 export const MOODS = [
@@ -688,6 +688,24 @@ function Photos({ date, photos, save }) {
       setBusy(b => b - 1);
     }
   };
+  // Ctrl+V anywhere while the day is open puts a copied picture into the day's photos
+  const addRef = useRef(addFiles); addRef.current = addFiles;
+  useEffect(() => {
+    const on = e => { const f = [...(e.clipboardData?.files || [])].filter(x => x.type.startsWith("image/")); if (f.length) { e.preventDefault(); addRef.current(f); } };
+    window.addEventListener("paste", on);
+    return () => window.removeEventListener("paste", on);
+  }, []);
+  // button for phones: read a picture from the clipboard
+  const pasteClip = async () => {
+    try {
+      const out = [];
+      for (const it of await navigator.clipboard.read()) {
+        const type = it.types.find(t => t.startsWith("image/"));
+        if (type) { const b = await it.getType(type); out.push(new File([b], "clip." + type.split("/")[1], { type })); }
+      }
+      out.length ? addFiles(out) : toast("В буфере нет картинки");
+    } catch { toast("Не получилось прочитать буфер. На компьютере просто нажми Ctrl+V"); }
+  };
   const del = async p => {
     setOpen(null);
     const cur = getDb().days.find(d => d.id === dayId(date))?.photos || [];
@@ -697,9 +715,8 @@ function Photos({ date, photos, save }) {
 
   return (
     <div onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
-      onDrop={e => { e.preventDefault(); setOver(false); addFiles(e.dataTransfer.files); }}
-      onPaste={e => addFiles(e.clipboardData.files)}>
-      <p className="mb-2 text-sm font-medium text-muted-foreground">Фото дня</p>
+      onDrop={e => { e.preventDefault(); setOver(false); addFiles(e.dataTransfer.files); }}>
+      <p className="mb-2 flex items-baseline gap-2 text-sm font-medium text-muted-foreground">Фото дня<span className="text-xs font-normal opacity-70 max-md:hidden">перетащи или вставь Ctrl+V</span></p>
       <div className={cn("grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-2 rounded-xl transition-shadow sm:grid-cols-[repeat(auto-fill,7rem)]", over && "ring-2 ring-ring/50 ring-offset-4 ring-offset-card")}>
         <AnimatePresence initial={false}>
           {photos.map((p, k) => (
@@ -718,6 +735,12 @@ function Photos({ date, photos, save }) {
           className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-accent/40 hover:text-foreground">
           <ImagePlusIcon className="size-5" />добавить
         </button>
+        {"clipboard" in navigator && "read" in navigator.clipboard && (
+          <button type="button" onClick={pasteClip}
+            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-accent/40 hover:text-foreground">
+            <ClipboardPasteIcon className="size-5" />вставить
+          </button>
+        )}
       </div>
       <input ref={input} type="file" accept="image/*" multiple hidden onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
       <Lightbox photos={photos} index={open} setIndex={setOpen} onDelete={del} />
