@@ -1,12 +1,16 @@
 import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { freshReload } from "@/lib/reload";
-import { BookOpenIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { ConfirmHost } from "@/components/Confirm";
+import { IconPickerHost } from "@/components/IconPicker";
+import MobileNav from "@/components/MobileNav";
+import { SettingsHost, openSettings } from "@/components/Settings";
+import { useAppearance } from "@/lib/appearance";
 import Avatar from "@/components/Avatar";
 import ProfileDialog from "@/components/ProfileDialog";
 import { loadMe, useMe } from "@/lib/people";
@@ -53,7 +57,7 @@ const readHash = () => {
 };
 
 export default function Shell() {
-  const db = useDb();
+  const db = useDb(), look = useAppearance();
   const [view, setView] = useState(readHash);
   const [menu, setMenu] = useState(false);
 
@@ -76,15 +80,15 @@ export default function Shell() {
   const stash = view.stash || null;
   const shown = view.note ? db.notes.find(n => n.id === view.note) : project ? db.projects.find(b => b.id === project) : stash ? db.stashes.find(b => b.id === stash) : null;
   const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : "Журнал";
-  const sidebar = <Sidebar view={{ ...view, project, journal: !view.note && !project && !stash }} go={go} email={db.email} />;
+  const sidebar = <Sidebar view={{ ...view, project, journal: !view.note && !project && !stash }} go={go} email={db.email} search={menu === "search"} />;
 
   return (
-    <MotionConfig reducedMotion="user">
+    <MotionConfig reducedMotion={look.motion === "off" ? "always" : "user"}>
     <div className="flex h-dvh overflow-hidden">
-      <aside className="hidden w-64 shrink-0 border-r bg-sidebar md:flex md:flex-col">{sidebar}</aside>
-      <Sheet open={menu} onOpenChange={setMenu}><SheetContent>{sidebar}</SheetContent></Sheet>
+      <aside className={cn("hidden shrink-0 border-r bg-sidebar md:flex md:flex-col", { narrow: "w-56", normal: "w-64", wide: "w-80" }[look.sidebar] || "w-64")}>{sidebar}</aside>
+      <Sheet open={!!menu} onOpenChange={o => setMenu(o ? "menu" : false)}><SheetContent>{sidebar}</SheetContent></Sheet>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto max-md:pb-[calc(4rem+env(safe-area-inset-bottom))]">
         <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b bg-background/90 px-2 md:hidden" style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
           <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}><MenuIcon /></Button>
           <span className="truncate text-sm font-medium">{title}</span>
@@ -98,18 +102,21 @@ export default function Shell() {
             : <JournalView />}
         </motion.div>
       </main>
+      <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onJournal={() => go({ journal: true })} />
       <ConfirmHost />
+      <SettingsHost />
+      <IconPickerHost />
     </div>
     </MotionConfig>
   );
 }
 
-function Sidebar({ view, go, email }) {
+function Sidebar({ view, go, email, search }) {
   const db = useDb(), me = useMe();
   const [profile, setProfile] = useState(false);
   const [dropping, setDropping] = useState(false);
   const [query, setQuery] = useState("");
-  const [searching, setSearching] = useState(false);
+  const [searching, setSearching] = useState(!!search);
   const create = async kind => {
     if (kind === "folder") return newFolder("");
     const id = kind === "note" ? await newNote("") : kind === "stash" ? await newStash("") : await newProject("");
@@ -154,6 +161,7 @@ function Sidebar({ view, go, email }) {
           </span>
         </button>
         <ProfileDialog open={profile} onOpenChange={setProfile} />
+        <Button variant="ghost" size="iconSm" className="shrink-0" aria-label="Настройки" title="Настройки" onClick={openSettings}><SettingsIcon /></Button>
         <Button variant="ghost" size="iconSm" className="shrink-0" aria-label="Выйти" title="Выйти" onClick={() => sb.auth.signOut()}><LogOutIcon /></Button>
       </div>
     </div>

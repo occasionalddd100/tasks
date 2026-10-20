@@ -6,10 +6,9 @@ import { toast } from "sonner";
 import { isApp } from "@/lib/native";
 import { freshReload } from "@/lib/reload";
 
-// follow the system theme
-const mq = window.matchMedia("(prefers-color-scheme: dark)");
-const applyTheme = () => document.documentElement.classList.toggle("dark", mq.matches);
-applyTheme(); mq.addEventListener("change", applyTheme);
+// theme, accent and text size from the settings window (system theme by default)
+import { apply as applyAppearance } from "@/lib/appearance";
+applyAppearance();
 
 createRoot(document.getElementById("root")).render(<App />);
 

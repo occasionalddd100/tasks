@@ -3,14 +3,21 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   CheckIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
   SearchIcon, StickyNoteIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
+  FolderPlusIcon, FolderIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
 } from "lucide-react";
+import ShareDialog from "@/components/ShareDialog";
+import { VIEW, ViewHeader, PillTab, PillTabs } from "@/components/ViewHeader";
+import { ItemIcon } from "@/components/IconPicker";
+import { useNavItems, scrollTop } from "@/components/MobileNav";
+import { canUseFolders, addFolder, scan, access, allow, fileUrl, useFolders } from "@/lib/localFolders";
+import { isMine } from "@/lib/db";
 import { toast } from "sonner";
 import { useDb, update, updateMany, remove } from "@/lib/db";
 import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh } from "@/lib/stash";
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { ActionsDropdown } from "@/components/ui/actions";
+import { ActionsDropdown, ActionsContext } from "@/components/ui/actions";
 import { confirmAction } from "@/components/Confirm";
 import { FileMenu, IconBtn } from "@/components/notes/NotesTree";
 
@@ -43,8 +50,23 @@ export default function StashView({ id, fresh, go }) {
     .filter(c => cur === ALL || c.tab === cur)
     .filter(c => !unseen || !c.watched)
     .filter(c => tags.every(t => c.tags?.includes(t)))
-    .filter(c => !q || [c.title, c.text, c.desc, c.note, c.author, c.url, ...(c.tags || [])].some(s => (s || "").toLowerCase().includes(q)))
+    .filter(c => !q || [c.title, c.text, c.desc, c.note, c.author, c.url, c.name, c.path, ...(c.tags || [])].some(s => (s || "").toLowerCase().includes(q)))
     .sort((a, b) => cur === ALL ? (b.added || "").localeCompare(a.added || "") : (a.order ?? 0) - (b.order ?? 0));
+  const [boards, setBoards] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const searchRef = useRef(null), addRef = useRef(null);
+  const focus = r => { scrollTop(); setTimeout(() => r.current?.focus(), 250); };
+  useNavItems([
+    { k: "boards", label: tabs.find(t => t.id === cur)?.name || "Все", icon: Columns3Icon, onClick: () => setBoards(true) },
+    { k: "search", label: "Поиск", icon: SearchIcon, onClick: () => focus(searchRef) },
+    { k: "add", label: "Добавить", icon: PlusIcon, accent: true, onClick: () => focus(addRef) },
+    { k: "unseen", label: "Очередь", icon: EyeOffIcon, active: unseen, onClick: () => setUnseen(v => !v) },
+  ]);
+  // new files in the connected folders show up by themselves
+  useEffect(() => {
+    if (!db.ready || !stash?.sources?.length) return;
+    (async () => { for (const s of stash.sources) if (await access(s.id) === "granted") await scan(id, s.id, s.tab || tabs[0]?.id); })();
+  }, [db.ready, id, stash?.sources?.length]);
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
   if (!stash) return <div className="p-8 text-sm text-muted-foreground">Стэш не найден. Может, его удалили.</div>;
@@ -73,24 +95,25 @@ export default function StashView({ id, fresh, go }) {
   const dropOnTab = t => { const c = dragged.current; dragged.current = null; setDragTab(null); if (c) { moveTo(c, t.id); toast(`Перенёс в «${t.name}»`); } };
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 pt-5 pb-16 md:px-8 md:pt-8">
-      <header className="flex items-center gap-2">
-        <LayoutGridIcon className="size-6 shrink-0 text-muted-foreground" />
-        <input value={stash.name || ""} onChange={e => update("stashes", id, { name: e.target.value })} autoFocus={fresh} onFocus={e => fresh && e.target.select()}
-          placeholder="Без названия" aria-label="Название стэша"
-          className="min-w-0 flex-1 bg-transparent text-2xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50 md:text-3xl" />
-        <FileMenu x={{ ...stash, kind: "stash" }} folders={db.folders} after={() => go({ journal: true })} />
-      </header>
+    <div className={VIEW}>
+      <ViewHeader icon={<ItemIcon x={stash} fallback={LayoutGridIcon} className="size-6" />} value={stash.name || ""} onChange={e => update("stashes", id, { name: e.target.value })}
+        autoFocus={fresh} onFocus={e => fresh && e.target.select()} aria-label="Название стэша">
+        {(!isMine(stash) || db.grants.some(g => g.coll === "stashes" && g.target === id)) && <UsersIcon className="size-4 shrink-0 text-muted-foreground" aria-label="Общий стэш" />}
+        <FileMenu x={{ ...stash, kind: "stash" }} folders={db.folders} after={() => go({ journal: true })} onShare={() => setSharing(true)} />
+      </ViewHeader>
+      {sharing && <ShareDialog open onOpenChange={o => !o && setSharing(false)} coll="stashes" target={id} name={stash.name} isOwner={isMine(stash)} />}
+      <BoardsSheet open={boards} setOpen={setBoards} tabs={tabs} cur={cur} setTab={t => { setTab(t); setBoards(false); }} counts={t => all.filter(c => c.tab === t).length} total={all.length} onAdd={addTab} />
 
       <Tabs tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
         onAdd={addTab} onRename={renameTab} onDelete={deleteTab} dragTab={dragTab} setDragTab={setDragTab} onDrop={dropOnTab} dragging={() => !!dragged.current} />
 
-      <AddLine stash={id} tab={target} />
+      <AddLine stash={id} tab={target} inputRef={addRef} />
+      <Sources stash={stash} tab={target} />
 
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex h-9 min-w-48 flex-1 items-center gap-2 rounded-lg border bg-card px-3 focus-within:ring-2 focus-within:ring-ring/40 sm:max-w-xs">
           <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по тексту и тегам" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+          <input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по тексту и тегам" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
           {query && <button type="button" onClick={() => setQuery("")} aria-label="Очистить"><XIcon className="size-3.5 text-muted-foreground" /></button>}
         </label>
         <Chip on={unseen} onClick={() => setUnseen(v => !v)}><EyeOffIcon className="size-3.5" />Не смотрел</Chip>
@@ -139,7 +162,7 @@ const Chip = ({ on, onClick, children }) => (
 function Tabs({ tabs, cur, setTab, counts, total, onAdd, onRename, onDelete, dragTab, setDragTab, onDrop, dragging }) {
   const [renaming, setRenaming] = useState(null);
   return (
-    <div className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0 [scrollbar-width:none]">
+    <PillTabs>
       <TabBtn on={cur === ALL} onClick={() => setTab(ALL)}>Все<span className="text-xs opacity-60">{total}</span></TabBtn>
       <span className="mx-1 h-5 w-px shrink-0 bg-border" />
       {tabs.map(t => renaming === t.id ? (
@@ -148,7 +171,12 @@ function Tabs({ tabs, cur, setTab, counts, total, onAdd, onRename, onDelete, dra
           onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setRenaming(null); }}
           className="h-9 w-36 shrink-0 rounded-lg border bg-background px-3 text-sm outline-none ring-2 ring-ring/40" />
       ) : (
-        <div key={t.id} className="group relative shrink-0"
+        <ActionsContext key={t.id} items={[
+          { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setRenaming(t.id)) },
+          { sep: true },
+          { label: "Удалить доску", icon: Trash2Icon, variant: "destructive", onSelect: () => onDelete(t) },
+        ]}>
+        <div className="group relative shrink-0"
           onDragOver={e => { if (dragging()) { e.preventDefault(); setDragTab(t.id); } }} onDragLeave={() => setDragTab(null)} onDrop={e => { e.preventDefault(); onDrop(t); }}>
           <TabBtn on={cur === t.id} drop={dragTab === t.id} onClick={() => setTab(t.id)} onDoubleClick={() => setRenaming(t.id)}>
             {t.name}<span className="text-xs opacity-60">{counts(t.id)}</span>
@@ -161,24 +189,18 @@ function Tabs({ tabs, cur, setTab, counts, total, onAdd, onRename, onDelete, dra
             )}
           </TabBtn>
         </div>
+        </ActionsContext>
       ))}
       <button type="button" onClick={onAdd} className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Новая доска" title="Новая доска"><PlusIcon className="size-4" /></button>
-    </div>
+    </PillTabs>
   );
 }
 
-const TabBtn = ({ on, drop, children, ...props }) => (
-  <button type="button" {...props}
-    className={cn("relative flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition-all",
-      on ? "bg-foreground text-background" : "text-muted-foreground hover:bg-accent hover:text-foreground",
-      drop && "scale-105 bg-primary/15 text-foreground ring-2 ring-primary/50")}>
-    {children}
-  </button>
-);
+const TabBtn = PillTab;
 
 /* ───────────── the one line to add things ───────────── */
 
-function AddLine({ stash, tab }) {
+function AddLine({ stash, tab, inputRef }) {
   const [v, setV] = useState("");
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
@@ -226,7 +248,7 @@ function AddLine({ stash, tab }) {
   return (
     <div data-addline className={cn("relative flex items-center gap-2 rounded-2xl border bg-card p-1.5 pl-4 shadow-sm transition-all focus-within:ring-2 focus-within:ring-ring/40", over && "scale-[1.01] ring-2 ring-primary/60")}>
       <LinkIcon className="size-4 shrink-0 text-muted-foreground" />
-      <input value={v} onChange={e => setV(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()}
+      <input ref={inputRef} value={v} onChange={e => setV(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()}
         placeholder={over ? "Отпускай, добавлю картинку" : "Вставь ссылку или текст"} aria-label="Добавить в стэш"
         className="h-10 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/70" />
       <input ref={file} type="file" accept="image/*" multiple className="hidden" onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
@@ -245,8 +267,17 @@ function Card({ c, board, onOpen, drag, onTag, tabs, moveTo }) {
   const [dragging, setDragging] = useState(false);
   const [grab, setGrab] = useState(true);
   const toggleSeen = () => update("clips", c.id, { watched: !c.watched });
+  const items = [
+          { label: "Открыть", icon: PencilIcon, onSelect: onOpen },
+          c.url && { label: "Открыть оригинал", icon: ExternalLinkIcon, onSelect: () => window.open(c.url, "_blank", "noopener") },
+          tabs.length > 1 && { label: "На доску", icon: ArrowRightLeftIcon, sub: tabs.map(t => ({ label: t.name, disabled: t.id === c.tab, onSelect: () => moveTo(t.id) })) },
+          { label: c.watched ? "Вернуть в очередь" : "Посмотрел", icon: c.watched ? EyeOffIcon : EyeIcon, onSelect: toggleSeen },
+          { sep: true },
+          { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: () => delClip(c) },
+        ].filter(Boolean);
   const hasMedia = c.provider !== "note" && c.provider !== "link" || c.thumb;
   return (
+    <ActionsContext items={items}>
     <motion.article layout="position"
       initial={{ opacity: 0, y: -60, scale: 0.7, rotate: -4 }} animate={{ opacity: dragging ? 0.4 : 1, y: 0, scale: 1, rotate: 0 }}
       exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }} transition={{ type: "spring", stiffness: 260, damping: 22 }}
@@ -256,7 +287,7 @@ function Card({ c, board, onOpen, drag, onTag, tabs, moveTo }) {
       <div className="flex flex-col gap-1.5 p-2.5 sm:p-3" onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}>
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Brand p={c.provider} />
-          <span className="truncate">{c.author ? "@" + c.author.replace(/^@/, "") : c.host || PROVIDER[c.provider]?.name}</span>
+          <span className="truncate">{c.provider === "local" ? c.path : c.author ? "@" + c.author.replace(/^@/, "") : c.host || PROVIDER[c.provider]?.name}</span>
           {board && <span className="ml-auto shrink-0 rounded bg-accent px-1.5 py-px">{board}</span>}
           {c.watched && <CheckIcon className={cn("size-3.5 shrink-0 text-emerald-500", !board && "ml-auto")} aria-label="Просмотрено" />}
         </div>
@@ -274,15 +305,10 @@ function Card({ c, board, onOpen, drag, onTag, tabs, moveTo }) {
       <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100">
         <button type="button" onClick={toggleSeen} title={c.watched ? "Вернуть в очередь" : "Посмотрел"} aria-label={c.watched ? "Вернуть в очередь" : "Посмотрел"}
           className="grid size-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur hover:bg-black/75 max-md:hidden">{c.watched ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}</button>
-        <ActionsDropdown align="end" items={[
-          { label: "Открыть", icon: PencilIcon, onSelect: onOpen },
-          c.url && { label: "Открыть оригинал", icon: ExternalLinkIcon, onSelect: () => window.open(c.url, "_blank", "noopener") },
-          tabs.length > 1 && { label: "На доску", icon: ArrowRightLeftIcon, sub: tabs.map(t => ({ label: t.name, disabled: t.id === c.tab, onSelect: () => moveTo(t.id) })) },
-          { sep: true },
-          { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: () => delClip(c) },
-        ].filter(Boolean)} trigger={<button type="button" aria-label="Действия с карточкой" className="grid size-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur hover:bg-black/75 max-md:size-7"><MoreHorizontalIcon className="size-4" /></button>} />
+        <ActionsDropdown align="end" items={items} trigger={<button type="button" aria-label="Действия с карточкой" className="grid size-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur hover:bg-black/75 max-md:size-7"><MoreHorizontalIcon className="size-4" /></button>} />
       </div>
     </motion.article>
+    </ActionsContext>
   );
 }
 
@@ -301,6 +327,7 @@ function Preview({ c, compact, autoplay }) {
   const box = "relative w-full overflow-hidden bg-muted";
   const maxH = compact ? "max-h-[70vh]" : "max-h-[75vh]";
 
+  if (c.provider === "local") return <LocalMedia c={c} compact={compact} autoplay={autoplay} />;
   if (c.provider === "photo") return photoUrl ? <img src={photoUrl} alt="" className={cn("block w-full object-cover", maxH)} /> : <div className={box} style={{ aspectRatio: ratio }} />;
   if (c.provider === "image") return <img src={c.url} alt="" loading="lazy" className={cn("block w-full object-cover", maxH)} />;
 
@@ -376,6 +403,7 @@ function Brand({ p, size = 14 }) {
   if (p === "x") return <svg viewBox="0 0 24 24" style={s} className="shrink-0 fill-foreground"><path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z" /></svg>;
   if (p === "tiktok") return <svg viewBox="0 0 24 24" style={s} className="shrink-0"><path d="M16.6 2h-3.4v13.4a2.9 2.9 0 1 1-2.9-2.9c.3 0 .6 0 .9.1V9.1a6.4 6.4 0 1 0 5.4 6.3V8.6a8 8 0 0 0 4.4 1.4V6.6A4.4 4.4 0 0 1 16.6 2z" fill="#ff0050" transform="translate(.6 .4)" /><path d="M16.6 2h-3.4v13.4a2.9 2.9 0 1 1-2.9-2.9c.3 0 .6 0 .9.1V9.1a6.4 6.4 0 1 0 5.4 6.3V8.6a8 8 0 0 0 4.4 1.4V6.6A4.4 4.4 0 0 1 16.6 2z" fill="#25f4ee" transform="translate(-.4 -.4)" /><path d="M16.6 2h-3.4v13.4a2.9 2.9 0 1 1-2.9-2.9c.3 0 .6 0 .9.1V9.1a6.4 6.4 0 1 0 5.4 6.3V8.6a8 8 0 0 0 4.4 1.4V6.6A4.4 4.4 0 0 1 16.6 2z" className="fill-foreground" /></svg>;
   if (p === "instagram") return <svg viewBox="0 0 24 24" style={s} className="shrink-0" fill="none" stroke="#e1306c" strokeWidth="2.2"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.6" fill="#e1306c" /></svg>;
+  if (p === "local") return <HardDriveIcon style={s} className="shrink-0" />;
   const Icon = p === "photo" || p === "image" ? ImageIcon : p === "note" ? StickyNoteIcon : p === "video" || p === "vimeo" ? PlayIcon : LinkIcon;
   return <Icon style={s} className="shrink-0" />;
 }
@@ -457,6 +485,79 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
               className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-destructive hover:bg-destructive/10"><Trash2Icon className="size-4" />Удалить</button>
           </div>
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ───────────── folders on this computer ───────────── */
+
+function Sources({ stash, tab }) {
+  useFolders();
+  const [busy, setBusy] = useState(false);
+  const [states, setStates] = useState({});
+  const list = stash.sources || [];
+  useEffect(() => { let on = true; Promise.all(list.map(async s => [s.id, await access(s.id)])).then(r => on && setStates(Object.fromEntries(r))); return () => { on = false; }; }, [list.length, busy]);
+  if (!canUseFolders && !list.length) return null;
+  const connect = async () => {
+    try { setBusy(true); const r = await addFolder(stash.id, tab); toast(`Папка «${r.name}» подключена: ${r.n} файлов`); }
+    catch (e) { if (e?.name !== "AbortError") toast.error("Не получилось: " + (e.message || e)); }
+    finally { setBusy(false); }
+  };
+  const rescan = async () => { setBusy(true); let n = 0; for (const s of list) n += await scan(stash.id, s.id, s.tab || tab); setBusy(false); toast(n ? `Новых файлов: ${n}` : "Новых файлов нет"); };
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      {list.map(s => {
+        const st = states[s.id];
+        return (
+          <span key={s.id} className="inline-flex h-7 items-center gap-1.5 rounded-full border bg-card px-2.5 text-muted-foreground" title={st === "missing" ? "Папка подключена на другом устройстве" : "Папка на этом компьютере"}>
+            <FolderIcon className="size-3.5" />{s.name}
+            {st === "prompt" && <button type="button" onClick={async () => { await allow(s.id); setBusy(b => !b); }} className="ml-1 inline-flex items-center gap-1 font-medium text-foreground"><LockIcon className="size-3" />разрешить</button>}
+            {st === "missing" && <span className="opacity-70">на другом устройстве</span>}
+          </span>
+        );
+      })}
+      {list.length > 0 && <button type="button" onClick={rescan} disabled={busy} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-muted-foreground hover:bg-accent hover:text-foreground"><RefreshCwIcon className={cn("size-3.5", busy && "animate-spin")} />обновить</button>}
+      {canUseFolders && <button type="button" onClick={connect} disabled={busy} className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-2.5 text-muted-foreground hover:text-foreground"><FolderPlusIcon className="size-3.5" />Подключить папку с компьютера</button>}
+    </div>
+  );
+}
+
+// a file from a connected folder; asks for access again after the browser restarts
+function LocalMedia({ c, compact, autoplay }) {
+  useFolders();
+  const [r, setR] = useState(null);
+  useEffect(() => { let on = true; fileUrl(c).then(x => on && setR(x)); return () => { on = false; }; });
+  const maxH = compact ? "max-h-[70vh]" : "max-h-[75vh]";
+  if (r?.url) return c.video
+    ? <div onClick={e => e.stopPropagation()}><video src={r.url} controls playsInline autoPlay={!!autoplay} preload="metadata" className={cn("block w-full bg-black", maxH)} /></div>
+    : <img src={r.url} alt={c.name} className={cn("block w-full object-cover", maxH)} />;
+  return (
+    <div className="grid aspect-[4/3] place-items-center gap-2 bg-muted p-4 text-center text-xs text-muted-foreground">
+      <div className="flex flex-col items-center gap-2">
+        <HardDriveIcon className="size-6" />
+        <span className="line-clamp-2 break-all">{c.name}</span>
+        {r?.state === "prompt" && <button type="button" onClick={e => { e.stopPropagation(); allow(c.source); }} className="rounded-full bg-foreground px-3 py-1 font-medium text-background">Разрешить доступ к папке</button>}
+        {r?.state === "missing" && <span>Файл лежит на другом устройстве</span>}
+        {r?.state === "gone" && <span>Файл удалён или перемещён</span>}
+      </div>
+    </div>
+  );
+}
+
+// phone: pick a board from the bottom bar
+function BoardsSheet({ open, setOpen, tabs, cur, setTab, counts, total, onAdd }) {
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="gap-2 p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <DialogTitle className="px-1 pb-1 text-base">Доски</DialogTitle>
+        {[{ id: ALL, name: "Все", n: total }, ...tabs.map(t => ({ ...t, n: counts(t.id) }))].map(t => (
+          <button key={t.id} type="button" onClick={() => setTab(t.id)}
+            className={cn("flex h-11 items-center gap-3 rounded-xl px-3 text-left text-[15px]", cur === t.id ? "bg-foreground font-medium text-background" : "hover:bg-accent")}>
+            <Columns3Icon className="size-4 opacity-60" /><span className="flex-1 truncate">{t.name}</span><span className="text-sm opacity-60">{t.n}</span>
+          </button>
+        ))}
+        <button type="button" onClick={() => { onAdd(); setOpen(false); }} className="flex h-11 items-center gap-3 rounded-xl border border-dashed px-3 text-[15px] text-muted-foreground"><PlusIcon className="size-4" />Новая доска</button>
       </DialogContent>
     </Dialog>
   );

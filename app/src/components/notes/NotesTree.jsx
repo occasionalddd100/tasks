@@ -12,6 +12,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { importFiles, fromInput } from "@/lib/importMd";
 import { ActionsContext, ActionsDropdown } from "@/components/ui/actions";
 import { AnimatePresence, motion } from "motion/react";
+import { ItemIcon, pickIcon } from "@/components/IconPicker";
+import { PaletteIcon } from "lucide-react";
 
 const OPEN_KEY = "openFolders";
 const loadOpen = () => { try { return new Set(JSON.parse(localStorage.getItem(OPEN_KEY) || "[]")); } catch { return new Set(); } };
@@ -93,8 +95,8 @@ export default function NotesTree({ view, go, query }) {
   const isActive = x => view[x.kind] === x.id;
   const fileRow = (x, depth) => (
     <FileRow key={x.kind + x.id} x={x} depth={depth} active={isActive(x)} go={go} folders={db.folders} dnd={dnd(x, COLL[x.kind])} pins={pins}
-      shared={x.kind === "project" && (grantOn("projects", x.id) || !isMine(x))}
-      onShare={() => setSharing({ coll: "projects", id: x.id, name: itemName(x), owner: isMine(x) })} />
+      shared={x.kind !== "note" && (grantOn(COLL[x.kind], x.id) || !isMine(x))}
+      onShare={() => setSharing({ coll: COLL[x.kind], id: x.id, name: itemName(x), owner: isMine(x) })} />
   );
 
   if (query) {
@@ -122,6 +124,7 @@ export default function NotesTree({ view, go, query }) {
       { label: "Новая папка", icon: FolderPlusIcon, onSelect: () => create("folder", f.id) },
       { sep: true },
       { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setRenaming(f.id)) },
+      { label: "Иконка и цвет", icon: PaletteIcon, onSelect: () => setTimeout(() => pickIcon("folders", f)) },
       pinItem(pins, "folders:" + f.id),
       !sharedWithMe && { label: "Выше", icon: ArrowUpIcon, onSelect: () => { const sib = t.folders(f.parent || ""), i = sib.findIndex(x => x.id === f.id); if (i > 0) moveFolder(f.id, f.parent || "", { id: sib[i - 1].id, after: false }); } },
       !sharedWithMe && { label: "Ниже", icon: ArrowDownIcon, onSelect: () => { const sib = t.folders(f.parent || ""), i = sib.findIndex(x => x.id === f.id); if (i < sib.length - 1) moveFolder(f.id, f.parent || "", { id: sib[i + 1].id, after: true }); } },
@@ -149,7 +152,7 @@ export default function NotesTree({ view, go, query }) {
         <ActionsContext items={items}>
           <Row depth={depth} onClick={() => toggle(f.id)} {...drag} drop={dropZone}>
             <ChevronRightIcon className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform duration-200", isOpen && "rotate-90")} />
-            {isOpen ? <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" /> : <FolderIcon className="size-4 shrink-0 text-muted-foreground" />}
+            <ItemIcon x={f} fallback={isOpen ? FolderOpenIcon : FolderIcon} />
             {renaming === f.id
               ? <RenameInput value={f.name} onDone={name => { setRenaming(null); if (name && name !== f.name) update("folders", f.id, { name }); }} />
               : <span className="truncate">{f.name || "Без названия"}</span>}
@@ -240,7 +243,7 @@ function FileRow({ x, depth, active, go, folders, shared, onShare, dnd = {}, pin
       <ActionsContext items={items}>
         <Row depth={depth} active={active} onClick={() => go({ [x.kind]: x.id })} {...drag} drop={dropZone && "file"}>
           <span className="size-3.5 shrink-0" />
-          <Icon className="size-4 shrink-0 text-muted-foreground" />
+          <ItemIcon x={x} fallback={Icon} />
           <span className={cn("truncate", !(x.name || x.title)?.trim() && "text-muted-foreground")}>{itemName(x)}</span>
           {pinned && <PinIcon className="size-3 shrink-0 text-muted-foreground" />}
           {shared && <UsersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Общий проект" />}
@@ -256,9 +259,10 @@ function FileRow({ x, depth, active, go, folders, shared, onShare, dnd = {}, pin
 // move / share / delete for a note or a project
 export function fileItems({ x, folders, after, onShare }) {
   const coll = COLL[x.kind], project = x.kind === "project";
-  const sharedRoot = project && !isMine(x);
+  const sharedRoot = (project || x.kind === "stash") && !isMine(x);
   return [
-    project && onShare && { label: isMine(x) ? "Поделиться" : "Участники", icon: UsersIcon, onSelect: onShare },
+    (project || x.kind === "stash") && onShare && { label: isMine(x) ? "Поделиться" : "Участники", icon: UsersIcon, onSelect: onShare },
+    { label: "Иконка и цвет", icon: PaletteIcon, onSelect: () => setTimeout(() => pickIcon(coll, x)) },
     moveItem(folders, x.folder, folder => update(coll, x.id, { folder })),
     !sharedRoot && { sep: true },
     !sharedRoot && { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: async () => {

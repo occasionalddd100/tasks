@@ -25,7 +25,7 @@ export default function ShareDialog({ open, onOpenChange, coll, target, name, is
   };
   const submit = e => { e.preventDefault(); run(async () => { await share(coll, target, email); setEmail(""); await refresh(); }); };
 
-  const what = { boards: "вкладкой", projects: "проектом", folders: "папкой" }[coll];
+  const what = { boards: "вкладкой", projects: "проектом", folders: "папкой", stashes: "стэшем" }[coll];
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -58,7 +58,7 @@ export default function ShareDialog({ open, onOpenChange, coll, target, name, is
         ) : (
           <Button variant="outline" className="text-destructive" disabled={busy}
             onClick={() => run(async () => { await unshare(coll, target, me); onOpenChange(false); })}>
-            Выйти из {{ boards: "вкладки", projects: "проекта", folders: "папки" }[coll]}
+            Выйти из {{ boards: "вкладки", projects: "проекта", folders: "папки", stashes: "стэша" }[coll]}
           </Button>
         )}
         {err && <p className="text-sm text-destructive" role="alert">{err}</p>}

@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { MoreHorizontalIcon, UsersIcon, ChevronRightIcon, BookOpenIcon, PencilIcon, MoveHorizontalIcon, ShrinkIcon } from "lucide-react";
+import { MoreHorizontalIcon, UsersIcon, ChevronRightIcon, BookOpenIcon, PencilIcon, MoveHorizontalIcon, ShrinkIcon, FileTextIcon, SearchIcon, MenuIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDb, update, isMine } from "@/lib/db";
 import { folderPath } from "@/lib/notes";
 import { FileMenu } from "@/components/notes/NotesTree";
 import { Button } from "@/components/ui/button";
 import { useEditLock } from "@/lib/lock";
+import { ItemIcon } from "@/components/IconPicker";
+import { useNavItems } from "@/components/MobileNav";
 import LockBanner, { useTypingIn } from "@/components/notes/LockBanner";
 
 const Editor = lazy(() => import("@/components/notes/Editor"));
@@ -51,6 +53,11 @@ export default function NoteView({ id, fresh, go }) {
     return () => window.removeEventListener("keydown", on);
   });
   useTypingIn(box, touch, [id, !!note]);
+  useNavItems([
+    { k: "journal", label: "Журнал", icon: BookOpenIcon },
+    { k: "search", label: "Поиск", icon: SearchIcon },
+    { k: "mode", label: reading ? "Править" : "Читать", icon: reading ? PencilIcon : FileTextIcon, active: reading, onClick: toggleMode },
+  ]);
 
   useEffect(() => { if (fresh) titleRef.current?.focus(); }, [id]);
   // follow remote title changes unless the title field is being edited
@@ -69,36 +76,33 @@ export default function NoteView({ id, fresh, go }) {
   const focusEditor = () => editorRef.current?.focus();
 
   return (
-    <div ref={box} className={cn("mx-auto w-full px-4 pt-6 pb-10 transition-[max-width] duration-300 md:px-10 md:pt-10", width === "wide" ? "max-w-6xl" : "max-w-3xl")}>
-      <div className="mb-6 flex min-h-8 items-center gap-1 text-sm text-muted-foreground">
-        {path.length ? path.map((f, i) => (
-          <span key={f.id} className="flex min-w-0 items-center gap-1">
-            {i > 0 && <ChevronRightIcon className="size-3.5 shrink-0" />}
-            <span className="truncate">{f.name}</span>
-          </span>
-        )) : <span>Без папки</span>}
-        {shared && <UsersIcon className="ml-1 size-3.5 shrink-0" aria-label="Общая папка" />}
-        <span className="ml-auto" />
-        <Button variant="ghost" size="iconSm" className="max-md:hidden" onClick={() => setWidth(width === "wide" ? "narrow" : "wide")}
-          aria-label={width === "wide" ? "Узкий вид" : "Широкий вид"} title={width === "wide" ? "Узкий вид" : "Широкий вид"}>
-          {width === "wide" ? <ShrinkIcon /> : <MoveHorizontalIcon />}
-        </Button>
-        <Button variant={reading ? "secondary" : "ghost"} size="iconSm" onClick={toggleMode}
-          aria-label={reading ? "Редактировать" : "Режим чтения"} title={(reading ? "Редактировать" : "Режим чтения") + " (Ctrl+E)"}>
-          {reading ? <PencilIcon /> : <BookOpenIcon />}
-        </Button>
-        <FileMenu x={{ ...note, kind: "note" }} folders={db.folders} after={() => go({ journal: true })}
-          trigger={<Button variant="ghost" size="iconSm" aria-label="Действия с заметкой"><MoreHorizontalIcon /></Button>} />
-      </div>
+    <div ref={box} className={cn("mx-auto w-full px-4 pt-5 pb-10 transition-[max-width] duration-300 md:px-8 md:pt-8", width === "wide" ? "max-w-6xl" : "max-w-3xl")}>
       <LockBanner other={other} />
-      <textarea
-        ref={titleRef} rows={1} value={title} placeholder="Без названия" readOnly={!!other || reading}
-        onFocus={() => { editingTitle.current = true; }}
-        onBlur={() => { editingTitle.current = false; }}
-        onChange={e => { setTitle(e.target.value); save({ title: e.target.value }); }}
-        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); focusEditor(); } }}
-        className="field-sizing-content w-full resize-none bg-transparent text-3xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/60 md:text-4xl"
-      />
+      <header className="flex items-start gap-2">
+        <ItemIcon x={note} fallback={FileTextIcon} className="mt-2 size-6 md:mt-2.5" />
+        <textarea
+          ref={titleRef} rows={1} value={title} placeholder="Без названия" readOnly={!!other || reading}
+          onFocus={() => { editingTitle.current = true; }}
+          onBlur={() => { editingTitle.current = false; }}
+          onChange={e => { setTitle(e.target.value); save({ title: e.target.value }); }}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); focusEditor(); } }}
+          className="field-sizing-content min-w-0 flex-1 resize-none bg-transparent text-2xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50 md:text-3xl"
+        />
+        <div className="mt-1 flex shrink-0 items-center gap-0.5 text-sm text-muted-foreground md:mt-1.5">
+          {path.length > 0 && <span className="mr-1 max-w-40 truncate max-sm:hidden" title={path.map(f => f.name).join(" / ")}>{path.at(-1).name}</span>}
+          {shared && <UsersIcon className="mr-1 size-3.5 shrink-0" aria-label="Общая папка" />}
+          <Button variant="ghost" size="iconSm" className="max-md:hidden" onClick={() => setWidth(width === "wide" ? "narrow" : "wide")}
+            aria-label={width === "wide" ? "Узкий вид" : "Широкий вид"} title={width === "wide" ? "Узкий вид" : "Широкий вид"}>
+            {width === "wide" ? <ShrinkIcon /> : <MoveHorizontalIcon />}
+          </Button>
+          <Button variant={reading ? "secondary" : "ghost"} size="iconSm" onClick={toggleMode}
+            aria-label={reading ? "Редактировать" : "Режим чтения"} title={(reading ? "Редактировать" : "Режим чтения") + " (Ctrl+E)"}>
+            {reading ? <PencilIcon /> : <BookOpenIcon />}
+          </Button>
+          <FileMenu x={{ ...note, kind: "note" }} folders={db.folders} after={() => go({ journal: true })}
+            trigger={<Button variant="ghost" size="iconSm" aria-label="Действия с заметкой"><MoreHorizontalIcon /></Button>} />
+        </div>
+      </header>
       <Suspense fallback={<p className="py-4 text-sm text-muted-foreground">Загружаю редактор…</p>}>
         <Editor key={id} foldKey={"fold:" + id} value={note.body || ""} onChange={body => save({ body })} readOnly={!!other || reading} onReady={c => { editorRef.current = c; }} />
       </Suspense>

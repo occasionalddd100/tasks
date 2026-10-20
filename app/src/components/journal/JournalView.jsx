@@ -12,6 +12,7 @@ import { usePhotoUrl, uploadPhoto, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 import { Badge, Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { useNavItems, scrollTop } from "@/components/MobileNav";
 import { PencilIcon, PlusIcon, XIcon, ListChecksIcon, CornerDownRightIcon, CalendarCheckIcon, NotebookPenIcon, BarChart3Icon } from "lucide-react";
 
 // how the day went: 5 moods, each with its colour; "Ужасный" is a stormy crimson that glows
@@ -74,12 +75,12 @@ export default function JournalView() {
   const pick = (date, edit = false) => setOpen({ date, edit });
   const [tab, setTabRaw] = useState(() => { try { return localStorage.getItem("journalTab") || "day"; } catch { return "day"; } });
   const setTab = t => { setTabRaw(t); try { localStorage.setItem("journalTab", t); } catch {} };
-  const only = t => tab !== t && "max-lg:hidden"; // on the phone each tab shows its own blocks
+  const only = t => tab !== t && "max-md:hidden"; // on the phone each tab shows its own blocks
   const memories = useMemories(info, mine);
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
   return (
-    <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 pt-5 pb-28 md:px-8 md:pt-8 lg:pb-16">
+    <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 pt-5 pb-8 md:px-8 md:pt-8 md:pb-16">
       {/* soft glow tinted by today's mood */}
       <motion.div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[42rem] max-w-full -translate-x-1/2 rounded-full"
         style={{ filter: "blur(64px)", WebkitFilter: "blur(64px)" }} animate={{ backgroundColor: todayMood?.color || "#64748b", opacity: todayMood ? 0.18 : 0.08 }} transition={{ duration: 0.8 }} />
@@ -124,26 +125,8 @@ const TABS = [
 
 // phone only: tabs at the thumb, instead of one long scroll
 function BottomNav({ tab, setTab, thoughts }) {
-  return (
-    <nav style={GLASS} className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/85 pb-[env(safe-area-inset-bottom)] lg:hidden">
-      <div className="mx-auto grid max-w-md grid-cols-4">
-        {TABS.map(({ k, label, icon: Icon }) => {
-          const on = tab === k;
-          return (
-            <button key={k} type="button" onClick={() => { setTab(k); document.querySelector("main")?.scrollTo?.({ top: 0 }); window.scrollTo({ top: 0 }); }}
-              className={cn("relative flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors", on ? "text-foreground" : "text-muted-foreground")}>
-              {on && <motion.span layoutId="navpill" className="absolute top-2 h-8 w-14 rounded-full bg-accent" transition={{ type: "spring", stiffness: 500, damping: 35 }} />}
-              <span className="relative">
-                <Icon className="size-5" />
-                {k === "thoughts" && thoughts > 0 && <span className="absolute -top-1.5 -right-2.5 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--ink)] px-1 text-[10px] font-bold text-white">{thoughts}</span>}
-              </span>
-              <span className="relative">{label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
-  );
+  useNavItems(TABS.map(({ k, label, icon }) => ({ k, label, icon, active: tab === k, badge: k === "thoughts" ? thoughts : 0, onClick: () => { setTab(k); scrollTop(); } })));
+  return null;
 }
 
 /* ───────────── year grid ───────────── */

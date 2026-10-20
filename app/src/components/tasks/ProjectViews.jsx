@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftIcon, ArrowRightIcon, ChevronRightIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Repeat2Icon, Trash2Icon, UsersIcon, XIcon } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, ChevronRightIcon, ListChecksIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Repeat2Icon, Trash2Icon, UsersIcon, XIcon } from "lucide-react";
 import { useDb, add, update, updateMany, remove, isMine } from "@/lib/db";
 import { folderPath, newTab, deleteTab } from "@/lib/notes";
 import { FileMenu } from "@/components/notes/NotesTree";
@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { VIEW, ViewHeader, PillTab, PillTabs } from "@/components/ViewHeader";
+import { ItemIcon } from "@/components/IconPicker";
 import ShareDialog from "@/components/ShareDialog";
 import { confirmAction } from "@/components/Confirm";
 import { ActionsContext, ActionsDropdown } from "@/components/ui/actions";
@@ -67,49 +69,35 @@ export function ProjectView({ id, fresh, go }) {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 pt-5 pb-16 md:px-8 md:pt-8">
-      <div className="flex min-h-8 items-center gap-1 text-sm text-muted-foreground">
-        {path.length ? path.map((f, i) => (
-          <span key={f.id} className="flex min-w-0 items-center gap-1">
-            {i > 0 && <ChevronRightIcon className="size-3.5 shrink-0" />}<span className="truncate">{f.name}</span>
-          </span>
-        )) : <span>Проект</span>}
-        <span className="ml-auto" />
-        <Button variant="outline" size="sm" onClick={() => setSharing(true)} aria-label={isMine(project) ? "Поделиться" : "Участники"}>
-          <UsersIcon /><span className="max-sm:hidden">{isMine(project) ? "Поделиться" : "Участники"}</span>
-        </Button>
+    <div className={VIEW}>
+      <ViewHeader ref={titleRef} value={name} aria-label="Название проекта" icon={<ItemIcon x={project} fallback={ListChecksIcon} className="size-6" />}
+        onFocus={() => { editing.current = true; }} onChange={e => setName(e.target.value)} onBlur={saveName}
+        onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setName(project.name); editing.current = false; setTimeout(() => e.target.blur()); } }}>
+        {path.length > 0 && <span className="max-w-40 truncate text-sm text-muted-foreground max-sm:hidden" title={path.map(f => f.name).join(" / ")}>{path.at(-1).name}</span>}
+        <Button variant="ghost" size="iconSm" onClick={() => setSharing(true)} aria-label={isMine(project) ? "Поделиться" : "Участники"} title={isMine(project) ? "Поделиться" : "Участники"}
+          className={cn(shared && "text-foreground")}><UsersIcon /></Button>
         <FileMenu x={{ ...project, kind: "project" }} folders={db.folders} after={() => go({ journal: true })}
           trigger={<Button variant="ghost" size="iconSm" aria-label="Действия с проектом"><MoreHorizontalIcon /></Button>} />
-      </div>
-      <header className="flex flex-col gap-3">
-        <input ref={titleRef} value={name} aria-label="Название проекта" placeholder="Без названия"
-          onFocus={() => { editing.current = true; }} onChange={e => setName(e.target.value)} onBlur={saveName}
-          onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setName(project.name); editing.current = false; setTimeout(() => e.target.blur()); } }}
-          className="w-full bg-transparent text-3xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/60 md:text-4xl" />
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge>{scope.length ? <>сделано <b>{done}</b> из {scope.length}</> : "задач пока нет"}</Badge>
-          {shared && <Badge><UsersIcon className="size-3.5" />общий</Badge>}
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-border" aria-hidden>
+      </ViewHeader>
+      <div className="flex items-center gap-3">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-border" aria-hidden>
           <i className="block h-full bg-primary transition-[width] duration-300" style={{ width: scope.length ? (done / scope.length) * 100 + "%" : 0 }} />
         </div>
-      </header>
-
-      <div className="flex items-center gap-2">
-        <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1">
-          <div role="tablist" className="inline-flex gap-1 rounded-lg border bg-muted p-1 whitespace-nowrap">
-            {tabs.map(b => b.id === board?.id && renaming
-              ? <TabRename key={b.id} value={b.name} onDone={n => { setRenaming(false); if (n && n !== b.name) update("boards", b.id, { name: n }); }} />
-              : <ActionsContext key={b.id} items={tabItems(b)}>
-                  <Tab active={b.id === board?.id} onClick={() => b.id === board?.id ? setRenaming(true) : pick(b.id)}
-                    title={b.id === board?.id ? "Нажми ещё раз, чтобы переименовать" : undefined}>{b.name}</Tab>
-                </ActionsContext>)}
-            <Tab onClick={addTab} title="Новая вкладка" aria-label="Новая вкладка"><PlusIcon className="size-4" /></Tab>
-          </div>
-        </div>
-        {board && <ActionsDropdown align="end" items={tabItems(board)}
-          trigger={<Button variant="ghost" size="icon" className="md:hidden" aria-label="Действия с вкладкой"><MoreHorizontalIcon /></Button>} />}
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{scope.length ? `${done} из ${scope.length}` : "задач пока нет"}</span>
       </div>
+
+      <PillTabs>
+        {tabs.map(b => b.id === board?.id && renaming
+          ? <TabRename key={b.id} value={b.name} onDone={n => { setRenaming(false); if (n && n !== b.name) update("boards", b.id, { name: n }); }} />
+          : <ActionsContext key={b.id} items={tabItems(b)}>
+              <PillTab on={b.id === board?.id} onClick={() => b.id === board?.id ? setRenaming(true) : pick(b.id)}
+                title={b.id === board?.id ? "Нажми ещё раз, чтобы переименовать" : undefined}>{b.name}
+                {b.id === board?.id && <ActionsDropdown align="start" items={tabItems(b)}
+                  trigger={<span role="button" tabIndex={0} aria-label="Действия с вкладкой" onClick={e => e.stopPropagation()} className="-mr-1 grid size-5 place-items-center rounded hover:bg-foreground/10"><MoreHorizontalIcon className="size-3.5" /></span>} />}
+              </PillTab>
+            </ActionsContext>)}
+        <button type="button" onClick={addTab} className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Новая вкладка" title="Новая вкладка"><PlusIcon className="size-4" /></button>
+      </PillTabs>
 
       {board ? <Board key={board.id} board={board} /> : <p className="text-sm text-muted-foreground">Вкладок пока нет. Создай первую кнопкой «+».</p>}
       <ShareDialog open={sharing} onOpenChange={setSharing} coll="projects" target={id} name={project.name} isOwner={isMine(project)} />

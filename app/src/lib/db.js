@@ -77,6 +77,17 @@ export async function add(coll, data) {
   return id;
 }
 
+// many new docs in one request (a scanned folder can bring hundreds)
+export async function addMany(coll, list) {
+  if (!list.length) return [];
+  const rows = list.map(data => ({ coll, id: rid(), data }));
+  for (const r of rows) cache[coll].set(r.id, { ...r.data, id: r.id, _owner: state.me });
+  emit(coll);
+  try { for (let i = 0; i < rows.length; i += 500) chk(await sb.from("docs").insert(rows.slice(i, i + 500))); }
+  catch (e) { rows.forEach(r => cache[coll].delete(r.id)); emit(coll); fail("Не сохранилось", e); return []; }
+  return rows.map(r => r.id);
+}
+
 // a doc with a known id (journal day = "<me>:<date>"): merge into it, or create it on first write
 export async function put(coll, id, fields) {
   if (cache[coll].has(id)) return updateMany(coll, [[id, fields]]);
