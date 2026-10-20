@@ -3,13 +3,14 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   CheckIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
   SearchIcon, StickyNoteIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
-  FolderPlusIcon, FolderIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
+  FolderPlusIcon, FolderIcon, FolderOpenIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
 } from "lucide-react";
 import ShareDialog from "@/components/ShareDialog";
 import { VIEW, ViewHeader, PillTab, PillTabs } from "@/components/ViewHeader";
 import { ItemIcon } from "@/components/IconPicker";
 import { useNavItems, scrollTop } from "@/components/MobileNav";
-import { canUseFolders, addFolder, scan, access, allow, fileUrl, useFolders } from "@/lib/localFolders";
+import { canUseFolders, addFolder, access, allow, fileUrl, useFolders } from "@/lib/localFolders";
+const FolderPortal = lazy(() => import("@/components/stash/FolderPortal"));
 import { isMine } from "@/lib/db";
 import { toast } from "sonner";
 import { useDb, update, updateMany, remove } from "@/lib/db";
@@ -52,6 +53,15 @@ export default function StashView({ id, fresh, go }) {
     .filter(c => tags.every(t => c.tags?.includes(t)))
     .filter(c => !q || [c.title, c.text, c.desc, c.note, c.author, c.url, c.name, c.path, ...(c.tags || [])].some(s => (s || "").toLowerCase().includes(q)))
     .sort((a, b) => cur === ALL ? (b.added || "").localeCompare(a.added || "") : (a.order ?? 0) - (b.order ?? 0));
+  // big boards render in pages of 60 as you scroll, not all at once
+  const [limit, setLimit] = useState(60);
+  useEffect(() => setLimit(60), [cur, q, unseen, tags.join()]);
+  const more = useRef(null);
+  useEffect(() => {
+    const el = more.current; if (!el) return;
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && setLimit(l => l + 60), { rootMargin: "800px" });
+    io.observe(el); return () => io.disconnect();
+  });
   const [boards, setBoards] = useState(false);
   const [sharing, setSharing] = useState(false);
   const searchRef = useRef(null), addRef = useRef(null);
@@ -62,11 +72,6 @@ export default function StashView({ id, fresh, go }) {
     { k: "add", label: "Добавить", icon: PlusIcon, accent: true, onClick: () => focus(addRef) },
     { k: "unseen", label: "Очередь", icon: EyeOffIcon, active: unseen, onClick: () => setUnseen(v => !v) },
   ]);
-  // new files in the connected folders show up by themselves
-  useEffect(() => {
-    if (!db.ready || !stash?.sources?.length) return;
-    (async () => { for (const s of stash.sources) if (await access(s.id) === "granted") await scan(id, s.id, s.tab || tabs[0]?.id); })();
-  }, [db.ready, id, stash?.sources?.length]);
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
   if (!stash) return <div className="p-8 text-sm text-muted-foreground">Стэш не найден. Может, его удалили.</div>;
@@ -126,7 +131,7 @@ export default function StashView({ id, fresh, go }) {
       {shown.length ? (
         <div className="columns-2 gap-2.5 sm:gap-4 lg:columns-3 2xl:columns-4">
           <AnimatePresence initial={false}>
-            {shown.map(c => (
+            {shown.slice(0, limit).map(c => (
               <Card key={c.id} c={c} board={cur === ALL ? tabs.find(t => t.id === c.tab)?.name : null} tabs={tabs} onOpen={() => setOpen(c.id)} moveTo={t => moveTo(c, t)}
                 onTag={t => setTags(s => s.includes(t) ? s : [...s, t])}
                 drag={{
@@ -145,6 +150,7 @@ export default function StashView({ id, fresh, go }) {
         </div>
       )}
 
+      {shown.length > limit && <div ref={more} className="h-10" />}
       <ClipDialog id={open} setOpen={setOpen} tabs={tabs} allTags={tagCounts.map(([t]) => t)} moveTo={moveTo} />
     </div>
   );
@@ -499,47 +505,38 @@ function Sources({ stash, tab }) {
   const list = stash.sources || [];
   useEffect(() => { let on = true; Promise.all(list.map(async s => [s.id, await access(s.id)])).then(r => on && setStates(Object.fromEntries(r))); return () => { on = false; }; }, [list.length, busy]);
   const pick = useRef(null);
-  // browsers without folder access (Firefox, Safari, Brave, phones): pick a folder once and upload its pictures
-  const uploadFolder = async files => {
-    const imgs = [...files].filter(f => f.type.startsWith("image/"));
-    if (!imgs.length) return toast("В папке нет картинок");
-    if (imgs.length > 40 && !(await confirmAction({ title: `Загрузить ${imgs.length} картинок?`, description: "Они займут место в файлах Supabase (лимит 1 ГБ). Каждая сжимается примерно до 200–400 КБ." }))) return;
-    setBusy(true);
-    let n = 0;
-    for (const f of imgs) {
-      try {
-        const tags = (f.webkitRelativePath || "").split("/").slice(1, -1).map(t => t.trim().toLowerCase().replace(/\s+/g, "-")).filter(Boolean);
-        const id = await addPhoto(stash.id, tab, await uploadPhoto(f, "stash"));
-        if (id) { await update("clips", id, { title: f.name.replace(/\.[^.]+$/, ""), tags }); n++; }
-      } catch {}
-    }
-    setBusy(false);
-    toast(`Загружено картинок: ${n}`);
+  const [open, setOpen] = useState(null);
+  // browsers that can't keep a folder (Firefox, Safari, Brave without the flag): browse the picked files for this visit only
+  const browseOnce = files => {
+    const list = [...files].filter(f => /^(image|video)\//.test(f.type));
+    if (!list.length) return toast("В папке нет картинок и видео");
+    const root = (list[0].webkitRelativePath || "").split("/")[0] || "Папка";
+    setOpen({ id: "mem:" + root, name: root, mem: list });
   };
   const connect = async () => {
     if (!canUseFolders) return pick.current?.click();
-    try { setBusy(true); const r = await addFolder(stash.id, tab); toast(`Папка «${r.name}» подключена: ${r.n} файлов`); }
+    try { setBusy(true); const r = await addFolder(stash.id, tab); setOpen({ id: r.id, name: r.name }); }
     catch (e) { if (e?.name !== "AbortError") toast.error("Не получилось: " + (e.message || e)); }
     finally { setBusy(false); }
   };
-  const rescan = async () => { setBusy(true); let n = 0; for (const s of list) n += await scan(stash.id, s.id, s.tab || tab); setBusy(false); toast(n ? `Новых файлов: ${n}` : "Новых файлов нет"); };
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
       {list.map(s => {
         const st = states[s.id];
         return (
-          <span key={s.id} className="inline-flex h-7 items-center gap-1.5 rounded-full border bg-card px-2.5 text-muted-foreground" title={st === "missing" ? "Папка подключена на другом устройстве" : "Папка на этом компьютере"}>
-            <FolderIcon className="size-3.5" />{s.name}
-            {st === "prompt" && <button type="button" onClick={async () => { await allow(s.id); setBusy(b => !b); }} className="ml-1 inline-flex items-center gap-1 font-medium text-foreground"><LockIcon className="size-3" />разрешить</button>}
+          <button key={s.id} type="button" onClick={() => setOpen(s)} className="inline-flex h-7 items-center gap-1.5 rounded-full border bg-card px-2.5 text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+            title={st === "missing" ? "Папка подключена на другом устройстве" : "Открыть папку: смотреть файлы и отправлять выбранные в стэш"}>
+            <FolderOpenIcon className="size-3.5" />{s.name}
+            {st === "prompt" && <LockIcon className="size-3" />}
             {st === "missing" && <span className="opacity-70">на другом устройстве</span>}
-          </span>
+          </button>
         );
       })}
-      {list.length > 0 && <button type="button" onClick={rescan} disabled={busy} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-muted-foreground hover:bg-accent hover:text-foreground"><RefreshCwIcon className={cn("size-3.5", busy && "animate-spin")} />обновить</button>}
-      <input ref={pick} type="file" webkitdirectory="" multiple className="hidden" onChange={e => { uploadFolder(e.target.files); e.target.value = ""; }} />
-      <button type="button" onClick={connect} disabled={busy} title={canUseFolders ? "Файлы читаются прямо с диска, в облако не загружаются" : "Этот браузер не даёт доступ к папкам: картинки из папки загрузятся в стэш"}
+      <input ref={pick} type="file" webkitdirectory="" multiple className="hidden" onChange={e => browseOnce(e.target.files)} onClick={e => { e.currentTarget.value = ""; }} />
+      {open && <Suspense fallback={null}><FolderPortal stash={stash} source={open} mem={open.mem} tab={tab} onClose={() => setOpen(null)} /></Suspense>}
+      <button type="button" onClick={connect} disabled={busy} title={canUseFolders ? "Папка читается прямо с диска; в облако попадает только то, что выберешь" : "Этот браузер не запоминает папки: её придётся выбирать каждый раз. В облако попадает только то, что выберешь"}
         className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-2.5 text-muted-foreground hover:text-foreground">
-        {busy ? <Loader2Icon className="size-3.5 animate-spin" /> : <FolderPlusIcon className="size-3.5" />}{canUseFolders ? "Подключить папку с компьютера" : "Добавить папку с картинками"}
+        {busy ? <Loader2Icon className="size-3.5 animate-spin" /> : <FolderPlusIcon className="size-3.5" />}{canUseFolders ? "Подключить папку с компьютера" : "Открыть папку с компьютера"}
       </button>
     </div>
   );
