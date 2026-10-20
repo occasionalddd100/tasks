@@ -1,10 +1,10 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRightIcon, FileTextIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, MoreHorizontalIcon,
-  PencilIcon, PlusIcon, Trash2Icon, UploadIcon, FolderUpIcon, UsersIcon, FolderInputIcon, ListChecksIcon, PinIcon, PinOffIcon, ArrowUpIcon, ArrowDownIcon,
+  PencilIcon, PlusIcon, Trash2Icon, UploadIcon, FolderUpIcon, UsersIcon, FolderInputIcon, ListChecksIcon, LayoutGridIcon, PinIcon, PinOffIcon, ArrowUpIcon, ArrowDownIcon,
 } from "lucide-react";
 import { useDb, getDb, update, updateMany, remove, isMine, put } from "@/lib/db";
-import { tree, newNote, newFolder, newProject, deleteFolder, deleteProject, folderStats, descendants } from "@/lib/notes";
+import { tree, newNote, newFolder, newProject, newStash, deleteStash, deleteFolder, deleteProject, folderStats, descendants } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 import { confirmAction } from "@/components/Confirm";
 import ShareDialog from "@/components/ShareDialog";
@@ -17,8 +17,11 @@ const OPEN_KEY = "openFolders";
 const loadOpen = () => { try { return new Set(JSON.parse(localStorage.getItem(OPEN_KEY) || "[]")); } catch { return new Set(); } };
 
 export const noteTitle = n => n.title?.trim() || "Без названия";
-export const itemName = x => x.kind === "project" ? x.name?.trim() || "Без названия" : noteTitle(x);
-const COLL = { note: "notes", project: "projects" };
+export const itemName = x => x.kind === "note" ? noteTitle(x) : x.name?.trim() || "Без названия";
+const COLL = { note: "notes", project: "projects", stash: "stashes" };
+const KIND = { notes: "note", projects: "project", stashes: "stash" };
+const ICON = { note: FileTextIcon, project: ListChecksIcon, stash: LayoutGridIcon };
+const NOUN = { note: "заметкой", project: "проектом", stash: "стэшем" };
 
 // pins are personal: one prefs doc per user, "<coll>:<id>" keys
 const prefsId = () => getDb().me + ":prefs";
@@ -34,7 +37,7 @@ export default function NotesTree({ view, go, query }) {
   const [open, setOpen] = useState(loadOpen);
   const [renaming, setRenaming] = useState(null);
   const [sharing, setSharing] = useState(null);
-  const t = useMemo(() => tree(db.folders, db.notes, db.projects), [db.folders, db.notes, db.projects]);
+  const t = useMemo(() => tree(db.folders, db.notes, db.projects, db.stashes), [db.folders, db.notes, db.projects, db.stashes]);
   const pins = usePins(db);
 
   // drag & drop: onto a folder = put inside, onto its top/bottom edge = place before/after it
@@ -83,7 +86,7 @@ export default function NotesTree({ view, go, query }) {
   const create = async (kind, folder) => {
     if (folder) toggle(folder, true);
     if (kind === "folder") { const id = await newFolder(folder); if (id) setRenaming(id); return; }
-    const id = kind === "note" ? await newNote(folder) : await newProject(folder);
+    const id = kind === "note" ? await newNote(folder) : kind === "stash" ? await newStash(folder) : await newProject(folder);
     if (id) go({ [kind]: id, fresh: true });
   };
   const grantOn = (coll, id) => db.grants.some(g => g.coll === coll && g.target === id);
@@ -98,6 +101,7 @@ export default function NotesTree({ view, go, query }) {
     const q = query.toLowerCase();
     const hits = [
       ...db.projects.map(b => ({ ...b, kind: "project" })).filter(b => itemName(b).toLowerCase().includes(q)),
+      ...db.stashes.map(b => ({ ...b, kind: "stash" })).filter(b => itemName(b).toLowerCase().includes(q)),
       ...db.notes.map(n => ({ ...n, kind: "note" })).filter(n => noteTitle(n).toLowerCase().includes(q) || (n.body || "").toLowerCase().includes(q))
         .sort((a, b) => (b.updated || "").localeCompare(a.updated || "")),
     ];
@@ -114,6 +118,7 @@ export default function NotesTree({ view, go, query }) {
     return [
       { label: "Новый проект", icon: ListChecksIcon, onSelect: () => create("project", f.id) },
       { label: "Новая заметка", icon: FileTextIcon, onSelect: () => create("note", f.id) },
+      { label: "Новый стэш", icon: LayoutGridIcon, onSelect: () => create("stash", f.id) },
       { label: "Новая папка", icon: FolderPlusIcon, onSelect: () => create("folder", f.id) },
       { sep: true },
       { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setRenaming(f.id)) },
@@ -179,8 +184,8 @@ export default function NotesTree({ view, go, query }) {
     <>
       {pinned.length > 0 && (
         <ul className="mb-2 flex flex-col gap-px border-b px-2 pb-2">
-          {pinned.map(({ coll, x }) => coll === "folders" ? renderFolder(x, 0, true) : <FileRow key={"pin" + x.id} x={{ ...x, kind: coll === "notes" ? "note" : "project" }} depth={0} pinned
-            active={isActive({ ...x, kind: coll === "notes" ? "note" : "project" })} go={go} folders={db.folders} dnd={dnd(x, coll)} pins={pins} />)}
+          {pinned.map(({ coll, x }) => coll === "folders" ? renderFolder(x, 0, true) : <FileRow key={"pin" + x.id} x={{ ...x, kind: KIND[coll] }} depth={0} pinned
+            active={isActive({ ...x, kind: KIND[coll] })} go={go} folders={db.folders} dnd={dnd(x, coll)} pins={pins} />)}
         </ul>
       )}
       <ul className="flex flex-col gap-px px-2">
@@ -215,6 +220,7 @@ export function CreateMenu({ onCreate, trigger, folder = "" }) {
       <DropdownMenuContent align="start" onClick={e => e.stopPropagation()}>
         <DropdownMenuItem onSelect={() => onCreate("project")}><ListChecksIcon />Проект с задачами</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCreate("note")}><FileTextIcon />Заметка</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onCreate("stash")}><LayoutGridIcon />Стэш (доска медиа)</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCreate("folder")}><FolderPlusIcon />Папка</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => files.current?.click()}><UploadIcon />Загрузить .md файлы</DropdownMenuItem>
@@ -226,7 +232,7 @@ export function CreateMenu({ onCreate, trigger, folder = "" }) {
 }
 
 function FileRow({ x, depth, active, go, folders, shared, onShare, dnd = {}, pins = [], pinned }) {
-  const Icon = x.kind === "project" ? ListChecksIcon : FileTextIcon;
+  const Icon = ICON[x.kind];
   const { dropZone, ...drag } = dnd;
   const items = [pinItem(pins, COLL[x.kind] + ":" + x.id), ...fileItems({ x, folders, onShare, after: () => active && go({ journal: true }) })];
   return (
@@ -239,7 +245,7 @@ function FileRow({ x, depth, active, go, folders, shared, onShare, dnd = {}, pin
           {pinned && <PinIcon className="size-3 shrink-0 text-muted-foreground" />}
           {shared && <UsersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Общий проект" />}
           <Actions>
-            <ActionsDropdown items={items} trigger={<IconBtn label={x.kind === "project" ? "Действия с проектом" : "Действия с заметкой"} className="md:hidden"><MoreHorizontalIcon /></IconBtn>} />
+            <ActionsDropdown items={items} trigger={<IconBtn label={"Действия с " + NOUN[x.kind]} className="md:hidden"><MoreHorizontalIcon /></IconBtn>} />
           </Actions>
         </Row>
       </ActionsContext>
@@ -258,17 +264,17 @@ export function fileItems({ x, folders, after, onShare }) {
     !sharedRoot && { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: async () => {
       const ok = await confirmAction(project
         ? { title: `Удалить проект «${itemName(x)}»?`, description: "Удалятся его категории и открытые задачи. Выполненные останутся в журнале." }
+        : x.kind === "stash" ? { title: `Удалить стэш «${itemName(x)}»?`, description: "Удалятся все его доски и карточки." }
         : { title: `Удалить «${itemName(x)}»?`, description: "Заметку нельзя будет вернуть." });
       if (!ok) return;
       after?.();
-      project ? deleteProject(x.id) : remove("notes", x.id);
+      project ? deleteProject(x.id) : x.kind === "stash" ? deleteStash(x.id) : remove("notes", x.id);
     } },
   ];
 }
 
 export function FileMenu({ trigger, ...props }) {
-  const project = props.x.kind === "project";
-  return <ActionsDropdown items={fileItems(props)} trigger={trigger || <IconBtn label={project ? "Действия с проектом" : "Действия с заметкой"}><MoreHorizontalIcon /></IconBtn>} />;
+  return <ActionsDropdown items={fileItems(props)} trigger={trigger || <IconBtn label={"Действия с " + NOUN[props.x.kind]}><MoreHorizontalIcon /></IconBtn>} />;
 }
 
 const moveItem = (folders, current, onMove) => ({

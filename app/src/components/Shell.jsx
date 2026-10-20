@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { freshReload } from "@/lib/reload";
 import { BookOpenIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, useDb } from "@/lib/db";
-import { newNote, newFolder, newProject } from "@/lib/notes";
+import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -29,19 +29,24 @@ class NoteGuard extends Component {
     if (!this.state.err) return this.props.children;
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-        <p className="text-sm text-muted-foreground">Не получилось открыть заметку.<br /><span className="text-xs opacity-70">{String(this.state.err?.message || this.state.err).slice(0, 160)}</span></p>
+        <p className="text-sm text-muted-foreground">Не получилось открыть.<br /><span className="text-xs opacity-70">{String(this.state.err?.message || this.state.err).slice(0, 160)}</span></p>
         <button type="button" onClick={() => { try { sessionStorage.removeItem("reloadedFor"); } catch {} freshReload("manual" + Date.now()); }} className="h-9 rounded-lg border px-4 text-sm font-medium hover:bg-accent">Обновить</button>
       </div>
     );
   }
 }
 
-const Loading = () => <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground"><span className="animate-pulse">Открываю заметку…</span></div>;
+const StashView = lazy(() => import("@/components/stash/StashView").catch(e => {
+  if (freshReload("chunk:stash")) return new Promise(() => {});
+  throw e;
+}));
 
-// view lives in the URL hash (#note=<id>, #project=<id>, #journal) so back/forward works;
+const Loading = () => <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground"><span className="animate-pulse">Открываю…</span></div>;
+
+// view lives in the URL hash (#note=<id>, #project=<id>, #stash=<id>, #journal) so back/forward works;
 // with no hash (opening the site or the app) the journal is home
 const readHash = () => {
-  const m = location.hash.match(/^#(note|project)=([\w-]+)/);
+  const m = location.hash.match(/^#(note|project|stash)=([\w-]+)/);
   if (m) return { [m[1]]: m[2] };
   if (location.hash === "#journal") return { journal: true };
   return { journal: true };
@@ -61,16 +66,17 @@ export default function Shell() {
 
   const go = v => {
     setMenu(false);
-    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : "#journal";
+    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : "#journal";
     if (location.hash !== hash) history.pushState(null, "", hash || location.pathname + location.search);
     setView(v);
   };
 
   // the remembered project may be gone; then the journal is home
   const project = view.project && !(view.home && db.ready && !db.projects.some(b => b.id === view.project)) ? view.project : null;
-  const shown = view.note ? db.notes.find(n => n.id === view.note) : project ? db.projects.find(b => b.id === project) : null;
-  const title = shown ? itemName({ ...shown, kind: view.note ? "note" : "project" }) : "Журнал";
-  const sidebar = <Sidebar view={{ ...view, project, journal: !view.note && !project }} go={go} email={db.email} />;
+  const stash = view.stash || null;
+  const shown = view.note ? db.notes.find(n => n.id === view.note) : project ? db.projects.find(b => b.id === project) : stash ? db.stashes.find(b => b.id === stash) : null;
+  const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : "Журнал";
+  const sidebar = <Sidebar view={{ ...view, project, journal: !view.note && !project && !stash }} go={go} email={db.email} />;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -84,10 +90,12 @@ export default function Shell() {
           <span className="truncate text-sm font-medium">{title}</span>
         </div>
         {db.error && <p className="m-4 rounded-md border border-destructive/40 p-3 text-sm text-destructive">Нет связи с базой: {db.error}. Обнови страницу.</p>}
-        <motion.div key={view.note || project || "journal"} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+        <motion.div key={view.note || project || stash || "journal"} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
           {view.note
             ? <NoteGuard key={view.note}><Suspense fallback={<Loading />}><NoteView id={view.note} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
-            : project ? <ProjectView id={project} fresh={view.fresh} go={go} /> : <JournalView />}
+            : project ? <ProjectView id={project} fresh={view.fresh} go={go} />
+            : stash ? <NoteGuard key={stash}><Suspense fallback={<Loading />}><StashView id={stash} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
+            : <JournalView />}
         </motion.div>
       </main>
       <ConfirmHost />
@@ -104,7 +112,7 @@ function Sidebar({ view, go, email }) {
   const [searching, setSearching] = useState(false);
   const create = async kind => {
     if (kind === "folder") return newFolder("");
-    const id = kind === "note" ? await newNote("") : await newProject("");
+    const id = kind === "note" ? await newNote("") : kind === "stash" ? await newStash("") : await newProject("");
     if (id) go({ [kind]: id, fresh: true });
   };
 

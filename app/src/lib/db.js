@@ -6,7 +6,7 @@ const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 export const sb = createClient(SB_URL, SB_KEY);
 
-export const COLLS = ["projects", "boards", "cats", "tasks", "habits", "log", "folders", "notes", "days", "prefs"];
+export const COLLS = ["projects", "boards", "cats", "tasks", "habits", "log", "folders", "notes", "days", "prefs", "stashes", "clips"];
 
 // One table `docs` (coll, id, data jsonb, owner). The store keeps every visible doc in memory,
 // applies writes optimistically and follows realtime changes from other people.
