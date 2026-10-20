@@ -155,7 +155,7 @@ export default function Board({ board }) {
 
 // two-column masonry: each card spans as many 4px rows as its height needs
 function Masonry({ children }) {
-  return <div className="grid grid-cols-1 items-start gap-x-4 [grid-auto-rows:4px] md:grid-cols-2">{children}</div>;
+  return <div className="grid grid-cols-1 items-start gap-x-4 [grid-auto-rows:4px] md:grid-cols-2 xl:grid-cols-3">{children}</div>;
 }
 function useSpan() {
   const ref = useRef(null);
