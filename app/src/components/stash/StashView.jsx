@@ -498,8 +498,26 @@ function Sources({ stash, tab }) {
   const [states, setStates] = useState({});
   const list = stash.sources || [];
   useEffect(() => { let on = true; Promise.all(list.map(async s => [s.id, await access(s.id)])).then(r => on && setStates(Object.fromEntries(r))); return () => { on = false; }; }, [list.length, busy]);
-  if (!canUseFolders && !list.length) return null;
+  const pick = useRef(null);
+  // browsers without folder access (Firefox, Safari, Brave, phones): pick a folder once and upload its pictures
+  const uploadFolder = async files => {
+    const imgs = [...files].filter(f => f.type.startsWith("image/"));
+    if (!imgs.length) return toast("В папке нет картинок");
+    if (imgs.length > 40 && !(await confirmAction({ title: `Загрузить ${imgs.length} картинок?`, description: "Они займут место в файлах Supabase (лимит 1 ГБ). Каждая сжимается примерно до 200–400 КБ." }))) return;
+    setBusy(true);
+    let n = 0;
+    for (const f of imgs) {
+      try {
+        const tags = (f.webkitRelativePath || "").split("/").slice(1, -1).map(t => t.trim().toLowerCase().replace(/\s+/g, "-")).filter(Boolean);
+        const id = await addPhoto(stash.id, tab, await uploadPhoto(f, "stash"));
+        if (id) { await update("clips", id, { title: f.name.replace(/\.[^.]+$/, ""), tags }); n++; }
+      } catch {}
+    }
+    setBusy(false);
+    toast(`Загружено картинок: ${n}`);
+  };
   const connect = async () => {
+    if (!canUseFolders) return pick.current?.click();
     try { setBusy(true); const r = await addFolder(stash.id, tab); toast(`Папка «${r.name}» подключена: ${r.n} файлов`); }
     catch (e) { if (e?.name !== "AbortError") toast.error("Не получилось: " + (e.message || e)); }
     finally { setBusy(false); }
@@ -518,7 +536,11 @@ function Sources({ stash, tab }) {
         );
       })}
       {list.length > 0 && <button type="button" onClick={rescan} disabled={busy} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-muted-foreground hover:bg-accent hover:text-foreground"><RefreshCwIcon className={cn("size-3.5", busy && "animate-spin")} />обновить</button>}
-      {canUseFolders && <button type="button" onClick={connect} disabled={busy} className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-2.5 text-muted-foreground hover:text-foreground"><FolderPlusIcon className="size-3.5" />Подключить папку с компьютера</button>}
+      <input ref={pick} type="file" webkitdirectory="" multiple className="hidden" onChange={e => { uploadFolder(e.target.files); e.target.value = ""; }} />
+      <button type="button" onClick={connect} disabled={busy} title={canUseFolders ? "Файлы читаются прямо с диска, в облако не загружаются" : "Этот браузер не даёт доступ к папкам: картинки из папки загрузятся в стэш"}
+        className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-2.5 text-muted-foreground hover:text-foreground">
+        {busy ? <Loader2Icon className="size-3.5 animate-spin" /> : <FolderPlusIcon className="size-3.5" />}{canUseFolders ? "Подключить папку с компьютера" : "Добавить папку с картинками"}
+      </button>
     </div>
   );
 }
