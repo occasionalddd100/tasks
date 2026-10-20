@@ -68,6 +68,7 @@ export default function StashView({ id, fresh, go }) {
   const [boards, setBoards] = useState(false);
   const [fan, setFan] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [dockAnchor, setDockAnchor] = useState(null);
   const isPhone = typeof matchMedia !== "undefined" && matchMedia("(max-width: 767px)").matches;
   const [sharing, setSharing] = useState(false);
   const searchRef = useRef(null), addRef = useRef(null);
@@ -114,9 +115,9 @@ export default function StashView({ id, fresh, go }) {
       </ViewHeader>
       {sharing && <ShareDialog open onOpenChange={o => !o && setSharing(false)} coll="stashes" target={id} name={stash.name} isOwner={isMine(stash)} />}
       <BoardsFan open={fan} setOpen={setFan} tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
-        onAdd={addTab} onMore={() => setBoards(true)} anchor={isPhone ? "navRight" : "dock"} />
-      <TagsFan open={tagsOpen} setOpen={setTagsOpen} tagCounts={tagCounts} tags={tags} setTags={setTags} unseen={unseen} setUnseen={setUnseen} anchor={isPhone ? "navLeft" : "dock"} />
-      <Dock board={cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски"} fan={fan} setFan={setFan} tagsOpen={tagsOpen} setTagsOpen={setTagsOpen} nTags={tags.length + (unseen ? 1 : 0)} />
+        onAdd={addTab} onMore={() => setBoards(true)} anchor={isPhone ? "navRight" : dockAnchor || "dock"} />
+      <TagsFan open={tagsOpen} setOpen={setTagsOpen} tagCounts={tagCounts} tags={tags} setTags={setTags} unseen={unseen} setUnseen={setUnseen} anchor={isPhone ? "navLeft" : dockAnchor || "dock"} />
+      <Dock board={cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски"} fan={fan} setFan={setFan} tagsOpen={tagsOpen} setTagsOpen={setTagsOpen} nTags={tags.length + (unseen ? 1 : 0)} setAnchor={setDockAnchor} />
       <UpButton className="fixed right-4 z-30 md:hidden bottom-[calc(5rem+env(safe-area-inset-bottom))]" />
       <BoardsSheet open={boards} setOpen={setBoards} tabs={tabs} cur={cur} setTab={t => { setTab(t); setBoards(false); }} counts={t => all.filter(c => c.tab === t).length} total={all.length} onAdd={addTab} />
 
@@ -708,7 +709,8 @@ const ANCHORS = {
   dock: { right: "1.5rem", bottom: "5.5rem" },
 };
 function Fan({ open, setOpen, items, onPick, anchor }) {
-  const left = anchor === "navLeft";
+  const style = typeof anchor === "string" ? ANCHORS[anchor] : anchor;
+  const left = anchor === "navLeft" || (style && "left" in style && !("right" in style));
   useBackClose(open, () => setOpen(false));
   useEffect(() => { if (!open) return; const k = e => e.key === "Escape" && setOpen(false); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [open]);
   return (
@@ -718,7 +720,7 @@ function Fan({ open, setOpen, items, onPick, anchor }) {
           <motion.button type="button" aria-label="Закрыть" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/40"
             style={{ backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} />
-          <ul className={cn("absolute flex flex-col-reverse gap-2", left ? "items-start" : "items-end")} style={ANCHORS[anchor]}>
+          <ul className={cn("absolute flex flex-col-reverse gap-2", left ? "items-start" : "items-end")} style={style}>
             {items.map((t, i) => {
               // the further up, the more it leans and drifts sideways
               const x = (left ? 1 : -1) * i * i * 1.4, r = (left ? 1 : -1) * i * 1.3;
@@ -801,17 +803,34 @@ function UpButton({ className }) {
 }
 
 // computer: a floating bubble bottom right with tags and boards, same fan as on the phone
-function Dock({ board, fan, setFan, tagsOpen, setTagsOpen, nTags }) {
+// centre of the content area (right of the sidebar), kept in sync with resizes
+function useMainCenter() {
+  const [x, setX] = useState(null);
+  useEffect(() => {
+    const main = document.querySelector("main"); if (!main) return;
+    const fit = () => { const r = main.getBoundingClientRect(); setX(r.left + r.width / 2); };
+    fit(); const ro = new ResizeObserver(fit); ro.observe(main); window.addEventListener("resize", fit);
+    return () => { ro.disconnect(); window.removeEventListener("resize", fit); };
+  }, []);
+  return x;
+}
+// the fan grows from the button that opened it: tags lean left, boards lean right
+const fanFrom = (el, side) => {
+  const r = el.getBoundingClientRect(), bottom = innerHeight - r.top + 12;
+  return side === "left" ? { right: innerWidth - r.right, bottom } : { left: r.left, bottom };
+};
+function Dock({ board, fan, setFan, tagsOpen, setTagsOpen, nTags, setAnchor }) {
+  const x = useMainCenter();
   return (
-    <div className="fixed right-6 bottom-6 z-40 flex items-center gap-2 max-md:hidden">
-      <UpButton />
+    <div className="fixed bottom-6 z-40 flex -translate-x-1/2 items-center gap-2 max-md:hidden" style={{ left: x ?? "50%" }}>
+      <div className="absolute right-full mr-2"><UpButton /></div>
       <div className="flex items-center gap-1 rounded-full border bg-background/80 p-1.5 shadow-xl" style={glass}>
-        <button type="button" onClick={() => { setFan(false); setTagsOpen(v => !v); }} aria-label="Теги" title="Теги"
+        <button type="button" onClick={e => { setAnchor(fanFrom(e.currentTarget, "left")); setFan(false); setTagsOpen(v => !v); }} aria-label="Теги" title="Теги"
           className={cn("relative grid size-10 place-items-center rounded-full transition-colors", tagsOpen ? "bg-foreground text-background" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
           <TagIcon className="size-[18px]" />
           {nTags > 0 && <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--ink)] px-1 text-[10px] font-bold text-white">{nTags}</span>}
         </button>
-        <button type="button" onClick={() => { setTagsOpen(false); setFan(v => !v); }}
+        <button type="button" onClick={e => { setAnchor(fanFrom(e.currentTarget, "right")); setTagsOpen(false); setFan(v => !v); }}
           className={cn("flex h-10 max-w-56 items-center gap-2 rounded-full pr-4 pl-3 text-sm font-medium transition-colors", fan ? "bg-foreground text-background" : "hover:bg-accent")}>
           <Columns3Icon className="size-[18px] shrink-0 opacity-70" /><span className="truncate">{board}</span>
           <ChevronUpIcon className={cn("size-4 shrink-0 opacity-60 transition-transform", fan && "rotate-180")} />
