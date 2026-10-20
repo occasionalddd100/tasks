@@ -317,8 +317,7 @@ function Preview({ c, compact, autoplay }) {
   if (video) {
     return (
       <div className={cn(box, "bg-black")} style={{ aspectRatio: ratio }} onClick={e => e.stopPropagation()}>
-        <video src={c.video} poster={c.thumb || undefined} controls playsInline preload="metadata" autoPlay={!!autoplay}
-          onError={() => c.provider === "x" && c.vid && setXEmbed(true)} className="absolute inset-0 size-full object-contain" />
+        <NoRefVideo src={c.video} poster={c.thumb} autoplay={autoplay} onFail={() => c.provider === "x" && c.vid && setXEmbed(true)} />
       </div>
     );
   }
@@ -353,6 +352,21 @@ function Preview({ c, compact, autoplay }) {
       )}
     </button>
   );
+}
+
+// X serves its video files only when the request doesn't name another site, and <video> can't drop the Referer itself,
+// so the player sits in a tiny frame whose page asks for no referrer
+function NoRefVideo({ src, poster, autoplay, onFail }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const on = e => { if (e.source === ref.current?.contentWindow && e.data === "stash-video-error") onFail(); };
+    window.addEventListener("message", on);
+    return () => window.removeEventListener("message", on);
+  }, []);
+  const esc = v => String(v || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  const doc = `<!doctype html><meta name="referrer" content="no-referrer"><style>html,body{margin:0;height:100%;background:#000}video{width:100%;height:100%;object-fit:contain;display:block}</style>
+<video src="${esc(src)}" ${poster ? `poster="${esc(poster)}"` : ""} controls playsinline preload="none" ${autoplay ? "autoplay" : ""} onerror="parent.postMessage('stash-video-error','*')"></video>`;
+  return <iframe ref={ref} srcDoc={doc} title="Видео" referrerPolicy="no-referrer" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen className="absolute inset-0 size-full border-0" />;
 }
 
 // small platform marks (lucide has no brand icons)
