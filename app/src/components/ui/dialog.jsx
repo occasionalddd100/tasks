@@ -2,8 +2,16 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBackClose } from "@/lib/back";
 
-const Dialog = DialogPrimitive.Root;
+// controlled or not, the phone back gesture closes it
+function Dialog({ open, defaultOpen, onOpenChange, ...props }) {
+  const [own, setOwn] = React.useState(!!defaultOpen);
+  const isOpen = open ?? own;
+  const set = v => { if (open === undefined) setOwn(v); onOpenChange?.(v); };
+  useBackClose(isOpen, () => set(false));
+  return <DialogPrimitive.Root open={isOpen} onOpenChange={set} {...props} />;
+}
 const DialogTrigger = DialogPrimitive.Trigger;
 const DialogClose = DialogPrimitive.Close;
 

@@ -9,6 +9,7 @@ import { addPhoto } from "@/lib/stash";
 import { uploadPhoto } from "@/lib/photos";
 import { access, allow, listFiles, loadTags, saveTags, thumbOf } from "@/lib/localFolders";
 import { cn } from "@/lib/utils";
+import { useBackClose } from "@/lib/back";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 const UP = "\u0000uploaded"; // paths already sent to the stash, kept with the local tags
@@ -26,6 +27,7 @@ export default function FolderPortal({ stash, source, mem, tab, onClose }) {
   const [tagF, setTagF] = useState("");
   const [view, setView] = useState(null);
   const [busy, setBusy] = useState(0);
+  useBackClose(view != null, () => setView(null));
   const last = useRef(null);
 
   const load = async force => {

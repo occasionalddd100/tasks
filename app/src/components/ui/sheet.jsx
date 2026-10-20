@@ -1,8 +1,12 @@
 import * as React from "react";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
+import { useBackClose } from "@/lib/back";
 
-const Sheet = SheetPrimitive.Root;
+function Sheet({ open, onOpenChange, ...props }) {
+  useBackClose(!!open, () => onOpenChange?.(false));
+  return <SheetPrimitive.Root open={open} onOpenChange={onOpenChange} {...props} />;
+}
 
 function SheetContent({ className, children, ...props }) {
   return (
