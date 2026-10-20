@@ -3,7 +3,7 @@ import * as Pop from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "motion/react";
 import {
   CheckIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
-  SearchIcon, StickyNoteIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
+  SearchIcon, StickyNoteIcon, BookOpenIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
   FolderPlusIcon, FolderIcon, CopyIcon, MaximizeIcon, ZoomInIcon, ZoomOutIcon, FolderOpenIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
 } from "lucide-react";
 import ShareDialog from "@/components/ShareDialog";
@@ -65,14 +65,15 @@ export default function StashView({ id, fresh, go }) {
     io.observe(el); return () => io.disconnect();
   });
   const [boards, setBoards] = useState(false);
+  const [fan, setFan] = useState(false);
   const [sharing, setSharing] = useState(false);
   const searchRef = useRef(null), addRef = useRef(null);
   const focus = r => { scrollTop(); setTimeout(() => r.current?.focus(), 250); };
   useNavItems([
-    { k: "boards", label: tabs.find(t => t.id === cur)?.name || "Все", icon: Columns3Icon, onClick: () => setBoards(true) },
+    { k: "journal", label: "Журнал", icon: BookOpenIcon },
     { k: "search", label: "Поиск", icon: SearchIcon, onClick: () => focus(searchRef) },
     { k: "add", label: "Добавить", icon: PlusIcon, accent: true, onClick: () => focus(addRef) },
-    { k: "unseen", label: "Очередь", icon: EyeOffIcon, active: unseen, onClick: () => setUnseen(v => !v) },
+    { k: "boards", label: cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски", icon: Columns3Icon, active: fan, onClick: () => setFan(v => !v) },
   ]);
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
@@ -109,6 +110,8 @@ export default function StashView({ id, fresh, go }) {
         <FileMenu x={{ ...stash, kind: "stash" }} folders={db.folders} after={() => go({ journal: true })} onShare={() => setSharing(true)} />
       </ViewHeader>
       {sharing && <ShareDialog open onOpenChange={o => !o && setSharing(false)} coll="stashes" target={id} name={stash.name} isOwner={isMine(stash)} />}
+      <BoardsFan open={fan} setOpen={setFan} tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
+        onAdd={addTab} onMore={() => setBoards(true)} />
       <BoardsSheet open={boards} setOpen={setBoards} tabs={tabs} cur={cur} setTab={t => { setTab(t); setBoards(false); }} counts={t => all.filter(c => c.tab === t).length} total={all.length} onAdd={addTab} />
 
       <Tabs tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
@@ -683,6 +686,53 @@ function LocalMedia({ c, compact, autoplay }) {
 }
 
 // phone: pick a board from the bottom bar
+// phone: boards fan up out of the nav button in a slight arc, like a Stack in the macOS Dock
+const FAN_MAX = 8;
+function BoardsFan({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, onMore }) {
+  const list = [{ id: ALL, name: "Все", n: total }, ...tabs.map(t => ({ ...t, n: counts(t.id) }))];
+  const shown = list.slice(0, FAN_MAX);
+  const extra = [list.length > FAN_MAX ? { id: "more", name: `Ещё ${list.length - FAN_MAX}…` } : { id: "new", name: "Новая доска" }];
+  const items = [...shown, ...extra];
+  const pick = t => { setOpen(false); if (t.id === "more") onMore(); else if (t.id === "new") onAdd(); else { setTab(t.id); scrollTop(); } };
+  useEffect(() => { if (!open) return; const k = e => e.key === "Escape" && setOpen(false); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [open]);
+  return (
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-30 md:hidden">
+          <motion.button type="button" aria-label="Закрыть" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/40"
+            style={{ backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} />
+          {/* anchored over the 4th of 5 nav buttons, growing upward */}
+          <ul className="absolute flex flex-col-reverse items-end gap-2" style={{ right: "calc(30% - 22px)", bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }}>
+            {items.map((t, i) => {
+              const on = t.id === cur, special = t.id === "more" || t.id === "new";
+              // the further up, the more it leans and drifts left
+              const x = -i * i * 1.6, r = -i * 1.4;
+              return (
+                <motion.li key={t.id} style={{ originX: 1, originY: 1 }}
+                  initial={{ opacity: 0, y: 40 + i * 30, x: 0, rotate: 0, scale: 0.4 }}
+                  animate={{ opacity: 1, y: 0, x, rotate: r, scale: 1, transition: { type: "spring", stiffness: 420, damping: 28, delay: i * 0.025 } }}
+                  exit={{ opacity: 0, y: 30 + i * 24, x: 0, rotate: 0, scale: 0.5, transition: { duration: 0.16, delay: (items.length - i) * 0.012 } }}>
+                  <button type="button" onClick={() => pick(t)} className="flex items-center gap-2.5">
+                    <span className={cn("max-w-[60vw] truncate rounded-full px-3 py-1.5 text-sm font-medium shadow-lg",
+                      on ? "bg-foreground text-background" : "bg-popover/95 text-popover-foreground")}>
+                      {t.name}{t.n != null && <span className="ml-1.5 opacity-60 tabular-nums">{t.n}</span>}
+                    </span>
+                    <span className={cn("grid size-11 shrink-0 place-items-center rounded-2xl shadow-lg ring-1 ring-black/5",
+                      on ? "bg-[var(--ink)] text-white" : special ? "border border-dashed bg-popover/95 text-muted-foreground" : "bg-popover text-foreground")}>
+                      {t.id === "new" ? <PlusIcon className="size-5" /> : t.id === "more" ? <MoreHorizontalIcon className="size-5" /> : t.id === ALL ? <LayoutGridIcon className="size-5" /> : <span className="text-base font-semibold">{t.name.trim()[0]?.toUpperCase() || "•"}</span>}
+                    </span>
+                  </button>
+                </motion.li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function BoardsSheet({ open, setOpen, tabs, cur, setTab, counts, total, onAdd }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
