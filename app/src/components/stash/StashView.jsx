@@ -243,15 +243,16 @@ function AddLine({ stash, tab }) {
 
 function Card({ c, board, onOpen, drag, onTag, tabs, moveTo }) {
   const [dragging, setDragging] = useState(false);
+  const [grab, setGrab] = useState(true);
   const toggleSeen = () => update("clips", c.id, { watched: !c.watched });
   const hasMedia = c.provider !== "note" && c.provider !== "link" || c.thumb;
   return (
     <motion.article layout="position"
       initial={{ opacity: 0, y: -60, scale: 0.7, rotate: -4 }} animate={{ opacity: dragging ? 0.4 : 1, y: 0, scale: 1, rotate: 0 }}
       exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }} transition={{ type: "spring", stiffness: 260, damping: 22 }}
-      {...drag} onDragStart={e => { setDragging(true); drag.onDragStart(e); }} onDragEnd={e => { setDragging(false); drag.onDragEnd(e); }}
+      {...drag} draggable={grab} onDragStart={e => { setDragging(true); drag.onDragStart(e); }} onDragEnd={e => { setDragging(false); drag.onDragEnd(e); }}
       className="group relative mb-2.5 break-inside-avoid overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-lg sm:mb-4 sm:rounded-2xl">
-      {hasMedia && <Preview c={c} compact />}
+      {hasMedia && <div onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)}><Preview c={c} compact /></div>}
       <div className="flex flex-col gap-1.5 p-2.5 sm:p-3" onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}>
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Brand p={c.provider} />
@@ -294,6 +295,7 @@ function delClip(c) {
 function Preview({ c, compact, autoplay }) {
   const [play, setPlay] = useState(!!autoplay);
   const [broken, setBroken] = useState(false);
+  const [xEmbed, setXEmbed] = useState(false);
   const photoUrl = usePhotoUrl(c.photo?.path);
   const ratio = c.vertical ? 9 / 16 : c.w && c.h ? Math.max(0.5, Math.min(2.2, c.w / c.h)) : 16 / 9;
   const box = "relative w-full overflow-hidden bg-muted";
@@ -303,11 +305,20 @@ function Preview({ c, compact, autoplay }) {
   if (c.provider === "image") return <img src={c.url} alt="" loading="lazy" className={cn("block w-full object-cover", maxH)} />;
 
   // X keeps the actual video file and photos: play them right in the card
+  // if X refuses the file (it sometimes blocks other sites), fall back to X's own embedded post
+  if (c.provider === "x" && xEmbed) {
+    return (
+      <div className="relative w-full bg-black" style={{ height: compact ? 460 : 600 }} onClick={e => e.stopPropagation()}>
+        <iframe src={`https://platform.twitter.com/embed/Tweet.html?id=${c.vid}&theme=dark&dnt=true&hideThread=true`} title={c.title || "Пост в X"} allow="autoplay; fullscreen" allowFullScreen className="absolute inset-0 size-full border-0" />
+      </div>
+    );
+  }
   const video = c.video && (c.provider === "x" || c.provider === "video" || c.provider === "link");
   if (video) {
     return (
       <div className={cn(box, "bg-black")} style={{ aspectRatio: ratio }} onClick={e => e.stopPropagation()}>
-        <video src={c.video} poster={c.thumb || undefined} controls playsInline preload="none" autoPlay={!!autoplay} className="absolute inset-0 size-full object-contain" />
+        <video src={c.video} poster={c.thumb || undefined} controls playsInline preload="metadata" autoPlay={!!autoplay}
+          onError={() => c.provider === "x" && c.vid && setXEmbed(true)} className="absolute inset-0 size-full object-contain" />
       </div>
     );
   }

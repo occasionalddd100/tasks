@@ -1,0 +1,2 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["./web-DaEPTI_p.js","./index-Ed-hDVKC.js","./floating-ui.dom-HP30r2JR.js","./index-7OQEF83m.css"])))=>i.map(i=>d[i]);
+import{I as e,R as t}from"./index-Ed-hDVKC.js";var n=t(`App`,{web:()=>e(()=>import(`./web-DaEPTI_p.js`).then(e=>new e.AppWeb),__vite__mapDeps([0,1,2,3]),import.meta.url)});export{n as App};
