@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as Pop from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "motion/react";
 import {
   CheckIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
   SearchIcon, StickyNoteIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
-  FolderPlusIcon, FolderIcon, CopyIcon, MaximizeIcon, FolderOpenIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
+  FolderPlusIcon, FolderIcon, CopyIcon, MaximizeIcon, ZoomInIcon, ZoomOutIcon, FolderOpenIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
 } from "lucide-react";
 import ShareDialog from "@/components/ShareDialog";
 import { VIEW, ViewHeader, PillTab, PillTabs } from "@/components/ViewHeader";
@@ -41,6 +41,7 @@ export default function StashView({ id, fresh, go }) {
   const [dragTab, setDragTab] = useState(null);
   const dragged = useRef(null);
 
+  const grid = GRID[useGrid()];
   const all = useMemo(() => db.clips.filter(c => c.stash === id), [db.clips, id]);
   const tagCounts = useMemo(() => {
     const m = new Map();
@@ -122,6 +123,7 @@ export default function StashView({ id, fresh, go }) {
           <input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по тексту и тегам" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
           {query && <button type="button" onClick={() => setQuery("")} aria-label="Очистить"><XIcon className="size-3.5 text-muted-foreground" /></button>}
         </label>
+        <GridZoom />
         <Chip on={unseen} onClick={() => setUnseen(v => !v)}><EyeOffIcon className="size-3.5" />Не смотрел</Chip>
         {tagCounts.map(([t, n]) => (
           <Chip key={t} on={tags.includes(t)} onClick={() => setTags(s => s.includes(t) ? s.filter(x => x !== t) : [...s, t])}>#{t}<span className="opacity-60">{n}</span></Chip>
@@ -130,10 +132,11 @@ export default function StashView({ id, fresh, go }) {
       </div>
 
       {shown.length ? (
-        <div className="grid grid-flow-row-dense grid-cols-2 gap-x-2.5 sm:gap-x-4 lg:grid-cols-3 2xl:grid-cols-4" style={{ gridAutoRows: ROW }}>
+        <div className={cn("grid grid-flow-row-dense [grid-template-columns:repeat(var(--cm),minmax(0,1fr))] md:[grid-template-columns:repeat(auto-fill,minmax(var(--cw),1fr))]", grid.gap)}
+          style={{ gridAutoRows: ROW, "--cw": grid.w + "px", "--cm": grid.m }}>
           <AnimatePresence initial={false}>
             {shown.slice(0, limit).map(c => (
-              <Card key={c.id} c={c} board={cur === ALL ? tabs.find(t => t.id === c.tab)?.name : null} tabs={tabs} allTags={tagCounts.map(([t]) => t)} onOpen={() => setOpen(c.id)} moveTo={t => moveTo(c, t)}
+              <Card key={c.id} c={c} level={grid.k} board={cur === ALL ? tabs.find(t => t.id === c.tab)?.name : null} tabs={tabs} allTags={tagCounts.map(([t]) => t)} onOpen={() => setOpen(c.id)} moveTo={t => moveTo(c, t)}
                 onTag={t => setTags(s => s.includes(t) ? s : [...s, t])}
                 drag={{
                   draggable: true,
@@ -281,12 +284,34 @@ function useRowSpan() {
   }, []);
   return ref;
 }
-export const SIZES = [["s", "Маленький"], ["m", "Обычный"], ["l", "Большой"]];
+// grid density for all cards, per device: min card width on a computer, column count on a phone
+const GRID = [
+  { k: "l", label: "Крупно", w: 360, m: 1, gap: "gap-x-4" },
+  { k: "m", label: "Обычно", w: 270, m: 2, gap: "gap-x-2.5 sm:gap-x-4" },
+  { k: "s", label: "Мельче", w: 200, m: 3, gap: "gap-x-2 sm:gap-x-3" },
+  { k: "xs", label: "Мелко", w: 150, m: 4, gap: "gap-x-1.5 sm:gap-x-2" },
+];
+let gridLevel = (() => { try { const v = +localStorage.getItem("stashGrid"); return v >= 0 && v < GRID.length ? v : 1; } catch { return 1; } })();
+const gridSubs = new Set();
+const setGrid = v => { gridLevel = Math.max(0, Math.min(GRID.length - 1, v)); try { localStorage.setItem("stashGrid", gridLevel); } catch {} gridSubs.forEach(f => f()); };
+const useGrid = () => useSyncExternalStore(f => (gridSubs.add(f), () => gridSubs.delete(f)), () => gridLevel);
+
+function GridZoom() {
+  const g = useGrid();
+  const btn = "grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent";
+  return (
+    <div className="flex items-center rounded-lg border bg-card" title="Размер карточек">
+      <button type="button" className={btn} disabled={g >= GRID.length - 1} onClick={() => setGrid(g + 1)} aria-label="Мельче, больше карточек на экране"><ZoomOutIcon className="size-4" /></button>
+      <span className="w-14 text-center text-xs text-muted-foreground select-none">{GRID[g].label}</span>
+      <button type="button" className={btn} disabled={g <= 0} onClick={() => setGrid(g - 1)} aria-label="Крупнее"><ZoomInIcon className="size-4" /></button>
+    </div>
+  );
+}
 const tagOf = raw => raw.trim().replace(/^#/, "").replace(/\s+/g, "-").toLowerCase();
 
-function Card({ c, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
+function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
   const span = useRowSpan();
-  const size = c.size || "m", small = size === "s";
+  const small = level === "s" || level === "xs", tiny = level === "xs", size = level;
   const [dragging, setDragging] = useState(false);
   const [grab, setGrab] = useState(true);
   const toggleSeen = () => update("clips", c.id, { watched: !c.watched });
@@ -294,22 +319,22 @@ function Card({ c, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
           { label: "Открыть", icon: PencilIcon, onSelect: onOpen },
           c.url && { label: "Открыть оригинал", icon: ExternalLinkIcon, onSelect: () => window.open(c.url, "_blank", "noopener") },
           tabs.length > 1 && { label: "На доску", icon: ArrowRightLeftIcon, sub: tabs.map(t => ({ label: t.name, disabled: t.id === c.tab, onSelect: () => moveTo(t.id) })) },
-          { label: "Размер", icon: MaximizeIcon, sub: SIZES.map(([k, l]) => ({ label: l, active: size === k, onSelect: () => update("clips", c.id, { size: k }) })) },
+          { label: "Размер карточек", icon: MaximizeIcon, sub: GRID.map((g, i) => ({ label: g.label, active: level === g.k, onSelect: () => setGrid(i) })) },
           { label: c.watched ? "Вернуть в очередь" : "Посмотрел", icon: c.watched ? EyeOffIcon : EyeIcon, onSelect: toggleSeen },
           { sep: true },
           { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: () => delClip(c) },
         ].filter(Boolean);
   const hasMedia = c.provider !== "note" && c.provider !== "link" || c.thumb;
   return (
-    <div ref={span} className={cn("self-start", size === "l" && "col-span-2")}>
-    <div className="pb-2.5 sm:pb-4">
+    <div ref={span} className="self-start">
+    <div className={cn("pb-2.5 sm:pb-4", small && "pb-2 sm:pb-3", tiny && "pb-1.5 sm:pb-2")}>
     <ActionsContext items={items}>
     <motion.article layout="position"
       initial={{ opacity: 0, y: -60, scale: 0.7, rotate: -4 }} animate={{ opacity: dragging ? 0.4 : 1, y: 0, scale: 1, rotate: 0 }}
       exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }} transition={{ type: "spring", stiffness: 260, damping: 22 }}
       {...drag} draggable={grab} onDragStart={e => { setDragging(true); drag.onDragStart(e); }} onDragEnd={e => { setDragging(false); drag.onDragEnd(e); }}
       className="group relative overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-lg sm:rounded-2xl">
-      {hasMedia && <div className={cn(small && "max-h-36 overflow-hidden [&>*]:max-h-36")} onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)}><Preview c={c} compact /></div>}
+      {hasMedia && <div className={cn(tiny && "max-h-56 overflow-hidden [&>*]:max-h-56")} onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)}><Preview c={c} compact /></div>}
       <div className={cn("flex flex-col gap-1.5 p-2.5 sm:p-3", small && "gap-1 p-2 sm:p-2")} onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}>
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Brand p={c.provider} />
@@ -322,7 +347,7 @@ function Card({ c, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
         {c.text && (c.provider === "note" || c.provider === "x" || !c.title) && <p className={cn("text-sm leading-snug whitespace-pre-wrap", c.provider === "note" ? "line-clamp-[12] text-[15px]" : "line-clamp-4 text-muted-foreground", small && "line-clamp-2 text-[13px]")}>{c.text}</p>}
         {c.desc && !small && <p className="line-clamp-3 text-[13px] leading-snug text-muted-foreground">{c.desc}</p>}
         {c.note && !small && <p className="flex items-center gap-1 text-xs text-muted-foreground"><FileTextIcon className="size-3" />есть заметка</p>}
-        {c.tags?.length > 0 && (
+        {c.tags?.length > 0 && !tiny && (
           <div className="flex flex-wrap gap-1 pt-0.5">
             {c.tags.map(t => <button key={t} type="button" onClick={e => { e.stopPropagation(); onTag(t); }} className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground">#{t}</button>)}
           </div>
@@ -331,7 +356,7 @@ function Card({ c, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
       <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100">
         <button type="button" onClick={toggleSeen} title={c.watched ? "Вернуть в очередь" : "Посмотрел"} aria-label={c.watched ? "Вернуть в очередь" : "Посмотрел"}
           className="grid size-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur hover:bg-black/75 max-md:hidden">{c.watched ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}</button>
-        <Bubble c={c} size={size} tabs={tabs} moveTo={moveTo} allTags={allTags} onOpen={onOpen} toggleSeen={toggleSeen} />
+        <Bubble c={c} tabs={tabs} moveTo={moveTo} allTags={allTags} onOpen={onOpen} toggleSeen={toggleSeen} />
       </div>
     </motion.article>
     </ActionsContext>
@@ -341,9 +366,10 @@ function Card({ c, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
 }
 
 // the round "⋯" bubble on a card: quick tags, size, and the usual actions in one place
-function Bubble({ c, size, tabs, moveTo, allTags, onOpen, toggleSeen }) {
+function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
   const [open, setOpen] = useState(false);
   const [tag, setTag] = useState("");
+  const g = useGrid();
   const tags = c.tags || [];
   const addTag = raw => { const t = tagOf(raw); if (t && !tags.includes(t)) update("clips", c.id, { tags: [...tags, t] }); setTag(""); };
   const suggest = allTags.filter(t => !tags.includes(t) && (!tag || t.includes(tag.toLowerCase()))).slice(0, 10);
@@ -380,11 +406,11 @@ function Bubble({ c, size, tabs, moveTo, allTags, onOpen, toggleSeen }) {
             )}
           </div>
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><MaximizeIcon className="size-3.5" />Размер</div>
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><MaximizeIcon className="size-3.5" />Размер всех карточек</div>
             <div className="flex gap-1 rounded-lg bg-muted p-1">
-              {SIZES.map(([k, l]) => (
-                <button key={k} type="button" onClick={() => update("clips", c.id, { size: k })}
-                  className={cn("h-7 flex-1 rounded-md text-xs transition-colors", size === k ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground")}>{l}</button>
+              {GRID.map((g, i) => (
+                <button key={g.k} type="button" onClick={() => setGrid(i)}
+                  className={cn("h-7 flex-1 rounded-md text-xs transition-colors", g === i ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground")}>{g.label}</button>
               ))}
             </div>
           </div>
