@@ -12,6 +12,7 @@ import { usePhotoUrl, uploadPhoto, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 import { Badge, Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import DayTimeline from "@/components/journal/DayTimeline";
 import { useNavItems, scrollTop } from "@/components/MobileNav";
 import { ClipboardPasteIcon, PencilIcon, PlusIcon, XIcon, ListChecksIcon, CornerDownRightIcon, CalendarCheckIcon, NotebookPenIcon, BarChart3Icon } from "lucide-react";
 
@@ -96,6 +97,7 @@ export default function JournalView() {
         </div>
       </header>
 
+      <div className={cn(only("day"))}><DayTimeline /></div>
       <div className={cn(only("day"))}><QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} /></div>
       {/* desktop: two columns filling the width; phone: tabs switched from the bottom bar */}
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start">
@@ -183,7 +185,7 @@ function Heatmap({ info, sel, onPick: pick }) {
         <motion.div key={range} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
           {range === "12"
             ? <YearGrid info={info} sel={sel} onPick={onPick} hover={hover} leave={() => setTip(null)} />
-            : <div className={cn("grid gap-4", range === "3" ? "grid-cols-3 max-sm:gap-2" : "mx-auto max-w-md")}>
+            : <div className={cn("grid gap-4", range === "3" ? "grid-cols-3 max-sm:gap-2" : "mx-auto max-w-[18rem]")}>
                 {months.map(([y, m]) => <MonthGrid key={y + "-" + m} y={y} m={m} big={range === "1"} info={info} sel={sel} onPick={onPick} hover={hover} leave={() => setTip(null)} />)}
               </div>}
         </motion.div>

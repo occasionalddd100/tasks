@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { sb, start, stop, setErrorHandler, subscribe } from "@/lib/db";
-import { startNative } from "@/lib/native";
+import { startNative, isApp } from "@/lib/native";
+import { webReminders } from "@/lib/reminders";
+import { getDb } from "@/lib/db";
 import Login from "@/components/Login";
 import Shell from "@/components/Shell";
 
@@ -19,7 +21,14 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { if (session?.user) start(session.user).then(() => startNative(subscribe)); }, [session?.user?.id]);
+  useEffect(() => {
+    if (!session?.user) return;
+    start(session.user).then(() => {
+      startNative(subscribe);
+      // browser / PWA on the PC: reminders while the tab is open (the phone app schedules real notifications)
+      if (!isApp) { let t = null; const sync = () => { clearTimeout(t); t = setTimeout(() => getDb().ready && webReminders(getDb()), 1500); }; subscribe(sync); sync(); }
+    });
+  }, [session?.user?.id]);
 
   return (
     <>

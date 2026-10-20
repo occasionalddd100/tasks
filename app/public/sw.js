@@ -1,6 +1,6 @@
 // offline shell: pages network-first (falls back to the cached app), hashed assets and fonts cache-first.
 // Data (Supabase) always goes to the network.
-const CACHE = "tasks-v2";
+const CACHE = "tasks-v3";
 // stash pictures (previews from YouTube, X, TikTok…, and our own uploads) are kept locally, cache-first;
 // the settings window can turn this off or clear it
 const MEDIA = "stash-media", FLAGS = "stash-flags", MEDIA_MAX = 1500;
@@ -53,4 +53,15 @@ self.addEventListener("fetch", e => {
   const own = url.origin === location.origin && url.pathname.includes("/assets/");
   const font = /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
   if (own || font) e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => put(req, res))));
+});
+
+// a reminder tapped: bring the app forward, opening the task's project
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const p = e.notification.data?.project, url = "./" + (p ? "#project=" + p : "#journal");
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(ws => {
+    const w = ws[0];
+    if (w) { w.focus(); return w.navigate ? w.navigate(url).catch(() => {}) : null; }
+    return self.clients.openWindow(url);
+  }));
 });

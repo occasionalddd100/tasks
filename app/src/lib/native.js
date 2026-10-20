@@ -1,35 +1,18 @@
 import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
 import { getDb } from "@/lib/db";
+import { plan, nid } from "@/lib/reminders";
 
 // Android app (Capacitor): the web code is loaded live from GitHub Pages, so it updates itself;
 // here are the native bits: local notifications for due tasks and a check for a newer APK.
 export const isApp = Capacitor.isNativePlatform();
 const REPO = "occasionalddd100/tasks";
-const MORNING = "09:00"; // tasks with a date but no time remind at this hour
-const EVENING = "20:00"; // ...and the evening before
-const EARLY = 60;        // tasks with a time also remind this many minutes ahead
 
-// a stable 31-bit number per task id, as Android notification ids are ints
-const nid = s => Math.abs([...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)) || 1;
-
-// each task: an early heads-up (an hour before, or the evening before for all-day tasks) and one at the time itself
+// reminders come from the shared plan (lib/reminders): the evening before, the morning of, an hour before, at the time
 function upcoming() {
-  const { tasks, cats, boards, me } = getDb();
-  const projectOf = t => boards.find(b => b.id === cats.find(c => c.id === t.cat)?.board)?.project;
-  const now = Date.now(), out = [];
-  for (const t of tasks) {
-    if (t.done || !t.due || !(t.assignee ? t.assignee === me : t._owner === me)) continue;
-    const at = new Date(`${t.due}T${t.time || MORNING}:00`), extra = { project: projectOf(t) || "" };
-    const early = t.time ? new Date(at.getTime() - EARLY * 6e4) : (() => { const d = new Date(`${t.due}T${EVENING}:00`); d.setDate(d.getDate() - 1); return d; })();
-    out.push({ id: nid(t.id), title: t.text, body: t.time ? "Пора: " + t.time : "Срок сегодня", at, extra });
-    out.push({ id: nid(t.id + ":early"), title: t.text, body: t.time ? `Через час, в ${t.time}` : "Завтра срок", at: early, extra });
-  }
-  return out
-    .filter(x => x.at.getTime() > now)
-    .sort((a, b) => a.at - b.at)
+  return plan(getDb())
     .slice(0, 60)
-    .map(({ at, ...n }) => ({ ...n, schedule: { at, allowWhileIdle: true } }));
+    .map(({ key, at, ...n }) => ({ ...n, id: nid(key), largeBody: n.body, schedule: { at, allowWhileIdle: true } }));
 }
 
 let LN = null, last = "";
