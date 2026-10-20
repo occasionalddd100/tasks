@@ -3,7 +3,7 @@ import * as Pop from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "motion/react";
 import {
   CheckIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
-  SearchIcon, StickyNoteIcon, ArrowUpIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
+  SearchIcon, StickyNoteIcon, ArrowUpIcon, ChevronUpIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
   FolderPlusIcon, FolderIcon, CopyIcon, MaximizeIcon, ZoomInIcon, ZoomOutIcon, FolderOpenIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
 } from "lucide-react";
 import ShareDialog from "@/components/ShareDialog";
@@ -67,14 +67,16 @@ export default function StashView({ id, fresh, go }) {
   });
   const [boards, setBoards] = useState(false);
   const [fan, setFan] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const isPhone = typeof matchMedia !== "undefined" && matchMedia("(max-width: 767px)").matches;
   const [sharing, setSharing] = useState(false);
   const searchRef = useRef(null), addRef = useRef(null);
   const focus = r => { scrollTop(); setTimeout(() => r.current?.focus(), 250); };
   useNavItems([
-    { k: "top", label: "Наверх", icon: ArrowUpIcon, onClick: scrollTop },
+    { k: "tags", label: "Теги", icon: TagIcon, active: tagsOpen, badge: tags.length + (unseen ? 1 : 0), onClick: () => { setFan(false); setTagsOpen(v => !v); } },
     { k: "search", label: "Поиск", icon: SearchIcon, onClick: () => focus(searchRef) },
     { k: "add", label: "Добавить", icon: PlusIcon, accent: true, onClick: () => focus(addRef) },
-    { k: "boards", label: cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски", icon: Columns3Icon, active: fan, onClick: () => setFan(v => !v) },
+    { k: "boards", label: cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски", icon: Columns3Icon, active: fan, onClick: () => { setTagsOpen(false); setFan(v => !v); } },
   ]);
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
@@ -104,7 +106,7 @@ export default function StashView({ id, fresh, go }) {
   const dropOnTab = t => { const c = dragged.current; dragged.current = null; setDragTab(null); if (c) { moveTo(c, t.id); toast(`Перенёс в «${t.name}»`); } };
 
   return (
-    <div className={VIEW}>
+    <div className={cn(VIEW, "max-md:gap-2.5 max-md:pt-3")}>
       <ViewHeader icon={<ItemIcon x={stash} fallback={LayoutGridIcon} className="size-6" />} value={stash.name || ""} onChange={e => update("stashes", id, { name: e.target.value })}
         autoFocus={fresh} onFocus={e => fresh && e.target.select()} aria-label="Название стэша">
         {(!isMine(stash) || db.grants.some(g => g.coll === "stashes" && g.target === id)) && <UsersIcon className="size-4 shrink-0 text-muted-foreground" aria-label="Общий стэш" />}
@@ -112,27 +114,32 @@ export default function StashView({ id, fresh, go }) {
       </ViewHeader>
       {sharing && <ShareDialog open onOpenChange={o => !o && setSharing(false)} coll="stashes" target={id} name={stash.name} isOwner={isMine(stash)} />}
       <BoardsFan open={fan} setOpen={setFan} tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
-        onAdd={addTab} onMore={() => setBoards(true)} />
+        onAdd={addTab} onMore={() => setBoards(true)} anchor={isPhone ? "navRight" : "dock"} />
+      <TagsFan open={tagsOpen} setOpen={setTagsOpen} tagCounts={tagCounts} tags={tags} setTags={setTags} unseen={unseen} setUnseen={setUnseen} anchor={isPhone ? "navLeft" : "dock"} />
+      <Dock board={cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски"} fan={fan} setFan={setFan} tagsOpen={tagsOpen} setTagsOpen={setTagsOpen} nTags={tags.length + (unseen ? 1 : 0)} />
+      <UpButton className="fixed right-4 z-30 md:hidden bottom-[calc(5rem+env(safe-area-inset-bottom))]" />
       <BoardsSheet open={boards} setOpen={setBoards} tabs={tabs} cur={cur} setTab={t => { setTab(t); setBoards(false); }} counts={t => all.filter(c => c.tab === t).length} total={all.length} onAdd={addTab} />
 
-      <Tabs tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
-        onAdd={addTab} onRename={renameTab} onDelete={deleteTab} dragTab={dragTab} setDragTab={setDragTab} onDrop={dropOnTab} dragging={() => !!dragged.current} />
+      <div className="max-md:hidden"><Tabs tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
+        onAdd={addTab} onRename={renameTab} onDelete={deleteTab} dragTab={dragTab} setDragTab={setDragTab} onDrop={dropOnTab} dragging={() => !!dragged.current} /></div>
 
       <AddLine stash={id} tab={target} inputRef={addRef} />
       <Sources stash={stash} tab={target} />
 
       <div className="flex flex-wrap items-center gap-2">
-        <label className="flex h-9 min-w-48 flex-1 items-center gap-2 rounded-lg border bg-card px-3 focus-within:ring-2 focus-within:ring-ring/40 sm:max-w-xs">
+        <label className="flex h-9 min-w-40 flex-1 items-center gap-2 rounded-lg border bg-card px-3 focus-within:ring-2 focus-within:ring-ring/40 sm:max-w-xs">
           <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
           <input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по тексту и тегам" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
           {query && <button type="button" onClick={() => setQuery("")} aria-label="Очистить"><XIcon className="size-3.5 text-muted-foreground" /></button>}
         </label>
         <GridZoom />
+        <div className="contents max-md:hidden">
         <Chip on={unseen} onClick={() => setUnseen(v => !v)}><EyeOffIcon className="size-3.5" />Не смотрел</Chip>
         {tagCounts.map(([t, n]) => (
           <Chip key={t} on={tags.includes(t)} onClick={() => setTags(s => s.includes(t) ? s.filter(x => x !== t) : [...s, t])}>#{t}<span className="opacity-60">{n}</span></Chip>
         ))}
         {(tags.length > 0 || unseen || q) && <button type="button" onClick={() => { setTags([]); setUnseen(false); setQuery(""); }} className="text-xs text-muted-foreground hover:text-foreground">сбросить</button>}
+        </div>
       </div>
 
       {shown.length ? (
@@ -306,7 +313,7 @@ function GridZoom() {
   return (
     <div className="flex items-center rounded-lg border bg-card" title="Размер карточек">
       <button type="button" className={btn} disabled={g >= GRID.length - 1} onClick={() => setGrid(g + 1)} aria-label="Мельче, больше карточек на экране"><ZoomOutIcon className="size-4" /></button>
-      <span className="w-14 text-center text-xs text-muted-foreground select-none">{GRID[g].label}</span>
+      <span className="w-14 text-center text-xs text-muted-foreground select-none max-md:hidden">{GRID[g].label}</span>
       <button type="button" className={btn} disabled={g <= 0} onClick={() => setGrid(g - 1)} aria-label="Крупнее"><ZoomInIcon className="size-4" /></button>
     </div>
   );
@@ -693,42 +700,41 @@ function LocalMedia({ c, compact, autoplay }) {
 }
 
 // phone: pick a board from the bottom bar
-// phone: boards fan up out of the nav button in a slight arc, like a Stack in the macOS Dock
-const FAN_MAX = 8;
-function BoardsFan({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, onMore }) {
-  const list = [{ id: ALL, name: "Все", n: total }, ...tabs.map(t => ({ ...t, n: counts(t.id) }))];
-  const shown = list.slice(0, FAN_MAX);
-  const extra = [list.length > FAN_MAX ? { id: "more", name: `Ещё ${list.length - FAN_MAX}…` } : { id: "new", name: "Новая доска" }];
-  const items = [...shown, ...extra];
+// boards and tags fan up out of their button in a slight arc, like a Stack in the macOS Dock
+const FAN_MAX = 9;
+const ANCHORS = {
+  navRight: { right: "calc(30% - 22px)", bottom: "calc(4.5rem + env(safe-area-inset-bottom))" },
+  navLeft: { left: "calc(10% - 22px)", bottom: "calc(4.5rem + env(safe-area-inset-bottom))" },
+  dock: { right: "1.5rem", bottom: "5.5rem" },
+};
+function Fan({ open, setOpen, items, onPick, anchor }) {
+  const left = anchor === "navLeft";
   useBackClose(open, () => setOpen(false));
-  const pick = t => { setOpen(false); if (t.id === "more") onMore(); else if (t.id === "new") onAdd(); else { setTab(t.id); scrollTop(); } };
   useEffect(() => { if (!open) return; const k = e => e.key === "Escape" && setOpen(false); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [open]);
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-30 md:hidden">
+        <div className="fixed inset-0 z-30">
           <motion.button type="button" aria-label="Закрыть" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/40"
             style={{ backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} />
-          {/* anchored over the 4th of 5 nav buttons, growing upward */}
-          <ul className="absolute flex flex-col-reverse items-end gap-2" style={{ right: "calc(30% - 22px)", bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }}>
+          <ul className={cn("absolute flex flex-col-reverse gap-2", left ? "items-start" : "items-end")} style={ANCHORS[anchor]}>
             {items.map((t, i) => {
-              const on = t.id === cur, special = t.id === "more" || t.id === "new";
-              // the further up, the more it leans and drifts left
-              const x = -i * i * 1.6, r = -i * 1.4;
+              // the further up, the more it leans and drifts sideways
+              const x = (left ? 1 : -1) * i * i * 1.4, r = (left ? 1 : -1) * i * 1.3;
               return (
-                <motion.li key={t.id} style={{ originX: 1, originY: 1 }}
+                <motion.li key={t.id} style={{ originX: left ? 0 : 1, originY: 1 }}
                   initial={{ opacity: 0, y: 40 + i * 30, x: 0, rotate: 0, scale: 0.4 }}
                   animate={{ opacity: 1, y: 0, x, rotate: r, scale: 1, transition: { type: "spring", stiffness: 420, damping: 28, delay: i * 0.025 } }}
                   exit={{ opacity: 0, y: 30 + i * 24, x: 0, rotate: 0, scale: 0.5, transition: { duration: 0.16, delay: (items.length - i) * 0.012 } }}>
-                  <button type="button" onClick={() => pick(t)} className="flex items-center gap-2.5">
-                    <span className={cn("max-w-[60vw] truncate rounded-full px-3 py-1.5 text-sm font-medium shadow-lg",
-                      on ? "bg-foreground text-background" : "bg-popover/95 text-popover-foreground")}>
+                  <button type="button" onClick={() => { if (!onPick(t)) setOpen(false); }} className={cn("flex items-center gap-2.5", left && "flex-row-reverse")}>
+                    <span className={cn("max-w-[60vw] truncate rounded-full px-3 py-1.5 text-sm font-medium shadow-lg transition-colors md:max-w-xs",
+                      t.on ? "bg-foreground text-background" : "bg-popover/95 text-popover-foreground hover:bg-accent")}>
                       {t.name}{t.n != null && <span className="ml-1.5 opacity-60 tabular-nums">{t.n}</span>}
                     </span>
-                    <span className={cn("grid size-11 shrink-0 place-items-center rounded-2xl shadow-lg ring-1 ring-black/5",
-                      on ? "bg-[var(--ink)] text-white" : special ? "border border-dashed bg-popover/95 text-muted-foreground" : "bg-popover text-foreground")}>
-                      {t.id === "new" ? <PlusIcon className="size-5" /> : t.id === "more" ? <MoreHorizontalIcon className="size-5" /> : t.id === ALL ? <LayoutGridIcon className="size-5" /> : <span className="text-base font-semibold">{t.name.trim()[0]?.toUpperCase() || "•"}</span>}
+                    <span className={cn("grid size-11 shrink-0 place-items-center rounded-2xl shadow-lg ring-1 ring-black/5 transition-transform hover:scale-110",
+                      t.on ? "bg-[var(--ink)] text-white" : t.dashed ? "border border-dashed bg-popover/95 text-muted-foreground" : "bg-popover text-foreground")}>
+                      {t.glyph}
                     </span>
                   </button>
                 </motion.li>
@@ -738,6 +744,80 @@ function BoardsFan({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, onM
         </div>
       )}
     </AnimatePresence>
+  );
+}
+
+const initial = s => <span className="text-base font-semibold">{s.trim()[0]?.toUpperCase() || "•"}</span>;
+function BoardsFan({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, onMore, anchor }) {
+  const list = [{ id: ALL, name: "Все", n: total, glyph: <LayoutGridIcon className="size-5" /> }, ...tabs.map(t => ({ id: t.id, name: t.name, n: counts(t.id), glyph: initial(t.name) }))];
+  const items = [...list.slice(0, FAN_MAX).map(t => ({ ...t, on: t.id === cur })),
+    list.length > FAN_MAX ? { id: "more", name: `Ещё ${list.length - FAN_MAX}…`, dashed: true, glyph: <MoreHorizontalIcon className="size-5" /> }
+      : { id: "new", name: "Новая доска", dashed: true, glyph: <PlusIcon className="size-5" /> }];
+  const pick = t => { if (t.id === "more") onMore(); else if (t.id === "new") onAdd(); else { setTab(t.id); scrollTop(); } };
+  return <Fan open={open} setOpen={setOpen} items={items} onPick={pick} anchor={anchor} />;
+}
+
+// tags stay open while you tick several
+function TagsFan({ open, setOpen, tagCounts, tags, setTags, unseen, setUnseen, anchor }) {
+  const any = tags.length > 0 || unseen;
+  const items = [
+    { id: "\u0000unseen", name: "Не смотрел", on: unseen, glyph: <EyeOffIcon className="size-5" /> },
+    ...tagCounts.slice(0, FAN_MAX).map(([t, n]) => ({ id: t, name: "#" + t, n, on: tags.includes(t), glyph: <TagIcon className="size-5" /> })),
+    any && { id: "\u0000reset", name: "Сбросить", dashed: true, glyph: <XIcon className="size-5" /> },
+  ].filter(Boolean);
+  const pick = t => {
+    if (t.id === "\u0000reset") { setTags([]); setUnseen(false); return false; }
+    if (t.id === "\u0000unseen") setUnseen(v => !v);
+    else setTags(s => s.includes(t.id) ? s.filter(x => x !== t.id) : [...s, t.id]);
+    return true;
+  };
+  return <Fan open={open} setOpen={setOpen} items={items} onPick={pick} anchor={anchor} />;
+}
+
+// true once the page is scrolled past a screen; listens to every scroller (main or window)
+function useScrolledDown() {
+  const [down, setDown] = useState(false);
+  useEffect(() => {
+    const on = e => { const el = e.target === document ? document.scrollingElement : e.target; setDown((el?.scrollTop || 0) > 700); };
+    document.addEventListener("scroll", on, true); return () => document.removeEventListener("scroll", on, true);
+  }, []);
+  return down;
+}
+
+const glass = { backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" };
+function UpButton({ className }) {
+  const down = useScrolledDown();
+  return (
+    <AnimatePresence>
+      {down && (
+        <motion.button type="button" onClick={scrollTop} aria-label="Наверх" title="Наверх" style={glass}
+          initial={{ opacity: 0, y: 16, scale: 0.6 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 16, scale: 0.6 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
+          className={cn("grid size-11 place-items-center rounded-full border bg-background/80 text-foreground shadow-lg hover:bg-accent", className)}>
+          <ArrowUpIcon className="size-5" />
+        </motion.button>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// computer: a floating bubble bottom right with tags and boards, same fan as on the phone
+function Dock({ board, fan, setFan, tagsOpen, setTagsOpen, nTags }) {
+  return (
+    <div className="fixed right-6 bottom-6 z-40 flex items-center gap-2 max-md:hidden">
+      <UpButton />
+      <div className="flex items-center gap-1 rounded-full border bg-background/80 p-1.5 shadow-xl" style={glass}>
+        <button type="button" onClick={() => { setFan(false); setTagsOpen(v => !v); }} aria-label="Теги" title="Теги"
+          className={cn("relative grid size-10 place-items-center rounded-full transition-colors", tagsOpen ? "bg-foreground text-background" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
+          <TagIcon className="size-[18px]" />
+          {nTags > 0 && <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--ink)] px-1 text-[10px] font-bold text-white">{nTags}</span>}
+        </button>
+        <button type="button" onClick={() => { setTagsOpen(false); setFan(v => !v); }}
+          className={cn("flex h-10 max-w-56 items-center gap-2 rounded-full pr-4 pl-3 text-sm font-medium transition-colors", fan ? "bg-foreground text-background" : "hover:bg-accent")}>
+          <Columns3Icon className="size-[18px] shrink-0 opacity-70" /><span className="truncate">{board}</span>
+          <ChevronUpIcon className={cn("size-4 shrink-0 opacity-60 transition-transform", fan && "rotate-180")} />
+        </button>
+      </div>
+    </div>
   );
 }
 
