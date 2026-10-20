@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import * as Pop from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "motion/react";
 import {
   CheckIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
   SearchIcon, StickyNoteIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
-  FolderPlusIcon, FolderIcon, FolderOpenIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
+  FolderPlusIcon, FolderIcon, CopyIcon, MaximizeIcon, FolderOpenIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
 } from "lucide-react";
 import ShareDialog from "@/components/ShareDialog";
 import { VIEW, ViewHeader, PillTab, PillTabs } from "@/components/ViewHeader";
@@ -129,10 +130,10 @@ export default function StashView({ id, fresh, go }) {
       </div>
 
       {shown.length ? (
-        <div className="columns-2 gap-2.5 sm:gap-4 lg:columns-3 2xl:columns-4">
+        <div className="grid grid-flow-row-dense grid-cols-2 gap-x-2.5 sm:gap-x-4 lg:grid-cols-3 2xl:grid-cols-4" style={{ gridAutoRows: ROW }}>
           <AnimatePresence initial={false}>
             {shown.slice(0, limit).map(c => (
-              <Card key={c.id} c={c} board={cur === ALL ? tabs.find(t => t.id === c.tab)?.name : null} tabs={tabs} onOpen={() => setOpen(c.id)} moveTo={t => moveTo(c, t)}
+              <Card key={c.id} c={c} board={cur === ALL ? tabs.find(t => t.id === c.tab)?.name : null} tabs={tabs} allTags={tagCounts.map(([t]) => t)} onOpen={() => setOpen(c.id)} moveTo={t => moveTo(c, t)}
                 onTag={t => setTags(s => s.includes(t) ? s : [...s, t])}
                 drag={{
                   draggable: true,
@@ -269,7 +270,23 @@ function AddLine({ stash, tab, inputRef }) {
 
 /* ───────────── cards ───────────── */
 
-function Card({ c, board, onOpen, drag, onTag, tabs, moveTo }) {
+// masonry on a grid: each card spans as many thin rows as it is tall, so a "big" card can take two columns
+const ROW = "4px";
+function useRowSpan() {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    const fit = () => { el.style.gridRowEnd = "span " + Math.max(1, Math.ceil(el.firstElementChild.getBoundingClientRect().height / parseInt(ROW))); };
+    fit(); const ro = new ResizeObserver(fit); ro.observe(el.firstElementChild); return () => ro.disconnect();
+  }, []);
+  return ref;
+}
+export const SIZES = [["s", "Маленький"], ["m", "Обычный"], ["l", "Большой"]];
+const tagOf = raw => raw.trim().replace(/^#/, "").replace(/\s+/g, "-").toLowerCase();
+
+function Card({ c, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
+  const span = useRowSpan();
+  const size = c.size || "m", small = size === "s";
   const [dragging, setDragging] = useState(false);
   const [grab, setGrab] = useState(true);
   const toggleSeen = () => update("clips", c.id, { watched: !c.watched });
@@ -277,20 +294,23 @@ function Card({ c, board, onOpen, drag, onTag, tabs, moveTo }) {
           { label: "Открыть", icon: PencilIcon, onSelect: onOpen },
           c.url && { label: "Открыть оригинал", icon: ExternalLinkIcon, onSelect: () => window.open(c.url, "_blank", "noopener") },
           tabs.length > 1 && { label: "На доску", icon: ArrowRightLeftIcon, sub: tabs.map(t => ({ label: t.name, disabled: t.id === c.tab, onSelect: () => moveTo(t.id) })) },
+          { label: "Размер", icon: MaximizeIcon, sub: SIZES.map(([k, l]) => ({ label: l, active: size === k, onSelect: () => update("clips", c.id, { size: k }) })) },
           { label: c.watched ? "Вернуть в очередь" : "Посмотрел", icon: c.watched ? EyeOffIcon : EyeIcon, onSelect: toggleSeen },
           { sep: true },
           { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: () => delClip(c) },
         ].filter(Boolean);
   const hasMedia = c.provider !== "note" && c.provider !== "link" || c.thumb;
   return (
+    <div ref={span} className={cn("self-start", size === "l" && "col-span-2")}>
+    <div className="pb-2.5 sm:pb-4">
     <ActionsContext items={items}>
     <motion.article layout="position"
       initial={{ opacity: 0, y: -60, scale: 0.7, rotate: -4 }} animate={{ opacity: dragging ? 0.4 : 1, y: 0, scale: 1, rotate: 0 }}
       exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }} transition={{ type: "spring", stiffness: 260, damping: 22 }}
       {...drag} draggable={grab} onDragStart={e => { setDragging(true); drag.onDragStart(e); }} onDragEnd={e => { setDragging(false); drag.onDragEnd(e); }}
-      className="group relative mb-2.5 break-inside-avoid overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-lg sm:mb-4 sm:rounded-2xl">
-      {hasMedia && <div onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)}><Preview c={c} compact /></div>}
-      <div className="flex flex-col gap-1.5 p-2.5 sm:p-3" onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}>
+      className="group relative overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-lg sm:rounded-2xl">
+      {hasMedia && <div className={cn(small && "max-h-36 overflow-hidden [&>*]:max-h-36")} onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)}><Preview c={c} compact /></div>}
+      <div className={cn("flex flex-col gap-1.5 p-2.5 sm:p-3", small && "gap-1 p-2 sm:p-2")} onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}>
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Brand p={c.provider} />
           <span className="truncate">{c.provider === "local" ? c.path : c.author ? "@" + c.author.replace(/^@/, "") : c.host || PROVIDER[c.provider]?.name}</span>
@@ -298,10 +318,10 @@ function Card({ c, board, onOpen, drag, onTag, tabs, moveTo }) {
           {c.watched && <CheckIcon className={cn("size-3.5 shrink-0 text-emerald-500", !board && "ml-auto")} aria-label="Просмотрено" />}
         </div>
         {c.loading && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2Icon className="size-3.5 animate-spin" />Достаю превью…</div>}
-        {c.title && <h3 className="line-clamp-3 text-[13px] leading-snug font-semibold sm:line-clamp-2 sm:text-[15px]">{c.title}</h3>}
-        {c.text && (c.provider === "note" || c.provider === "x" || !c.title) && <p className={cn("text-sm leading-snug whitespace-pre-wrap", c.provider === "note" ? "line-clamp-[12] text-[15px]" : "line-clamp-4 text-muted-foreground")}>{c.text}</p>}
-        {c.desc && <p className="line-clamp-3 text-[13px] leading-snug text-muted-foreground">{c.desc}</p>}
-        {c.note && <p className="flex items-center gap-1 text-xs text-muted-foreground"><FileTextIcon className="size-3" />есть заметка</p>}
+        {c.title && <h3 className={cn("line-clamp-3 text-[13px] leading-snug font-semibold sm:line-clamp-2 sm:text-[15px]", small && "line-clamp-1 sm:line-clamp-1 sm:text-[13px]", size === "l" && "sm:text-lg")}>{c.title}</h3>}
+        {c.text && (c.provider === "note" || c.provider === "x" || !c.title) && <p className={cn("text-sm leading-snug whitespace-pre-wrap", c.provider === "note" ? "line-clamp-[12] text-[15px]" : "line-clamp-4 text-muted-foreground", small && "line-clamp-2 text-[13px]")}>{c.text}</p>}
+        {c.desc && !small && <p className="line-clamp-3 text-[13px] leading-snug text-muted-foreground">{c.desc}</p>}
+        {c.note && !small && <p className="flex items-center gap-1 text-xs text-muted-foreground"><FileTextIcon className="size-3" />есть заметка</p>}
         {c.tags?.length > 0 && (
           <div className="flex flex-wrap gap-1 pt-0.5">
             {c.tags.map(t => <button key={t} type="button" onClick={e => { e.stopPropagation(); onTag(t); }} className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground">#{t}</button>)}
@@ -311,10 +331,82 @@ function Card({ c, board, onOpen, drag, onTag, tabs, moveTo }) {
       <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100">
         <button type="button" onClick={toggleSeen} title={c.watched ? "Вернуть в очередь" : "Посмотрел"} aria-label={c.watched ? "Вернуть в очередь" : "Посмотрел"}
           className="grid size-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur hover:bg-black/75 max-md:hidden">{c.watched ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}</button>
-        <ActionsDropdown align="end" items={items} trigger={<button type="button" aria-label="Действия с карточкой" className="grid size-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur hover:bg-black/75 max-md:size-7"><MoreHorizontalIcon className="size-4" /></button>} />
+        <Bubble c={c} size={size} tabs={tabs} moveTo={moveTo} allTags={allTags} onOpen={onOpen} toggleSeen={toggleSeen} />
       </div>
     </motion.article>
     </ActionsContext>
+    </div>
+    </div>
+  );
+}
+
+// the round "⋯" bubble on a card: quick tags, size, and the usual actions in one place
+function Bubble({ c, size, tabs, moveTo, allTags, onOpen, toggleSeen }) {
+  const [open, setOpen] = useState(false);
+  const [tag, setTag] = useState("");
+  const tags = c.tags || [];
+  const addTag = raw => { const t = tagOf(raw); if (t && !tags.includes(t)) update("clips", c.id, { tags: [...tags, t] }); setTag(""); };
+  const suggest = allTags.filter(t => !tags.includes(t) && (!tag || t.includes(tag.toLowerCase()))).slice(0, 10);
+  const act = f => () => { setOpen(false); f(); };
+  const Row = ({ icon: Icon, children, onClick, danger }) => (
+    <button type="button" onClick={onClick} className={cn("flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-sm hover:bg-accent", danger && "text-destructive hover:bg-destructive/10")}>
+      <Icon className={cn("size-4", !danger && "text-muted-foreground")} />{children}
+    </button>
+  );
+  return (
+    <Pop.Root open={open} onOpenChange={o => { setOpen(o); if (!o) setTag(""); }}>
+      <Pop.Trigger asChild>
+        <button type="button" aria-label="Действия с карточкой" onClick={e => e.stopPropagation()} className="grid size-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur hover:bg-black/75 max-md:size-7"><MoreHorizontalIcon className="size-4" /></button>
+      </Pop.Trigger>
+      <Pop.Portal>
+        <Pop.Content align="end" sideOffset={6} collisionPadding={12} onClick={e => e.stopPropagation()} onOpenAutoFocus={e => { if (matchMedia("(pointer: coarse)").matches) e.preventDefault(); }}
+          className="z-50 flex w-72 max-w-[calc(100vw-24px)] flex-col gap-3 rounded-2xl border bg-popover p-3 text-popover-foreground shadow-xl origin-(--radix-popover-content-transform-origin) data-[state=open]:animate-[menu-in_120ms_ease-out]">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><TagIcon className="size-3.5" />Теги</div>
+            <div className="flex flex-wrap gap-1">
+              {tags.map(t => (
+                <span key={t} className="inline-flex h-7 items-center gap-0.5 rounded-full bg-accent pr-1 pl-2.5 text-xs font-medium">#{t}
+                  <button type="button" onClick={() => update("clips", c.id, { tags: tags.filter(x => x !== t) })} aria-label={"Убрать тег " + t} className="grid size-5 place-items-center rounded-full hover:bg-foreground/10"><XIcon className="size-3" /></button>
+                </span>
+              ))}
+              <input value={tag} onChange={e => setTag(e.target.value)} placeholder="+ тег" aria-label="Новый тег" enterKeyHint="done"
+                onKeyDown={e => { if (e.key === "Enter" || e.key === "," || e.key === " ") { e.preventDefault(); addTag(tag); } if (e.key === "Backspace" && !tag && tags.length) update("clips", c.id, { tags: tags.slice(0, -1) }); }}
+                className="h-7 min-w-20 flex-1 rounded-full border border-dashed bg-transparent px-2.5 text-xs outline-none focus:border-solid" />
+            </div>
+            {suggest.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {suggest.map(t => <button key={t} type="button" onClick={() => addTag(t)} className="h-6 rounded-full border px-2 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground">+ #{t}</button>)}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><MaximizeIcon className="size-3.5" />Размер</div>
+            <div className="flex gap-1 rounded-lg bg-muted p-1">
+              {SIZES.map(([k, l]) => (
+                <button key={k} type="button" onClick={() => update("clips", c.id, { size: k })}
+                  className={cn("h-7 flex-1 rounded-md text-xs transition-colors", size === k ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground")}>{l}</button>
+              ))}
+            </div>
+          </div>
+          {tabs.length > 1 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><ArrowRightLeftIcon className="size-3.5" />На доску</div>
+              <div className="flex flex-wrap gap-1">
+                {tabs.map(t => <button key={t.id} type="button" disabled={t.id === c.tab} onClick={act(() => moveTo(t.id))}
+                  className={cn("h-7 rounded-full border px-2.5 text-xs", t.id === c.tab ? "border-transparent bg-accent font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>{t.name}</button>)}
+              </div>
+            </div>
+          )}
+          <div className="-mx-1 flex flex-col border-t pt-2">
+            <Row icon={PencilIcon} onClick={act(onOpen)}>Открыть</Row>
+            {c.url && <Row icon={ExternalLinkIcon} onClick={act(() => window.open(c.url, "_blank", "noopener"))}>Открыть оригинал</Row>}
+            {c.url && <Row icon={CopyIcon} onClick={act(() => navigator.clipboard?.writeText(c.url).then(() => toast("Ссылка скопирована")))}>Скопировать ссылку</Row>}
+            <Row icon={c.watched ? EyeOffIcon : EyeIcon} onClick={act(toggleSeen)}>{c.watched ? "Вернуть в очередь" : "Посмотрел"}</Row>
+            <Row icon={Trash2Icon} danger onClick={act(() => delClip(c))}>Удалить</Row>
+          </div>
+        </Pop.Content>
+      </Pop.Portal>
+    </Pop.Root>
   );
 }
 
