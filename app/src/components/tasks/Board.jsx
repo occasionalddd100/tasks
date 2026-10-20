@@ -5,11 +5,12 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarIcon, CheckCheckIcon, ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GripVerticalIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { ArrowRightLeftIcon, CalendarIcon, CheckCheckIcon, ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GripVerticalIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useDb, getDb, add, update, updateMany, remove } from "@/lib/db";
 import { byOrder, nextOrder, stale, inWeek, fmtDate } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/Confirm";
@@ -250,6 +251,14 @@ function CatCard({ cat, ids, taskById }) {
     remove("cats", cat.id);
   };
   const toggle = () => update("cats", cat.id, { collapsed: !cat.collapsed });
+  const db = useDb();
+  // move to another tab: its tasks follow, since they point at the category
+  const moveTo = b => { update("cats", cat.id, { board: b.id, order: nextOrder(db.cats.filter(c => c.board === b.id)) }); toast(`«${cat.name}» перенесена во вкладку «${b.name}»`); };
+  const here = db.boards.find(b => b.id === cat.board);
+  const tabsOf = p => db.boards.filter(b => b.project === p && b.id !== cat.board).sort(byOrder).map(b => ({ label: b.name, onSelect: () => moveTo(b) }));
+  const own = tabsOf(here?.project);
+  const others = db.projects.filter(p => p.id !== here?.project).map(p => ({ label: p.name || "Без названия", sub: tabsOf(p.id) })).filter(p => p.sub.length);
+  const move = own.length || others.length ? { label: "Перенести во вкладку", icon: ArrowRightLeftIcon, sub: [...own, ...(others.length ? [own.length && { sep: true }, { title: "Другие проекты" }, ...others] : [])] } : null;
   const allFolded = parents.length && parents.every(t => t.collapsed);
   const items = [
     { label: "Добавить задачу", icon: PlusIcon, onSelect: () => { if (cat.collapsed) toggle(); setTimeout(() => input.current?.focus(), 250); } },
@@ -257,6 +266,7 @@ function CatCard({ cat, ids, taskById }) {
     { label: cat.collapsed ? "Развернуть" : "Свернуть", icon: ChevronDownIcon, onSelect: toggle },
     parents.length > 0 && { label: allFolded ? "Раскрыть все подзадачи" : "Свернуть все подзадачи", icon: allFolded ? ChevronsUpDownIcon : ChevronsDownUpIcon,
       onSelect: () => updateMany("tasks", parents.map(t => [t.id, { collapsed: !allFolded }])) },
+    move,
     { sep: true },
     { label: "Удалить категорию", icon: Trash2Icon, variant: "destructive", onSelect: del },
   ];
