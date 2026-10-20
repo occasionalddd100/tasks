@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { freshReload } from "@/lib/reload";
-import { BookOpenIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, CrosshairIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,8 @@ import { importFiles, fromDrop } from "@/lib/importMd";
 import { MotionConfig, motion } from "motion/react";
 import NotesTree, { IconBtn, CreateMenu, itemName } from "@/components/notes/NotesTree";
 import { ProjectView } from "@/components/tasks/ProjectViews";
+import FocusView from "@/components/tasks/FocusView";
+import { focusOpen } from "@/lib/focus";
 import JournalView from "@/components/journal/JournalView";
 
 const NoteView = lazy(() => import("@/components/notes/NoteView").catch(e => {
@@ -53,6 +55,7 @@ const readHash = () => {
   const m = location.hash.match(/^#(note|project|stash)=([\w-]+)/);
   if (m) return { [m[1]]: m[2] };
   if (location.hash === "#journal") return { journal: true };
+  if (location.hash === "#focus") return { focus: true };
   return { journal: true };
 };
 
@@ -70,7 +73,7 @@ export default function Shell() {
 
   const go = v => {
     setMenu(false);
-    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : "#journal";
+    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : v.focus ? "#focus" : "#journal";
     if (location.hash !== hash) history.pushState(null, "", hash || location.pathname + location.search);
     setView(v);
   };
@@ -79,8 +82,9 @@ export default function Shell() {
   const project = view.project && !(view.home && db.ready && !db.projects.some(b => b.id === view.project)) ? view.project : null;
   const stash = view.stash || null;
   const shown = view.note ? db.notes.find(n => n.id === view.note) : project ? db.projects.find(b => b.id === project) : stash ? db.stashes.find(b => b.id === stash) : null;
-  const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : "Журнал";
-  const sidebar = <Sidebar view={{ ...view, project, journal: !view.note && !project && !stash }} go={go} email={db.email} search={menu === "search"} />;
+  const focus = !view.note && !project && !stash && !!view.focus;
+  const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : focus ? "Фокус" : "Журнал";
+  const sidebar = <Sidebar view={{ ...view, project, focus, journal: !view.note && !project && !stash && !focus }} go={go} email={db.email} search={menu === "search"} />;
 
   return (
     <MotionConfig reducedMotion={look.motion === "off" ? "always" : "user"}>
@@ -94,15 +98,17 @@ export default function Shell() {
           <span className="truncate text-sm font-medium">{title}</span>
         </div>
         {db.error && <p className="m-4 rounded-md border border-destructive/40 p-3 text-sm text-destructive">Нет связи с базой: {db.error}. Обнови страницу.</p>}
-        <motion.div key={view.note || project || stash || "journal"} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+        <motion.div key={view.note || project || stash || (focus ? "focus" : "journal")} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
           {view.note
             ? <NoteGuard key={view.note}><Suspense fallback={<Loading />}><NoteView id={view.note} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
             : project ? <ProjectView id={project} fresh={view.fresh} go={go} />
             : stash ? <NoteGuard key={stash}><Suspense fallback={<Loading />}><StashView id={stash} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
+            : focus ? <FocusView go={go} />
             : <JournalView />}
         </motion.div>
       </main>
-      <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onJournal={() => go({ journal: true })} />
+      <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onJournal={() => go({ journal: true })}
+        focus={{ onClick: () => go({ focus: true }), active: focus, badge: focusOpen(db) }} />
       <ConfirmHost />
       <SettingsHost />
       <IconPickerHost />
@@ -129,6 +135,11 @@ function Sidebar({ view, go, email, search }) {
         <button type="button" onClick={() => go({ journal: true })}
           className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", view.journal && "bg-accent")}>
           <BookOpenIcon className="size-4" />Журнал
+        </button>
+        <button type="button" onClick={() => go({ focus: true })}
+          className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", view.focus && "bg-accent")}>
+          <CrosshairIcon className="size-4" />Фокус
+          {focusOpen(db) > 0 && <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-xs tabular-nums text-foreground/80">{focusOpen(db)}</span>}
         </button>
       </div>
       <div className="flex h-8 items-center gap-0.5 px-4 pt-2 pb-1">

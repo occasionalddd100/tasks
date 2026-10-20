@@ -1,10 +1,11 @@
 import { createContext, useContext, useRef, useState } from "react";
 import {
-  AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CalendarXIcon, ChevronRightIcon, ClockIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlagIcon, FlameIcon,
+  AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CrosshairIcon, CalendarXIcon, ChevronRightIcon, ClockIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlagIcon, FlameIcon,
   GripVerticalIcon, MoreHorizontalIcon, UserIcon, UserXIcon, PencilIcon, StickyNoteIcon, SunIcon, Trash2Icon,
 } from "lucide-react";
 import { getDb, update, updateMany, remove } from "@/lib/db";
 import { today, dueLabel, stale } from "@/lib/tasks";
+import { inFocus, toFocus, fromFocus } from "@/lib/focus";
 import { renderMd } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -67,7 +68,9 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
   const openDate = () => openPicker(dateRef), openTime = () => openPicker(timeRef);
   const when = t.due ? dueLabel(t.due) + (t.time ? " " + t.time : "") : "";
 
+  const focused = inFocus(t);
   const items = [
+    !t.done && { label: focused ? "Убрать из фокуса" : "В фокус", icon: CrosshairIcon, onSelect: () => (focused ? fromFocus(t) : toFocus(t)) },
     canHide && { label: "Скрыть в выполненные", icon: EyeOffIcon, onSelect: () => hideTask(t) },
     { label: hasBody ? "Открыть заметку" : "Добавить заметку", icon: FileTextIcon, onSelect: () => setNoteOpen(true) },
     onAddSub && { label: "Добавить подзадачу", icon: CornerDownRightIcon, onSelect: onAddSub },
@@ -161,6 +164,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
               </button>
             } />
           )}
+          {focused && !t.done && <span className="grid size-6 place-items-center text-primary" title="В фокусе" aria-label="В фокусе"><CrosshairIcon className="size-3.5" /></span>}
           {p && <span className={cn("grid size-6 place-items-center", p.cls)} title={p.label} aria-label={"Приоритет: " + p.label}><p.icon className="size-3.5" /></span>}
           <ActionsDropdown align="end" items={items} trigger={
             <button type="button" aria-label="Действия с задачей"

@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { motion } from "motion/react";
-import { BookOpenIcon, MenuIcon, SearchIcon } from "lucide-react";
+import { BookOpenIcon, CrosshairIcon, MenuIcon, SearchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // phone bottom bar shared by every view: a view puts its own buttons there with useNavItems,
@@ -14,14 +14,17 @@ export function useNavItems(list) {
 
 export const scrollTop = () => { document.querySelector("main")?.scrollTo?.({ top: 0, behavior: "smooth" }); window.scrollTo({ top: 0 }); };
 
-export default function MobileNav({ onMenu, onSearch, onJournal }) {
+export default function MobileNav({ onMenu, onSearch, onJournal, focus }) {
   const list = useSyncExternalStore(f => (subs.add(f), () => subs.delete(f)), () => items) || [
     { k: "journal", label: "Журнал", icon: BookOpenIcon, onClick: onJournal },
     { k: "search", label: "Поиск", icon: SearchIcon, onClick: onSearch },
   ];
   // views may list "journal" / "search" without a handler: those go to the shell
   const builtin = { journal: onJournal, search: onSearch };
-  const all = [...list.map(x => x.onClick ? x : { ...x, onClick: builtin[x.k] }), { k: "menu", label: "Меню", icon: MenuIcon, onClick: onMenu }];
+  // "Фокус" sits next to "Меню" everywhere, so the current sprint is one tap away from any view
+  const all = [...list.map(x => x.onClick ? x : { ...x, onClick: builtin[x.k] }),
+    { k: "focus", label: "Фокус", icon: CrosshairIcon, ...focus, active: focus?.active && !list.some(x => x.active) },
+    { k: "menu", label: "Меню", icon: MenuIcon, onClick: onMenu }];
   return (
     <nav style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/85 pb-[env(safe-area-inset-bottom)] md:hidden">
