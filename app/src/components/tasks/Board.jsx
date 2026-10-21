@@ -148,7 +148,7 @@ export default function Board({ board }) {
       {archive.length > 0 && <DoneCard tasks={archive} cats={cats} />}
       {!cats.length && <p className="text-sm text-muted-foreground">Во вкладке пока нет категорий. Создай первую кнопкой ниже.</p>}
       <NewCat board={board} cats={cats} />
-      <p className="text-xs text-muted-foreground">Тяни за ⋮⋮, чтобы переставить задачу или категорию. Нажми на текст, чтобы изменить. <span className="max-md:hidden">Правая кнопка мыши открывает меню: заметка, подзадача, приоритет, дата.</span><span className="md:hidden">Долгое нажатие или ⋯ открывает меню.</span></p>
+      <p className="text-xs text-muted-foreground">Тяни за ⋮⋮, чтобы переставить задачу или категорию. <span className="max-md:hidden">Нажми на текст, чтобы изменить. Правая кнопка мыши открывает меню: фокус, срочно, дата, заметка.</span><span className="md:hidden">Нажми на задачу, чтобы открыть её. Смахни вправо, чтобы закрыть, влево, чтобы положить в фокус.</span></p>
     </div>
     </Fresh.Provider></Kids.Provider></People.Provider>
   );

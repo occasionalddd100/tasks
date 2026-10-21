@@ -39,6 +39,13 @@ export default function FocusView({ go }) {
   const burning = useMemo(() => db.tasks.filter(t => !t.done && !t.hidden && !inFocus(t) && t.text?.trim() &&
     ((t.due && t.due <= today()) || t.prio === "urgent")).slice(0, 6), [db.tasks]);
 
+  // the old "Ближайшее" mark is gone: offer its open tasks to the focus once, by hand
+  const legacy = db.tasks.filter(t => t.prio === "today" && !t.done && !t.hidden && !inFocus(t) && t.text?.trim());
+  const takeLegacy = into => {
+    let n = Math.max(0, ...db.tasks.filter(inFocus).map(x => x.focus));
+    updateMany("tasks", legacy.map(t => [t.id, into ? { prio: "", focus: ++n } : { prio: "" }]));
+  };
+
   return (
     <div className={VIEW}>
       <header className="flex items-center gap-2">
@@ -47,12 +54,22 @@ export default function FocusView({ go }) {
         {done > 0 && !sprint && <Button variant="ghost" size="sm" onClick={clearDone}>Убрать сделанные</Button>}
       </header>
 
+      {legacy.length > 0 && (
+        <section className="flex flex-col gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm md:max-w-3xl">
+          <p>Метки «Ближайшее» больше нет: теперь есть только фокус и дата. С этой меткой осталось задач: {legacy.length}. Например: {legacy.slice(0, 3).map(t => "«" + t.text + "»").join(", ")}.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => takeLegacy(true)}>Перенести в фокус</Button>
+            <Button size="sm" variant="ghost" onClick={() => takeLegacy(false)}>Просто снять метку</Button>
+          </div>
+        </section>
+      )}
+
       <SprintBar sprint={sprint} done={done} total={list.length} onStart={startSprint} onFinish={finish} />
 
       <section className="rounded-xl border bg-card p-2 shadow-xs md:max-w-3xl">
         {list.length === 0 && (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-            Тут пусто. Кидай задачи из проектов через ПКМ → «В фокус» или пиши новые ниже.
+            Тут пусто. Смахни задачу в проекте влево (на компьютере ПКМ → «В фокус») или напиши новую ниже.
           </p>
         )}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>

@@ -209,6 +209,7 @@
 @keyframes fade-in { from { opacity: 0 } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(.98) } }
 @keyframes sheet-in { from { transform: translateX(-100%) } }
+@keyframes sheet-up { from { transform: translateY(100%) } }
 
 /* tables never squeeze into letter columns: cells keep a readable width and the table scrolls sideways */
 .milkdown .milkdown-table-block .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }

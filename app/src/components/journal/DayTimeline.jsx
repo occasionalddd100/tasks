@@ -55,7 +55,7 @@ export default function DayTimeline() {
       if (t.hidden || !t.text?.trim()) continue;
       if (t.done ? !(mineDone(t) && t.doneOn >= d0) : !mineOpen(t)) continue;
       const time = timeOf(t);
-      const important = !t.done && ((t.due && t.due <= td) || t.prio === "urgent" || t.prio === "today" || inFocus(t));
+      const important = !t.done && ((t.due && t.due <= td) || t.prio === "urgent" || inFocus(t));
       if (!time) { if (important) untimed.push(t); continue; }
       let when = null;
       if (t.due) { if (dates.has(t.due)) when = at(t.due, time); else if (!t.done && t.due < d0) { untimed.push(t); continue; } }
@@ -67,7 +67,7 @@ export default function DayTimeline() {
       if (when != null && when >= start && when <= end) events.push({ t, when, time });
     }
     events.sort((a, b) => a.when - b.when);
-    const rank = t => (t.due && t.due < td ? 0 : t.prio === "urgent" ? 1 : t.due === td ? 2 : t.prio === "today" ? 3 : 4);
+    const rank = t => (t.due && t.due < td ? 0 : t.prio === "urgent" ? 1 : t.due === td ? 2 : inFocus(t) ? 3 : 4);
     untimed.sort((a, b) => rank(a) - rank(b));
     return { events, untimed };
   }, [db.tasks, db.me, start, end, Math.floor(now / 60e3)]);

@@ -1,7 +1,7 @@
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, useContext, useRef, useState, useSyncExternalStore } from "react";
 import {
-  AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CrosshairIcon, CalendarXIcon, ChevronRightIcon, ClockIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlagIcon, FlameIcon,
-  GripVerticalIcon, MoreHorizontalIcon, UserIcon, UserXIcon, PencilIcon, StickyNoteIcon, SunIcon, Trash2Icon,
+  AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CrosshairIcon, CalendarXIcon, ChevronRightIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlameIcon,
+  GripVerticalIcon, UserIcon, UserXIcon, PencilIcon, Trash2Icon, CheckIcon,
 } from "lucide-react";
 import { getDb, update, updateMany, remove } from "@/lib/db";
 import { today, dueLabel, stale } from "@/lib/tasks";
@@ -14,17 +14,36 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/h
 import { confirmAction } from "@/components/Confirm";
 import InlineInput from "@/components/InlineInput";
 import TaskNoteDialog from "@/components/tasks/TaskNoteDialog";
+import TaskSheet from "@/components/tasks/TaskSheet";
 import Avatar from "@/components/Avatar";
 import { personName } from "@/lib/people";
 
 // people who can be assigned in the current project
 export const People = createContext([]);
 
-export const PRIO = {
-  urgent: { label: "Срочно", icon: FlameIcon, cls: "text-red-500" },
-  today: { label: "Ближайшее", icon: SunIcon, cls: "text-amber-500" },
-  later: { label: "Позже", icon: ClockIcon, cls: "text-blue-500" },
-};
+// on the phone a task opens one sheet (TaskSheet) instead of menus; a swipe marks it done or puts it in focus
+const PHONE = "(max-width: 767px)";
+const usePhone = () => useSyncExternalStore(f => { const m = matchMedia(PHONE); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, () => matchMedia(PHONE).matches);
+const SWIPE = 80;
+
+// a horizontal drag on the row: right past SWIPE = done, left = focus. Vertical moves stay page scrolls.
+function useSwipe(onRight, onLeft) {
+  const [dx, setDx] = useState(0);
+  const g = useRef(null);
+  const onTouchStart = e => { const p = e.touches[0]; g.current = { x: p.clientX, y: p.clientY, on: false, off: false }; };
+  const onTouchMove = e => {
+    const s = g.current; if (!s || s.off) return;
+    const p = e.touches[0], x = p.clientX - s.x, y = p.clientY - s.y;
+    if (!s.on) { if (Math.abs(y) > 10) { s.off = true; return; } if (Math.abs(x) < 12) return; s.on = true; }
+    setDx(Math.max(-140, Math.min(140, x)));
+  };
+  const onTouchEnd = () => {
+    const s = g.current; g.current = null;
+    if (s?.on) { if (dx > SWIPE) onRight(); else if (dx < -SWIPE) onLeft(); }
+    setDx(0);
+  };
+  return { dx, handlers: { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel: () => { g.current = null; setDx(0); } }, swiping: () => !!g.current?.on };
+}
 
 // all subtasks below a task, any depth
 export function descendantsOf(id) {
@@ -48,11 +67,13 @@ export async function deleteTask(t) {
 export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
   const [editing, setEditing] = useState(null); // "text" | "note"
   const [noteOpen, setNoteOpen] = useState(false);
+  const [sheet, setSheet] = useState(false);
+  const phone = usePhone();
   const dateRef = useRef(null), timeRef = useRef(null);
 
   const toggle = v => update("tasks", t.id, v ? { done: true, doneOn: today(), doneBy: getDb().me } : { done: false, doneOn: "", doneBy: "", hidden: false });
   const canHide = t.done && !stale(t) && !overlay;
-  const p = PRIO[t.prio];
+  const urgent = t.prio === "urgent" && !t.done;
   const late = t.due && !t.done && (t.due < today() || (t.due === today() && t.time && t.time < new Date().toTimeString().slice(0, 5)));
   const hasBody = !!t.body?.trim();
   const people = useContext(People);
@@ -75,10 +96,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
     { label: hasBody ? "Открыть заметку" : "Добавить заметку", icon: FileTextIcon, onSelect: () => setNoteOpen(true) },
     onAddSub && { label: "Добавить подзадачу", icon: CornerDownRightIcon, onSelect: onAddSub },
     { sep: true },
-    { label: "Приоритет", icon: FlagIcon, sub: [
-      ...Object.entries(PRIO).map(([k, v]) => ({ label: v.label, icon: v.icon, iconClass: v.cls, active: t.prio === k, onSelect: () => update("tasks", t.id, { prio: k }) })),
-      { label: "Без приоритета", icon: FlagIcon, active: !t.prio, onSelect: () => update("tasks", t.id, { prio: "" }) },
-    ] },
+    !t.done && { label: t.prio === "urgent" ? "Снять «Срочно»" : "Срочно", icon: FlameIcon, iconClass: "text-red-500", onSelect: () => update("tasks", t.id, { prio: t.prio === "urgent" ? "" : "urgent" }) },
     { label: "Исполнитель", icon: UserIcon, sub: assignItems },
     { label: t.due ? "Изменить дату" : "Поставить дату", icon: CalendarIcon, onSelect: () => setTimeout(openDate, 50) },
     t.due && { label: t.time ? "Изменить время" : "Поставить время", icon: AlarmClockIcon, onSelect: () => setTimeout(openTime, 50) },
@@ -86,15 +104,19 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
     t.due && { label: "Убрать дату", icon: CalendarXIcon, onSelect: () => update("tasks", t.id, { due: "", time: "" }) },
     { sep: true },
     { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setEditing("text")) },
-    { label: t.note ? "Изменить подпись" : "Добавить подпись", icon: StickyNoteIcon, onSelect: () => setTimeout(() => setEditing("note")) },
     { sep: true },
     { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: () => deleteTask(t) },
   ];
 
+  const swipe = useSwipe(() => toggle(!t.done), () => !t.done && (focused ? fromFocus(t) : toFocus(t)));
+  const tapOpen = phone && !overlay;
   const row = (
-    <div className={cn("group/task relative flex items-start gap-1 rounded-md py-1.5 pr-1 transition-colors hover:bg-accent/50 data-[state=open]:bg-accent/70",
-      p && "before:absolute before:top-2 before:bottom-2 before:-left-0.5 before:w-0.5 before:rounded-full",
-      t.prio === "urgent" && "before:bg-red-500", t.prio === "today" && "before:bg-amber-500", t.prio === "later" && "before:bg-blue-500")}>
+    <div {...(tapOpen ? swipe.handlers : {})}
+      onClick={tapOpen ? e => { if (!e.target.closest("button,[role=checkbox],input,label,a")) setSheet(true); } : undefined}
+      style={swipe.dx ? { transform: `translateX(${swipe.dx}px)` } : undefined}
+      className={cn("group/task relative flex items-start gap-1 rounded-md py-1.5 pr-1 transition-colors hover:bg-accent/50 data-[state=open]:bg-accent/70",
+        swipe.dx ? "bg-background" : "transition-transform", tapOpen && "touch-pan-y",
+        urgent && "before:absolute before:top-2 before:bottom-2 before:-left-0.5 before:w-0.5 before:rounded-full before:bg-red-500")}>
       {grip ? (
         <button {...grip} ref={grip.ref} aria-label={"Перетащить: " + t.text}
           className="mt-0.5 grid h-5 w-4 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground/50 opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100 active:cursor-grabbing max-md:opacity-50">
@@ -113,8 +135,8 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
           ? <InlineInput value={t.text} className="h-7 w-full text-[15px]" onDone={v => { setEditing(null); if (v && v !== t.text) update("tasks", t.id, { text: v }); }} />
           : (
             <span className="inline">
-              <span onClick={() => !overlay && setEditing("text")}
-                className={cn("cursor-text text-[15px] leading-snug break-words transition-colors", t.done && "text-muted-foreground line-through")}>{t.text}</span>
+              <span onClick={() => !overlay && !phone && setEditing("text")}
+                className={cn(!phone && "cursor-text", "text-[15px] leading-snug break-words transition-colors", t.done && "text-muted-foreground line-through")}>{t.text}</span>
               {hasBody && !overlay && (
                 <HoverCard>
                   <HoverCardTrigger asChild>
@@ -136,13 +158,11 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
               )}
             </span>
           )}
-        {editing === "note"
-          ? <InlineInput value={t.note || ""} placeholder="Короткая подпись" className="mt-1 h-7 w-full text-[13px]" onDone={v => { setEditing(null); if (v !== null && v !== (t.note || "")) update("tasks", t.id, { note: v }); }} />
-          : t.note && <span onClick={() => setEditing("note")} className="mt-0.5 block cursor-text text-[13px] text-muted-foreground">{t.note}</span>}
+        {t.note && <span className="mt-0.5 block text-[13px] text-muted-foreground">{t.note}</span>}
       </div>
       {!overlay && (
         <div className="flex shrink-0 items-center">
-          <button type="button" onClick={openDate} title={t.due ? "Срок: " + t.due + (t.time ? " " + t.time : "") : "Поставить дату"} aria-label={t.due ? "Срок " + when : "Поставить дату"}
+          <button type="button" onClick={phone ? () => setSheet(true) : openDate} title={t.due ? "Срок: " + t.due + (t.time ? " " + t.time : "") : "Поставить дату"} aria-label={t.due ? "Срок " + when : "Поставить дату"}
             className={cn("relative grid h-6 min-w-6 place-items-center rounded px-1 text-xs text-muted-foreground hover:bg-background",
               !t.due && "opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100 max-md:hidden", t.due && "bg-muted", late && "text-destructive")}>
             {t.due ? when : <CalendarIcon className="size-3.5" />}
@@ -165,21 +185,25 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
             } />
           )}
           {focused && !t.done && <span className="grid size-6 place-items-center text-primary" title="В фокусе" aria-label="В фокусе"><CrosshairIcon className="size-3.5" /></span>}
-          {p && <span className={cn("grid size-6 place-items-center", p.cls)} title={p.label} aria-label={"Приоритет: " + p.label}><p.icon className="size-3.5" /></span>}
-          <ActionsDropdown align="end" items={items} trigger={
-            <button type="button" aria-label="Действия с задачей"
-              className="grid size-6 place-items-center rounded text-muted-foreground opacity-60 hover:bg-background md:hidden">
-              <MoreHorizontalIcon className="size-3.5" />
-            </button>
-          } />
+          {urgent && <span className="grid size-6 place-items-center text-red-500" title="Срочно" aria-label="Срочно"><FlameIcon className="size-3.5" /></span>}
         </div>
       )}
     </div>
   );
   if (overlay) return row;
+  // what a swipe will do shows under the row as it slides
+  const under = swipe.dx !== 0 && (
+    <div className={cn("pointer-events-none absolute inset-0 flex items-center rounded-md px-4 text-sm font-medium text-white",
+      swipe.dx > 0 ? "justify-start bg-emerald-500" : "justify-end bg-primary", Math.abs(swipe.dx) < SWIPE && "opacity-60")}>
+      {swipe.dx > 0
+        ? <span className="flex items-center gap-1.5"><CheckIcon className="size-4" />{t.done ? "Вернуть" : "Готово"}</span>
+        : !t.done && <span className="flex items-center gap-1.5"><CrosshairIcon className="size-4" />{focused ? "Из фокуса" : "В фокус"}</span>}
+    </div>
+  );
   // the dialog sits outside the menu trigger so right-clicks inside the editor don't open the task menu
   return <>
-    <ActionsContext items={items}>{row}</ActionsContext>
+    {phone ? <div className="relative">{under}{row}</div> : <ActionsContext items={items}>{row}</ActionsContext>}
     {noteOpen && <TaskNoteDialog t={t} open={noteOpen} onOpenChange={setNoteOpen} />}
+    {phone && <TaskSheet t={t} open={sheet} onOpenChange={setSheet} people={people} onNote={() => setNoteOpen(true)} onAddSub={onAddSub} />}
   </>;
 }
