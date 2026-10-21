@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import * as D from "@radix-ui/react-dialog";
 import {
   AlarmClockIcon, CalendarIcon, CornerDownRightIcon, CrosshairIcon, EyeOffIcon, FileTextIcon, FlameIcon, FolderInputIcon, Trash2Icon, UserIcon, XIcon,
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { personName } from "@/lib/people";
 import { descendantsOf, hideTask, deleteTask } from "@/components/tasks/TaskRow";
+import TaskNoteDialog from "@/components/tasks/TaskNoteDialog";
 
 // Everything about one task on the phone, in one place: tap a task, this slides up.
 // Top: the two things that decide when it gets done ("Фокус" now, "Когда" by date), then the 🔥 flag; below, the rest.
@@ -122,4 +123,21 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
       </D.Portal>
     </D.Root>
   );
+}
+
+// any task anywhere opens here by id: lists that aren't task rows (the day, the timeline, cards) use this
+let openId = null; const subs = new Set();
+export const openTask = id => { openId = id; subs.forEach(f => f()); };
+export function TaskSheetHost() {
+  const id = useSyncExternalStore(f => (subs.add(f), () => subs.delete(f)), () => openId);
+  const db = useDb(), t = id && db.tasks.find(x => x.id === id);
+  const [note, setNote] = useState(false), [shut, setShut] = useState(false);
+  useEffect(() => { setShut(false); }, [id]);
+  if (!t) return null;
+  // the sheet closes first and asks for the note a moment later, so wait before forgetting the task
+  const closed = () => { setShut(true); setTimeout(() => setNote(n => { if (!n) openTask(null); return n; }), 260); };
+  return <>
+    <TaskSheet t={t} open={!note && !shut} onOpenChange={o => !o && closed()} onNote={() => setNote(true)} />
+    {note && <TaskNoteDialog t={t} open onOpenChange={o => { if (!o) { setNote(false); openTask(null); } }} />}
+  </>;
 }

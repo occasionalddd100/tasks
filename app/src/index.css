@@ -198,12 +198,12 @@
 .md table { border-collapse: collapse; } .md th, .md td { border: 1px solid var(--border); padding: 2px 8px; }
 
 /* subtasks: a rail from the parent's chevron, a rounded elbow to each child, an arrowhead pointing up at the parent */
-.subtree { position: relative; margin-left: 22px; --rail: color-mix(in oklab, var(--muted-foreground) 55%, transparent); }
+/* the rail sits under the parent's fold chevron; each elbow stops short of the child's drag grip */
+.subtree { position: relative; margin-left: 40px; --rail: color-mix(in oklab, var(--muted-foreground) 55%, transparent); }
 .subtree > li { position: relative; }
-.subtree > li:not(:last-of-type)::before { content: ""; position: absolute; left: 8px; top: 0; bottom: 0; border-left: 1.5px solid var(--rail); }
-.subtree > li::after { content: ""; position: absolute; left: 8px; top: 0; height: 16px; width: 30px; border: 0 solid var(--rail); border-left-width: 1.5px; border-bottom-width: 1.5px; border-bottom-left-radius: 7px; pointer-events: none; }
-.subtree > li[data-kids]::after { width: 11px; }
-.subtree::before { content: ""; position: absolute; z-index: 1; left: 4.75px; top: -1px; border: 4.5px solid transparent; border-bottom: 6px solid var(--rail); border-top: 0; }
+.subtree > li:not(:last-of-type)::before { content: ""; position: absolute; left: -10px; top: 0; bottom: 0; border-left: 1.5px solid var(--rail); }
+.subtree > li::after { content: ""; position: absolute; left: -10px; top: 0; height: 16px; width: 8px; border: 0 solid var(--rail); border-left-width: 1.5px; border-bottom-width: 1.5px; border-bottom-left-radius: 6px; pointer-events: none; }
+.subtree::before { content: ""; position: absolute; z-index: 1; left: -14.25px; top: -1px; border: 4.5px solid transparent; border-bottom: 6px solid var(--rail); border-top: 0; }
 .subtree > li:has(> form)::after, .subtree > li:has(> form)::before { display: none; }
 
 @keyframes fade-in { from { opacity: 0 } }

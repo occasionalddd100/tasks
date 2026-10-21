@@ -6,13 +6,14 @@ import { today, plural } from "@/lib/tasks";
 import { inFocus } from "@/lib/focus";
 import { timeOf, plan } from "@/lib/reminders";
 import { isApp } from "@/lib/native";
+import { exText, exAt } from "@/lib/done";
+import { openTask } from "@/components/tasks/TaskSheet";
 import { cn } from "@/lib/utils";
 
 // The day at a glance: a 30-hour strip from 06:00 today to tomorrow noon, coloured by part of day,
 // with "now", every task that has a time and a countdown to the next one; the week and reminders fold below.
 
 const H = 3600e3;
-const SLEEP = 23; // hour the day ends for "до сна"
 const PARTS = [
   { from: 23, to: 31, k: "night", label: "Ночь", icon: MoonStarIcon, bg: "linear-gradient(180deg,#1e1b4b,#312e81)", dot: "#a5b4fc" },
   { from: 7, to: 12, k: "morning", label: "Утро", icon: SunriseIcon, bg: "linear-gradient(180deg,#f59e0b,#fbbf24)", dot: "#fde68a" },
@@ -66,19 +67,29 @@ export default function DayTimeline() {
       }
       if (when != null && when >= start && when <= end) events.push({ t, when, time });
     }
+    // what I wrote down as done ("Что сделал") stands where it was written
+    for (const d of db.days) {
+      if (d._owner !== me || !d.extra?.length || !dates.has(d.date)) continue;
+      d.extra.forEach((x, k) => {
+        const a = exAt(x); if (!a) return;
+        const when = new Date(a).getTime();
+        if (when >= start && when <= end) events.push({ t: { id: "log:" + d.date + ":" + k, text: exText(x), done: true, log: true }, when, time: hm(when) });
+      });
+    }
     events.sort((a, b) => a.when - b.when);
     const rank = t => (t.due && t.due < td ? 0 : t.prio === "urgent" ? 1 : t.due === td ? 2 : inFocus(t) ? 3 : 4);
     untimed.sort((a, b) => rank(a) - rank(b));
     return { events, untimed };
-  }, [db.tasks, db.me, start, end, Math.floor(now / 60e3)]);
+  }, [db.tasks, db.days, db.me, start, end, Math.floor(now / 60e3)]);
 
   const next = events.find(e => !e.t.done && e.when >= now);
   const missed = events.filter(e => !e.t.done && e.when < now);
+  const logged = events.filter(e => e.t.log && iso(new Date(e.when)) === today()).length;
   const toggle = t => update("tasks", t.id, t.done ? { done: false, doneOn: "", doneBy: "", hidden: false } : { done: true, doneOn: today(), doneBy: db.me });
 
   return (
     <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <Hero now={now} next={next} missed={missed.length} left={events.filter(e => !e.t.done && e.when >= now).length} onTick={toggle} />
+      <Hero now={now} next={next} missed={missed.length} logged={logged} left={events.filter(e => !e.t.done && e.when >= now).length} onTick={toggle} />
       <Strip now={now} start={start} end={end} events={events} onTick={toggle} />
       <Ahead db={db} now={now} />
     </motion.section>
@@ -87,15 +98,13 @@ export default function DayTimeline() {
 
 /* ───────── top: where we are, what's next ───────── */
 
-function Hero({ now, next, missed, left, onTick }) {
-  const d = new Date(now), part = partAt(d.getHours()), Icon = part.icon;
-  const night = d.getHours() >= SLEEP || d.getHours() < 5;
-  const dayStart = new Date(d).setHours(7, 0, 0, 0), dayEnd = new Date(d).setHours(SLEEP, 0, 0, 0);
-  const progress = night ? 1 : Math.min(1, Math.max(0, (now - dayStart) / (dayEnd - dayStart)));
-  const toSleep = night ? 0 : dayEnd - now;
+function Hero({ now, next, missed, left, logged, onTick }) {
+  const h = new Date(now).getHours(), part = partAt(h), Icon = part.icon;
+  const mid = new Date(now); mid.setHours(24, 0, 0, 0);
+  const progress = (now - new Date(now).setHours(0, 0, 0, 0)) / (24 * H);
   return (
-    <div className="grid grid-cols-1 gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] md:items-center [&>*]:min-w-0">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b p-4">
+      <div className="flex min-w-56 flex-1 items-center gap-3">
         <motion.div className="grid size-12 shrink-0 place-items-center rounded-2xl text-white shadow-md" style={{ background: part.bg }}
           animate={{ rotate: [0, -6, 6, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}>
           <Icon className="size-6" />
@@ -108,17 +117,14 @@ function Hero({ now, next, missed, left, onTick }) {
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
             <motion.div className="h-full rounded-full" style={{ background: part.bg }} initial={{ width: 0 }} animate={{ width: progress * 100 + "%" }} transition={{ duration: 1.2, ease: "easeOut" }} />
           </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {toSleep > 0 ? <>до сна <b className="text-foreground">{span(toSleep)}</b> · день прошёл на {Math.round(progress * 100)}%</> : <>уже ночь, пора спать</>}
-          </div>
+          <div className="mt-1 text-xs text-muted-foreground">до конца суток <b className="text-foreground">{span(mid - now)}</b></div>
         </div>
       </div>
-
-      <NextUp next={next} onTick={onTick} />
-
-      <div className="flex gap-2 md:flex-col md:items-end">
-        <Pill tone={missed ? "bad" : "mute"} n={missed} label={plural(missed, ["пропущена", "пропущены", "пропущено"])} pulse={missed > 0} />
-        <Pill tone="mute" n={left} label="впереди" />
+      {next && <div className="min-w-64 flex-[1.4]"><NextUp next={next} onTick={onTick} /></div>}
+      <div className="flex flex-wrap gap-2">
+        {missed > 0 && <Pill tone="bad" n={missed} label={plural(missed, ["пропущена", "пропущены", "пропущено"])} pulse />}
+        {left > 0 && <Pill tone="mute" n={left} label="впереди" />}
+        {logged > 0 && <Pill tone="good" n={logged} label={"записано " + plural(logged, ["дело", "дела", "дел"])} />}
       </div>
     </div>
   );
@@ -127,7 +133,7 @@ function Hero({ now, next, missed, left, onTick }) {
 function Pill({ tone, n, label, pulse }) {
   return (
     <span className={cn("relative inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
-      tone === "bad" ? "border-destructive/40 bg-destructive/10 text-destructive" : "text-muted-foreground")}>
+      tone === "bad" ? "border-destructive/40 bg-destructive/10 text-destructive" : tone === "good" ? "border-good/40 bg-good/10 text-good" : "text-muted-foreground")}>
       {pulse && <span className="relative flex size-2"><span className="absolute inline-flex size-full animate-ping rounded-full bg-destructive/70" /><span className="relative inline-flex size-2 rounded-full bg-destructive" /></span>}
       <b className="tabular-nums">{n}</b> {label}
     </span>
@@ -137,11 +143,6 @@ function Pill({ tone, n, label, pulse }) {
 // the next timed task with a live countdown; the ring fills over the last 3 hours before it
 function NextUp({ next, onTick }) {
   const now = useNow(1000);
-  if (!next) return (
-    <div className="flex items-center gap-3 rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
-      <CalendarClockIcon className="size-5" />Задач со временем впереди нет. Поставь время задаче, и она встанет на таймлайн.
-    </div>
-  );
   const ms = next.when - now, soon = ms < H, ring = 1 - Math.min(1, ms / (3 * H));
   const s = Math.max(0, Math.floor(ms / 1000));
   const clock = soon ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : span(ms);
@@ -159,7 +160,7 @@ function NextUp({ next, onTick }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Дальше · {next.time}{iso(new Date(next.when)) !== today() ? " завтра" : ""}</div>
-        <div className="truncate text-[15px] font-semibold" title={next.t.text}>{next.t.text}</div>
+        <button type="button" onClick={() => openTask(next.t.id)} className="block max-w-full truncate text-left text-[15px] font-semibold hover:underline" title={next.t.text}>{next.t.text}</button>
         <div className={cn("text-xl font-bold tabular-nums", soon && "text-amber-500")}>через {clock}</div>
       </div>
       <button type="button" onClick={() => onTick(next.t)} title="Сделано" aria-label={"Отметить: " + next.t.text}
@@ -271,7 +272,7 @@ function Stars() {
 function Pin({ e, now, k, onTick }) {
   const done = e.t.done, missed = !done && e.when < now, soon = !done && !missed && e.when - now < H;
   const tone = done ? "border-good/50 bg-good/10" : missed ? "border-destructive/60 bg-destructive/10" : soon ? "border-amber-500/70 bg-amber-500/15" : "bg-card";
-  const hint = done ? "сделано" : missed ? span(now - e.when) + " назад" : "через " + span(e.when - now);
+  const hint = e.t.log ? "записал" : done ? "сделано" : missed ? span(now - e.when) + " назад" : "через " + span(e.when - now);
   return (
     <motion.div className="absolute" style={{ left: e.x, top: e.lane * LANE_H, width: PIN_W }}
       initial={{ opacity: 0, y: 8, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.15 + k * 0.04, type: "spring", stiffness: 300, damping: 22 }}>
@@ -280,12 +281,12 @@ function Pin({ e, now, k, onTick }) {
       <div style={{ marginLeft: -e.shift }} className={cn("relative -translate-x-3 flex h-[38px] items-center gap-1.5 rounded-lg border px-1.5 shadow-xs", tone)} title={e.t.text}>
         {soon && <motion.span className="absolute inset-0 rounded-lg border-2 border-amber-500" animate={{ opacity: [0.9, 0] , scale: [1, 1.08] }} transition={{ duration: 1.4, repeat: Infinity }} />}
         {missed && <motion.span className="absolute inset-0 rounded-lg border-2 border-destructive" animate={{ opacity: [0.8, 0] }} transition={{ duration: 1.2, repeat: Infinity }} />}
-        <button type="button" onClick={() => onTick(e.t)} aria-label={(done ? "Снять отметку: " : "Отметить: ") + e.t.text}
+        <button type="button" disabled={e.t.log} onClick={() => onTick(e.t)} aria-label={(done ? "Снять отметку: " : "Отметить: ") + e.t.text}
           className={cn("relative grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors", done ? "border-good bg-good text-white" : "border-muted-foreground/50 hover:border-good")}>
           {done && <CheckIcon className="size-3" strokeWidth={3} />}
         </button>
-        <div className="min-w-0 leading-tight">
-          <div className={cn("truncate text-[12px] font-semibold", done && "text-muted-foreground line-through")}>{e.t.text}</div>
+        <div className={cn("min-w-0 leading-tight", !e.t.log && "cursor-pointer")} onClick={() => !e.t.log && openTask(e.t.id)}>
+          <div className={cn("truncate text-[12px] font-semibold", done && !e.t.log && "text-muted-foreground line-through")}>{e.t.text}</div>
           <div className={cn("truncate text-[10px] whitespace-nowrap tabular-nums", missed ? "text-destructive" : soon ? "text-amber-500" : "text-muted-foreground")}>{e.time} · {hint}</div>
         </div>
       </div>

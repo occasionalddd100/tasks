@@ -158,7 +158,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
     <div {...(tapOpen ? swipe.handlers : {})}
       onClick={tapOpen ? e => { if (!e.target.closest("button,[role=checkbox],input,label,a")) setSheet(true); } : undefined}
       style={swipe.dx ? { transform: `translateX(${swipe.dx}px)` } : undefined}
-      className={cn("group/task relative flex items-start gap-1 rounded-md py-1.5 pr-1 transition-colors hover:bg-accent/50 data-[state=open]:bg-accent/70",
+      className={cn("group/task relative flex items-start gap-1 rounded-md py-1.5 pr-1 md:py-1 transition-colors hover:bg-accent/50 data-[state=open]:bg-accent/70",
         swipe.dx ? "bg-background" : "transition-transform", tapOpen && "touch-pan-y",
         urgent && "before:absolute before:top-2 before:bottom-2 before:-left-0.5 before:w-0.5 before:rounded-full before:bg-red-500")}>
       {grip ? (
@@ -166,13 +166,13 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
           className="mt-0.5 grid h-5 w-4 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground/50 opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100 active:cursor-grabbing max-md:opacity-50">
           <GripVerticalIcon className="size-3.5" />
         </button>
-      ) : <span className="w-4 shrink-0" />}
+      ) : null /* lists outside a board (journal, drafts) have no grip, so no gap for one */}
       {kids ? (
         <button type="button" onClick={kids.toggle} aria-expanded={!kids.collapsed} aria-label={kids.collapsed ? "Развернуть подзадачи" : "Свернуть подзадачи"}
           className="mt-0.5 grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-background hover:text-foreground">
           <ChevronRightIcon className={cn("size-3.5 transition-transform duration-200", !kids.collapsed && "rotate-90")} />
         </button>
-      ) : <span className="w-5 shrink-0" />}
+      ) : grip && !t.parent && <span className="w-5 shrink-0" />}
       <Checkbox className="mt-0.5" checked={!!t.done} onCheckedChange={v => toggle(!!v)} aria-label={t.text} disabled={overlay} />
       <div className="min-w-0 flex-1 pl-1.5">
         {editing === "text"

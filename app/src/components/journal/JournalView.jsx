@@ -15,9 +15,10 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import DayTimeline from "@/components/journal/DayTimeline";
 import { PillTab, PillTabs } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
-import { CaptureBar } from "@/components/tasks/QuickAdd";
-import { draftTasks } from "@/lib/personal";
-import { focusList } from "@/lib/focus";
+import DraftsCard from "@/components/tasks/Drafts";
+import { exText, exAt } from "@/lib/done";
+import { addDone, removeDone } from "@/lib/done";
+import { openTask } from "@/components/tasks/TaskSheet";
 import { ClipboardPasteIcon, PencilIcon, PlusIcon, XIcon, ListChecksIcon, CornerDownRightIcon, CalendarCheckIcon, NotebookPenIcon, BarChart3Icon, InboxIcon, CrosshairIcon } from "lucide-react";
 
 // how the day went: 5 moods, each with its colour; "Ужасный" is a stormy crimson that glows
@@ -62,7 +63,7 @@ export default function JournalView() {
 
   // done items: tasks, habits, old log, plus what I wrote down by hand for that day
   const info = date => ({
-    items: [...(items.get(date)?.items || []), ...(mine.get(date)?.extra || []).map(text => ({ text, from: "вручную" }))],
+    items: [...(items.get(date)?.items || []), ...(mine.get(date)?.extra || []).map(x => ({ text: exText(x), from: "вручную" }))],
     note: items.get(date)?.note || "", doc: mine.get(date),
   });
   const active = date => { const i = info(date); return i.items.length > 0 || !!i.doc?.mood || !!dayText(i.doc) || !!i.doc?.photos?.length; };
@@ -99,30 +100,25 @@ export default function JournalView() {
           {streak >= 2 && <Badge><FlameIcon className="size-3.5 text-orange-500" />подряд: <b>{streak}</b> {plural(streak, ["день", "дня", "дней"])}</Badge>}
           {deadline >= 0 && <Badge>до 31.10: <b>{deadline}</b> {plural(deadline, ["день", "дня", "дней"])}</Badge>}
         </div>
+        <QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} />
       </header>
       <PillTabs>{TABS.map(({ k, label, icon: Icon }) => <PillTab key={k} on={tab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>
 
       {tab === "day" && <>
       <DayTimeline />
-      {/* the working part: drafts to throw things into on the left, what's on today on the right */}
-      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start">
-        <DraftsCard />
+      {/* the day's tasks and habits on the left, drafts to sort on the right */}
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start">
         <div className="flex flex-col gap-5">
-          <FocusCard />
           <TodayPanel i={info(today())} onOpen={edit => pick(today(), edit)} />
+          <Habits habits={db.habits} />
         </div>
+        <DraftsCard />
       </div>
       </>}
 
-        {tab === "diary" && <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start">
-          <ThoughtsCard i={info(today())} />
-          <QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} />
-        </div>}
+        {tab === "diary" && <ThoughtsCard i={info(today())} />}
         {tab === "days" && <Heatmap info={info} sel={open?.date} onPick={pick} />}
-        {tab === "stats" && <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start">
-          <Stats info={info} items={items} mine={mine} streak={streak} />
-          <Habits habits={db.habits} />
-        </div>}
+        {tab === "stats" && <Stats info={info} items={items} mine={mine} streak={streak} />}
       <DayDialog open={open} setOpen={setOpen} info={info} burst={bursts.fire} />
       {bursts.layer}
     </div>
@@ -135,49 +131,6 @@ const TABS = [
   { k: "days", label: "Дни", icon: CalendarDaysIcon },
   { k: "stats", label: "Итоги", icon: BarChart3Icon },
 ];
-
-// "Черновики" of the personal project: a field to throw tasks in, and the list to sort out (tap a task → category)
-function DraftsCard() {
-  const db = useDb();
-  const list = draftTasks(db);
-  const [all, setAll] = useState(false);
-  return (
-    <section className="flex flex-col gap-3 rounded-2xl border bg-card p-4 shadow-sm">
-      <header className="flex items-center gap-2">
-        <InboxIcon className="size-5 text-primary" />
-        <h2 className="text-lg font-bold tracking-tight">Черновики</h2>
-        {list.length > 0 && <span className="text-sm text-muted-foreground tabular-nums">{list.length}</span>}
-        <a href="#personal" className="ml-auto text-sm text-muted-foreground underline-offset-2 hover:underline">Личное →</a>
-      </header>
-      <CaptureBar />
-      {list.length > 0 ? <>
-        <p className="text-xs text-muted-foreground">Нажми на задачу, чтобы поставить срок или перенести в категорию.<span className="max-md:hidden"> На компьютере: правая кнопка.</span></p>
-        <ul className="-mx-2">{(all ? list : list.slice(0, 6)).map(t => <li key={t.id}><TaskRow t={t} /></li>)}</ul>
-        {list.length > 6 && <button type="button" onClick={() => setAll(a => !a)} className="self-start text-sm text-muted-foreground hover:text-foreground">{all ? "Свернуть" : `Показать все (${list.length})`}</button>}
-      </> : <p className="text-sm text-muted-foreground">Пусто. Всё, что придёт в голову, кидай сюда и разбирай потом.</p>}
-    </section>
-  );
-}
-
-// the focus list in short, with a way into the full screen
-function FocusCard() {
-  const db = useDb();
-  const list = focusList(db).filter(t => !t.done);
-  return (
-    <section className="flex flex-col gap-2 rounded-2xl border bg-card p-4 shadow-sm">
-      <header className="flex items-center gap-2">
-        <CrosshairIcon className="size-5 text-primary" />
-        <h2 className="text-lg font-bold tracking-tight">Фокус</h2>
-        {list.length > 0 && <span className="text-sm text-muted-foreground tabular-nums">{list.length}</span>}
-        <a href="#focus" className="ml-auto text-sm text-muted-foreground underline-offset-2 hover:underline">Открыть →</a>
-      </header>
-      {list.length
-        ? <ul className="-mx-2">{list.slice(0, 5).map(t => <li key={t.id}><TaskRow t={t} /></li>)}</ul>
-        : <p className="text-sm text-muted-foreground">В фокусе пусто. Смахни задачу влево, и она окажется здесь.</p>}
-      {list.length > 5 && <a href="#focus" className="text-sm text-muted-foreground hover:text-foreground">и ещё {list.length - 5}</a>}
-    </section>
-  );
-}
 
 /* ───────────── year grid ───────────── */
 
@@ -455,8 +408,7 @@ function QuickDone({ extra, burst }) {
   const [flash, setFlash] = useState(null);
   const submit = e => {
     e.preventDefault(); const v = text.trim(); if (!v) return;
-    const date = today(), cur = getDb().days.find(d => d.id === dayId(date))?.extra || [];
-    put("days", dayId(date), { date, extra: [...cur, v] });
+    addDone(v);
     setText(""); setFlash(v); setTimeout(() => setFlash(f => f === v ? null : f), 2200);
     burst({ currentTarget: e.currentTarget.querySelector("button") }, ["#10b981", "#84cc16", "#38bdf8"]);
   };
@@ -486,16 +438,16 @@ function ExtraDone({ date, extra, save }) {
   const [text, setText] = useState("");
   const submit = e => {
     e.preventDefault(); const v = text.trim(); if (!v) return;
-    setText(""); save({ extra: [...(getDb().days.find(d => d.id === dayId(date))?.extra || []), v] });
+    setText(""); addDone(v, date);
   };
-  const del = k => save({ extra: extra.filter((_, i) => i !== k) });
+  const del = k => removeDone(date, k);
   return (
     <div>
       <p className="mb-2 text-sm font-medium text-muted-foreground">Что ещё сделал</p>
       {extra.length > 0 && (
         <ul className="mb-2 flex flex-wrap gap-1.5">
           <AnimatePresence initial={false}>
-            {extra.map((t, k) => (
+            {extra.map(exText).map((t, k) => (
               <motion.li key={t + k} layout initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.85 }}
                 className="group inline-flex max-w-full items-center gap-1.5 rounded-lg border border-good/40 bg-good/10 py-1 pr-1 pl-2 text-[13px]">
                 <CheckIcon className="size-3.5 shrink-0 text-good" />
@@ -517,90 +469,70 @@ function ExtraDone({ date, extra, save }) {
   );
 }
 
-// the day's tasks from projects: done that day, and still open (due that day, or overdue/urgent for today),
-// grouped by project, subtasks indented under their parent
+// the day's tasks: what's left first (due that day; for today also overdue and urgent), then what got done, folded.
+// Every row opens the task; the circle ticks it.
 function DayTasks({ date }) {
   const db = useDb();
   const now = today();
+  const [showDone, setShowDone] = useState(false);
   const data = useMemo(() => {
     const catOf = new Map(db.cats.map(c => [c.id, c])), boardOf = new Map(db.boards.map(b => [b.id, b])), projOf = new Map(db.projects.map(p => [p.id, p]));
     const byId = new Map(db.tasks.map(t => [t.id, t]));
     const mineDone = t => (t.doneBy || t._owner || db.me) === db.me;
     const mineOpen = t => t.assignee ? t.assignee === db.me : t._owner === db.me;
-    const done = db.tasks.filter(t => t.done && t.doneOn === date && mineDone(t));
-    const open = db.tasks.filter(t => !t.done && mineOpen(t) && byId.size && (
-      date === now ? (t.due && t.due <= now) || t.prio === "urgent" : t.due === date));
-    const pick = new Map([...done, ...open].map(t => [t.id, t]));
-    // parents of listed subtasks come along as context rows, so nesting stays visible
-    for (const t of [...pick.values()]) for (let p = byId.get(t.parent); p && !pick.has(p.id); p = byId.get(p.parent)) pick.set(p.id, { ...p, ctx: true });
-    const project = t => projOf.get(boardOf.get(catOf.get(t.cat)?.board)?.project);
-    const groups = new Map();
-    for (const t of pick.values()) {
-      const p = project(t), k = p?.id || "";
-      if (!groups.has(k)) groups.set(k, { name: p?.name || "Без проекта", id: k, list: [] });
-      groups.get(k).list.push(t);
-    }
-    // order inside a project: parents before kids, by board order
-    const tree = list => {
-      const ids = new Set(list.map(t => t.id)), kids = new Map(), roots = [];
-      for (const t of [...list].sort((a, b) => (a.order ?? 999) - (b.order ?? 999))) {
-        if (t.parent && ids.has(t.parent)) { if (!kids.has(t.parent)) kids.set(t.parent, []); kids.get(t.parent).push(t); } else roots.push(t);
-      }
-      const out = [], walk = (t, d) => { out.push({ t, d }); (kids.get(t.id) || []).forEach(k => walk(k, d + 1)); };
-      roots.forEach(t => walk(t, 0));
-      return out;
-    };
-    return { done: done.length, open: open.length, groups: [...groups.values()].map(g => ({ ...g, rows: tree(g.list) })) };
+    const where = t => { const p = projOf.get(boardOf.get(catOf.get(t.cat)?.board)?.project); return p?.personal ? "Личное" : p?.name || ""; };
+    const row = t => ({ t, where: where(t), parent: byId.get(t.parent)?.text || "" });
+    const rank = t => (t.due && t.due < now ? 0 : t.prio === "urgent" ? 1 : 2);
+    const open = db.tasks.filter(t => !t.done && !t.hidden && mineOpen(t) && (date === now ? (t.due && t.due <= now) || t.prio === "urgent" : t.due === date))
+      .sort((a, b) => rank(a) - rank(b) || (a.time || "99").localeCompare(b.time || "99")).map(row);
+    const done = db.tasks.filter(t => t.done && t.doneOn === date && mineDone(t)).map(row);
+    return { open, done };
   }, [db.tasks, db.cats, db.boards, db.projects, db.me, date]);
   const toggle = t => update("tasks", t.id, t.done ? { done: false, doneOn: "", doneBy: "", hidden: false } : { done: true, doneOn: today(), doneBy: db.me });
   const canTick = date === now;
+  const doneOpen = showDone || !data.open.length;
+
+  const Row = ({ t, where, parent }) => {
+    const late = !t.done && t.due && t.due < now;
+    const meta = [late ? "просрочено" : t.prio === "urgent" && !t.done ? "срочно" : "", t.time || "", where].filter(Boolean).join(" · ");
+    return (
+      <li className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60">
+        <button type="button" disabled={!canTick} onClick={() => toggle(t)} aria-label={(t.done ? "Снять отметку: " : "Отметить: ") + t.text}
+          className={cn("grid size-[18px] shrink-0 place-items-center rounded-full border-2 transition-colors disabled:cursor-default",
+            t.done ? "border-good bg-good text-white" : "border-muted-foreground/40 enabled:hover:border-good")}>
+          {t.done && <CheckIcon className="size-3" strokeWidth={3} />}
+        </button>
+        <button type="button" onClick={() => openTask(t.id)} className="flex min-w-0 flex-1 items-baseline gap-2 text-left">
+          <span className="min-w-0 flex-1 text-[14px] leading-snug">
+            {parent && <span className="text-muted-foreground">{parent} › </span>}
+            <span className={cn(t.done && "text-muted-foreground line-through decoration-muted-foreground/50")}>{t.text}</span>
+          </span>
+          {meta && <span className={cn("max-w-[40%] shrink-0 truncate text-xs", late ? "text-destructive" : "text-muted-foreground")}>{meta}</span>}
+        </button>
+      </li>
+    );
+  };
 
   return (
-    <div>
-      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-        Задачи
-        {data.done > 0 && <span className="rounded-full bg-good/15 px-2 py-0.5 text-xs font-semibold text-good tabular-nums">✓ {data.done}</span>}
-        {data.open > 0 && <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums">○ {data.open}</span>}
+    <div className="flex flex-col gap-1">
+      <p className="flex items-center gap-2 px-2 text-sm font-medium text-muted-foreground">
+        {date === now ? "На сегодня" : "Задачи"}
+        {data.open.length > 0 && <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums">{data.open.length}</span>}
       </p>
-      {!data.groups.length && <p className="text-sm text-muted-foreground/80">{date > now ? "На этот день задач нет." : "В этот день задач не было."}</p>}
-      <div className="flex flex-col gap-2">
-        {data.groups.map(g => (
-          <section key={g.id} className="overflow-hidden rounded-xl border bg-background">
-            <a href={g.id ? "#project=" + g.id : undefined} className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground">
-              <ListChecksIcon className="size-3.5" />{g.name}
-              <span className="ml-auto font-normal tabular-nums">{g.rows.filter(r => r.t.done && !r.t.ctx).length} / {g.rows.filter(r => !r.t.ctx).length}</span>
-            </a>
-            <ul className="py-1">
-              {g.rows.map(({ t, d }) => {
-                const late = !t.done && t.due && t.due < now;
-                if (t.ctx) return (
-                  <li key={t.id} className="flex items-center gap-2 py-1 pr-3 text-[13px] text-muted-foreground" style={{ paddingLeft: 12 + d * 22 }}>
-                    <CornerDownRightIcon className="size-3.5 shrink-0 -scale-x-100 rotate-180 opacity-60" /><span className="truncate">{t.text}</span>
-                  </li>
-                );
-                return (
-                  <li key={t.id} className="relative flex items-start gap-2 py-1 pr-3" style={{ paddingLeft: 12 + d * 22 }}>
-                    {d > 0 && <span aria-hidden className="absolute top-0 bottom-0 w-px bg-border" style={{ left: 12 + (d - 1) * 22 + 8 }} />}
-                    <button type="button" disabled={!canTick} onClick={() => toggle(t)} aria-label={(t.done ? "Снять отметку: " : "Отметить: ") + t.text}
-                      className={cn("mt-0.5 grid size-[18px] shrink-0 place-items-center rounded-full border-2 transition-colors disabled:cursor-default",
-                        t.done ? "border-good bg-good text-white" : "border-muted-foreground/40 enabled:hover:border-good")}>
-                      {t.done && <CheckIcon className="size-3" strokeWidth={3} />}
-                    </button>
-                    <div className="min-w-0 flex-1 text-[14px] leading-snug">
-                      <span className={cn(t.done && "text-muted-foreground line-through decoration-muted-foreground/50")}>{t.text}</span>
-                      {(t.due || t.prio) && !t.done && (
-                        <span className={cn("ml-2 text-xs", late ? "text-destructive" : "text-muted-foreground")}>
-                          {late ? "просрочено" : t.prio === "urgent" ? "срочно" : ""}{t.time ? " · " + t.time : ""}
-                        </span>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))}
-      </div>
+      {data.open.length > 0
+        ? <ul>{data.open.map(r => <Row key={r.t.id} {...r} />)}</ul>
+        : <p className="px-2 py-1 text-sm text-muted-foreground/80">{date > now ? "На этот день задач нет." : date === now ? "Всё срочное и на сегодня закрыто." : "Открытых задач на этот день не было."}</p>}
+      {data.done.length > 0 && <>
+        <button type="button" onClick={() => setShowDone(v => !v)} className="mt-2 flex items-center gap-2 self-start rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <span className="rounded-full bg-good/15 px-2 py-0.5 text-xs font-semibold text-good tabular-nums">✓ {data.done.length}</span>
+          сделано <ChevronRightIcon className={cn("size-3.5 transition-transform", doneOpen && "rotate-90")} />
+        </button>
+        <AnimatePresence initial={false}>
+          {doneOpen && <motion.ul initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            {data.done.map(r => <Row key={r.t.id} {...r} />)}
+          </motion.ul>}
+        </AnimatePresence>
+      </>}
     </div>
   );
 }
@@ -641,7 +573,7 @@ function DayDialog({ open, setOpen, info, burst }) {
   const isToday = date === today();
   return (
     <Dialog open={!!open} onOpenChange={o => !o && setOpen(null)}>
-      <DialogContent className="max-h-[92vh] max-h-[92dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-x-hidden overflow-y-auto p-0 sm:max-w-2xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[env(safe-area-inset-bottom)]">
+      <DialogContent className="max-h-[92vh] max-h-[92dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-x-hidden overflow-y-auto p-0 sm:max-w-2xl lg:max-w-5xl xl:max-w-6xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[env(safe-area-inset-bottom)]">
         {date && <>
           <motion.div aria-hidden className="sticky top-0 z-10 h-1" animate={{ backgroundColor: mood?.color || "transparent" }} />
           <div className="flex items-center gap-1 border-b px-3 py-2.5 pr-12">
@@ -663,12 +595,60 @@ function DayDialog({ open, setOpen, info, burst }) {
   );
 }
 
+// a simple 24-hour line of the day: thoughts, what I wrote down as done, and tasks with a time
+const PART = h => (h < 6 || h >= 23 ? "#312e81" : h < 12 ? "#f59e0b" : h < 18 ? "#0ea5e9" : "#9333ea");
+function DayLine({ date, doc }) {
+  const db = useDb();
+  const marks = useMemo(() => {
+    const out = [], minutes = iso => { const d = new Date(iso); return d.getHours() * 60 + d.getMinutes(); };
+    for (const t of doc?.thoughts || []) if (t.at) out.push({ m: minutes(t.at), text: t.text, kind: "thought" });
+    for (const x of doc?.extra || []) if (exAt(x)) out.push({ m: minutes(exAt(x)), text: exText(x), kind: "done" });
+    for (const t of db.tasks) if (t.due === date && t.time && (t.assignee ? t.assignee === db.me : t._owner === db.me)) {
+      const [h, mm] = t.time.split(":").map(Number); out.push({ m: h * 60 + mm, text: t.text, kind: t.done ? "done" : "task", id: t.id });
+    }
+    return out.sort((a, b) => a.m - b.m);
+  }, [doc, db.tasks, date]);
+  const [tip, setTip] = useState(null);
+  if (!marks.length) return null;
+  const hm = m => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  const color = { thought: "bg-sky-400", done: "bg-good", task: "bg-amber-400" };
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="relative h-9 overflow-visible rounded-lg">
+        <div className="absolute inset-x-0 top-3 flex h-3 overflow-hidden rounded-full opacity-60">
+          {Array.from({ length: 24 }, (_, h) => <span key={h} className="h-full flex-1" style={{ background: PART(h) }} />)}
+        </div>
+        {marks.map((x, k) => (
+          <button key={k} type="button" onMouseEnter={() => setTip(k)} onMouseLeave={() => setTip(null)} onClick={() => (x.id ? openTask(x.id) : setTip(tip === k ? null : k))}
+            className={cn("absolute top-1.5 size-4 -translate-x-1/2 rounded-full ring-2 ring-background transition-transform hover:scale-125", color[x.kind])}
+            style={{ left: (x.m / 1440) * 100 + "%" }} aria-label={hm(x.m) + " " + x.text} />
+        ))}
+        {tip != null && marks[tip] && (
+          <div className="pointer-events-none absolute top-8 z-10 max-w-64 -translate-x-1/2 rounded-lg border bg-popover px-2.5 py-1.5 text-xs shadow-lg"
+            style={{ left: `clamp(8rem, ${(marks[tip].m / 1440) * 100}%, calc(100% - 8rem))` }}>
+            <b className="tabular-nums">{hm(marks[tip].m)}</b> {marks[tip].text}
+          </div>
+        )}
+      </div>
+      <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">{["00", "06", "12", "18", "24"].map(h => <span key={h}>{h}</span>)}</div>
+      <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-sky-400" />мысли</span>
+        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-good" />сделано</span>
+        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-amber-400" />задачи со временем</span>
+      </div>
+    </div>
+  );
+}
+
 function DayRead({ date, i, onEdit }) {
   const mood = moodOf(i.doc?.mood), marks = MARKS.filter(m => i.doc?.marks?.includes(m.k)), photos = i.doc?.photos || [];
   const [lb, setLb] = useState(null);
   const empty = !mood && !marks.length && !dayText(i.doc) && !photos.length;
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
+    <DayLine date={date} doc={i.doc} />
+    <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start">
+    <div className="flex min-w-0 flex-col gap-4">
       {photos.length > 0 && (
         <div className={cn("grid gap-2", photos.length === 1 ? "grid-cols-1" : "grid-cols-3")}>
           {photos.slice(0, 4).map((p, k) => (
@@ -692,8 +672,12 @@ function DayRead({ date, i, onEdit }) {
           <SparklesIcon className="size-5" />{date === today() ? "Написать о сегодня" : "Этот день пока без записи. Добавить?"}
         </button>
       )}
+    </div>
+    <div className="flex min-w-0 flex-col gap-4">
       <DayTasks date={date} />
       <DoneList items={i.items.filter(it => it.from !== "из задач")} note={i.note} future={date > today()} title="Ещё сделано" hideEmpty />
+    </div>
+    </div>
       <Lightbox photos={photos} index={lb} setIndex={setLb} />
     </div>
   );

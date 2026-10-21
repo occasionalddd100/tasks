@@ -15,6 +15,7 @@ import { confirmAction } from "@/components/Confirm";
 import { ActionsContext, ActionsDropdown } from "@/components/ui/actions";
 import { motion } from "motion/react";
 import Board from "@/components/tasks/Board";
+import DraftsCard from "@/components/tasks/Drafts";
 
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
@@ -86,6 +87,8 @@ export function ProjectView({ id, fresh, go }) {
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{scope.length ? `${done} из ${scope.length}` : "задач пока нет"}</span>
       </div>
 
+      {project.personal && isMine(project) && <DraftsCard link={false} wide />}
+
       <PillTabs>
         {tabs.map(b => b.id === board?.id && renaming
           ? <TabRename key={b.id} value={b.name} onDone={n => { setRenaming(false); if (n && n !== b.name) update("boards", b.id, { name: n }); }} />
@@ -99,7 +102,7 @@ export function ProjectView({ id, fresh, go }) {
         <button type="button" onClick={addTab} className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Новая вкладка" title="Новая вкладка"><PlusIcon className="size-4" /></button>
       </PillTabs>
 
-      {board ? <Board key={board.id} board={board} /> : <p className="text-sm text-muted-foreground">Вкладок пока нет. Создай первую кнопкой «+».</p>}
+      {board ? <Board key={board.id} board={board} hideDrafts={project.personal} /> : <p className="text-sm text-muted-foreground">Вкладок пока нет. Создай первую кнопкой «+».</p>}
       <ShareDialog open={sharing} onOpenChange={setSharing} coll="projects" target={id} name={project.name} isOwner={isMine(project)} />
     </div>
   );

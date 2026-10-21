@@ -1,11 +1,12 @@
 import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { freshReload } from "@/lib/reload";
-import { BookOpenIcon, CrosshairIcon, InboxIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, CrosshairIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { ActionsContext } from "@/components/ui/actions";
 import { ConfirmHost } from "@/components/Confirm";
 import { IconPickerHost } from "@/components/IconPicker";
 import MobileNav from "@/components/MobileNav";
@@ -22,6 +23,7 @@ import FocusView from "@/components/tasks/FocusView";
 import { focusOpen } from "@/lib/focus";
 import JournalView from "@/components/journal/JournalView";
 import { QuickAddHost, openQuickAdd } from "@/components/tasks/QuickAdd";
+import { TaskSheetHost } from "@/components/tasks/TaskSheet";
 import { ensurePersonal, personalOf, draftTasks } from "@/lib/personal";
 
 const NoteView = lazy(() => import("@/components/notes/NoteView").catch(e => {
@@ -113,6 +115,7 @@ export default function Shell() {
         <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b bg-background/90 px-2 md:hidden" style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
           <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}><MenuIcon /></Button>
           <span className="truncate text-sm font-medium">{title}</span>
+          {db.pending > 0 && <span className="ml-auto mr-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400" title="Сохранится, когда появится интернет">не отправлено: {db.pending}</span>}
         </div>
         {db.error && <p className="m-4 rounded-md border border-destructive/40 p-3 text-sm text-destructive">Нет связи с базой: {db.error}. Обнови страницу.</p>}
         <motion.div key={view.note || project || stash || (focus ? "focus" : "journal")} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
@@ -125,10 +128,11 @@ export default function Shell() {
             : <JournalView />}
         </motion.div>
       </main>
-      <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onJournal={() => go({ journal: true })} onAdd={openQuickAdd} journal={journal}
+      <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onJournal={() => go({ journal: true })} onAdd={m => m && openQuickAdd(m)} journal={journal}
         personal={{ onClick: () => go({ personal: true }), active: personal, badge: draftTasks(db).length }}
         focus={{ onClick: () => go({ focus: true }), active: focus, badge: focusOpen(db) }} />
       <QuickAddHost onOpenDrafts={() => go({ personal: true })} />
+      <TaskSheetHost />
       <ConfirmHost />
       <SettingsHost />
       <IconPickerHost />
@@ -184,6 +188,15 @@ function Sidebar({ view, go, email, search }) {
             className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/50" />
         </div>
       )}
+      <ActionsContext items={[
+        { title: "Создать" },
+        { label: "Проект с задачами", icon: ListChecksIcon, onSelect: () => create("project") },
+        { label: "Заметку", icon: FileTextIcon, onSelect: () => create("note") },
+        { label: "Стэш", icon: LayoutGridIcon, onSelect: () => create("stash") },
+        { label: "Папку", icon: FolderPlusIcon, onSelect: () => create("folder") },
+        { sep: true },
+        { label: "Задачу в черновики", icon: InboxIcon, hint: "N", onSelect: () => setTimeout(openQuickAdd) },
+      ]}>
       <nav className={cn("min-h-0 flex-1 overflow-y-auto pb-4 transition-colors", dropping && "bg-accent/60 ring-2 ring-ring/40 ring-inset")} aria-label="Проекты и заметки"
         onDragOver={e => { if ([...e.dataTransfer.types].includes("Files")) { e.preventDefault(); setDropping(true); } }}
         onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDropping(false); }}
@@ -191,6 +204,8 @@ function Sidebar({ view, go, email, search }) {
         <NotesTree view={view} go={go} query={searching ? query.trim() : ""} />
         {dropping && <p className="px-4 py-2 text-sm text-muted-foreground">Отпусти, чтобы импортировать .md</p>}
       </nav>
+      </ActionsContext>
+      {db.pending > 0 && <div className="mx-2 mb-2 rounded-md bg-amber-500/15 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400">Нет сети: {db.pending} {db.pending === 1 ? "изменение ждёт" : "изменений ждут"} отправки</div>}
       <div className="flex items-center gap-1 border-t p-2 text-sm">
         <button type="button" onClick={() => setProfile(true)} title="Профиль: имя и аватарка"
           className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-accent">

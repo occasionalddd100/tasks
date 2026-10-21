@@ -34,21 +34,86 @@ const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 const strip = ({ id, _owner, ...data }) => data;
 
 async function loadAll() {
-  const [{ data, error }, g] = await Promise.all([
-    sb.from("docs").select("coll,id,data,owner"),
-    sb.from("grants").select("coll,target,user_id,owner"),
-  ]);
-  if (error) throw error;
+  let data, grants;
+  try {
+    const [r, g] = await Promise.all([
+      sb.from("docs").select("coll,id,data,owner"),
+      sb.from("grants").select("coll,target,user_id,owner"),
+    ]);
+    if (r.error) throw r.error;
+    data = r.data; grants = g.data || [];
+    store.set(SNAP, JSON.stringify({ me: state.me, data, grants }));
+  } catch (e) {
+    // no network: open with the last copy this device saw, edits queue up until it's back
+    const snap = JSON.parse(store.get(SNAP) || "null");
+    if (!isNet(e) || !snap || snap.me !== state.me) throw e;
+    data = snap.data; grants = snap.grants; setState({ offline: true });
+  }
   for (const c of COLLS) cache[c].clear();
   for (const r of data) cache[r.coll]?.set(r.id, val(r));
-  state = { ...state, grants: g.data || [] };
+  replay();
+  state = { ...state, grants };
   emit(...COLLS);
+}
+
+/* ───── offline: writes that can't reach the server wait in a queue on this device ───── */
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const SNAP = "tasks.snap", OUT = "tasks.outbox";
+let outbox = JSON.parse(store.get(OUT) || "[]");
+const saveOut = () => { store.set(OUT, JSON.stringify(outbox)); setState({ pending: outbox.length }); };
+const isNet = e => (typeof navigator !== "undefined" && !navigator.onLine) || e instanceof TypeError || /fetch|network|load failed|timeout/i.test(e?.message || "");
+// pending edits on top of freshly loaded data, so a reload doesn't undo them
+function replay() {
+  for (const op of outbox) {
+    if (op.t === "ins") for (const r of op.rows) cache[r.coll]?.set(r.id, { ...(cache[r.coll].get(r.id) || {}), ...r.data, id: r.id, _owner: state.me });
+    if (op.t === "merge") { const o = cache[op.coll]?.get(op.id); if (o) cache[op.coll].set(op.id, { ...o, ...op.f }); }
+    if (op.t === "del") op.ids.forEach(id => cache[op.coll]?.delete(id));
+  }
+}
+async function send(op) {
+  if (op.t === "ins") for (let i = 0; i < op.rows.length; i += 500) {
+    const r = await sb.from("docs").insert(op.rows.slice(i, i + 500));
+    if (r.error?.code === "23505") { for (const x of op.rows.slice(i, i + 500)) chk(await sb.rpc("merge_doc", { c: x.coll, i: x.id, f: x.data })); }
+    else chk(r);
+  }
+  if (op.t === "merge") chk(await sb.rpc("merge_doc", { c: op.coll, i: op.id, f: op.f }));
+  if (op.t === "del") chk(await sb.from("docs").delete().eq("coll", op.coll).in("id", op.ids));
+}
+let flushing = false;
+export async function flush() {
+  if (flushing || !outbox.length) return;
+  flushing = true;
+  try {
+    while (outbox.length) {
+      try { await send(outbox[0]); }
+      catch (e) { if (isNet(e)) break; fail("Не сохранилось", e); }
+      outbox.shift(); saveOut();
+    }
+    if (!outbox.length && state.offline) setState({ offline: false });
+  } finally { flushing = false; }
+}
+// runs a write now, or queues it when there's no network (or earlier writes still wait, to keep their order)
+async function write(op, undo, msg = "Не сохранилось") {
+  if (outbox.length) { outbox.push(op); saveOut(); flush(); return true; }
+  try { await send(op); return true; }
+  catch (e) {
+    if (isNet(e)) { outbox.push(op); saveOut(); onOffline(); return true; }
+    undo(); fail(msg, e); return false;
+  }
+}
+let warned = 0;
+const onOffline = () => { if (Date.now() - warned > 60e3) { warned = Date.now(); onNotice("Нет сети. Всё сохранится, когда интернет появится."); } };
+let onNotice = () => {};
+export const setNoticeHandler = f => { onNotice = f; };
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => flush());
+  setInterval(() => outbox.length && navigator.onLine && flush(), 30e3);
 }
 
 let channel = null;
 export async function start(user) {
   setState({ me: user.id, email: user.email || "" });
-  try { await loadAll(); setState({ ready: true }); }
+  try { await loadAll(); setState({ ready: true, pending: outbox.length }); flush(); }
   catch (e) { setState({ ready: true, error: e.message || String(e) }); }
   channel?.unsubscribe();
   channel = sb.channel("docs")
@@ -72,9 +137,8 @@ const fail = (msg, e) => { onError(msg + ": " + (e?.message || e)); };
 export async function add(coll, data) {
   const id = rid();
   cache[coll].set(id, { ...data, id, _owner: state.me }); emit(coll);
-  try { chk(await sb.from("docs").insert({ coll, id, data: strip(data) })); }
-  catch (e) { cache[coll].delete(id); emit(coll); fail("Не сохранилось", e); return null; }
-  return id;
+  const ok = await write({ t: "ins", rows: [{ coll, id, data: strip(data) }] }, () => { cache[coll].delete(id); emit(coll); });
+  return ok ? id : null;
 }
 
 // many new docs in one request (a scanned folder can bring hundreds)
@@ -83,21 +147,16 @@ export async function addMany(coll, list) {
   const rows = list.map(data => ({ coll, id: rid(), data }));
   for (const r of rows) cache[coll].set(r.id, { ...r.data, id: r.id, _owner: state.me });
   emit(coll);
-  try { for (let i = 0; i < rows.length; i += 500) chk(await sb.from("docs").insert(rows.slice(i, i + 500))); }
-  catch (e) { rows.forEach(r => cache[coll].delete(r.id)); emit(coll); fail("Не сохранилось", e); return []; }
-  return rows.map(r => r.id);
+  const ok = await write({ t: "ins", rows }, () => { rows.forEach(r => cache[coll].delete(r.id)); emit(coll); });
+  return ok ? rows.map(r => r.id) : [];
 }
 
 // a doc with a known id (journal day = "<me>:<date>"): merge into it, or create it on first write
 export async function put(coll, id, fields) {
   if (cache[coll].has(id)) return updateMany(coll, [[id, fields]]);
   cache[coll].set(id, { ...fields, id, _owner: state.me }); emit(coll);
-  try { chk(await sb.from("docs").insert({ coll, id, data: fields })); }
-  catch (e) {
-    // created meanwhile on another device: merge instead
-    if (e.code === "23505") { try { chk(await sb.rpc("merge_doc", { c: coll, i: id, f: fields })); return; } catch (e2) { e = e2; } }
-    cache[coll].delete(id); emit(coll); fail("Не сохранилось", e);
-  }
+  // created meanwhile on another device: send() merges on a duplicate id
+  await write({ t: "ins", rows: [{ coll, id, data: fields }] }, () => { cache[coll].delete(id); emit(coll); });
 }
 
 export async function update(coll, id, fields) {
@@ -110,21 +169,17 @@ export async function updateMany(coll, list) {
   const before = list.map(([id]) => [id, cache[coll].get(id)]);
   for (const [id, f] of list) { const o = cache[coll].get(id); if (o) cache[coll].set(id, { ...o, ...f }); }
   emit(coll);
-  try {
-    const rs = await Promise.all(list.map(([id, f]) => sb.rpc("merge_doc", { c: coll, i: id, f })));
-    rs.forEach(chk);
-  } catch (e) {
-    for (const [id, o] of before) if (o) cache[coll].set(id, o);
-    emit(coll); fail("Не сохранилось", e);
-  }
+  const undo = () => { for (const [id, o] of before) if (o) cache[coll].set(id, o); emit(coll); };
+  if (outbox.length) { for (const [id, f] of list) await write({ t: "merge", coll, id, f }, undo); return; }
+  // parallel when online; whatever fails for lack of network goes to the queue one by one
+  await Promise.all(list.map(([id, f]) => write({ t: "merge", coll, id, f }, undo)));
 }
 
 export async function remove(coll, ids) {
   ids = [].concat(ids);
   const before = ids.map(id => [id, cache[coll].get(id)]);
   ids.forEach(id => cache[coll].delete(id)); emit(coll);
-  try { chk(await sb.from("docs").delete().eq("coll", coll).in("id", ids)); }
-  catch (e) { for (const [id, o] of before) if (o) cache[coll].set(id, o); emit(coll); fail("Не удалилось", e); }
+  await write({ t: "del", coll, ids }, () => { for (const [id, o] of before) if (o) cache[coll].set(id, o); emit(coll); }, "Не удалилось");
 }
 
 export async function rpc(name, args) { return chk(await sb.rpc(name, args)).data; }

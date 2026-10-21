@@ -5,7 +5,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRightLeftIcon, CalendarIcon, CheckCheckIcon, ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GripVerticalIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { ArrowRightLeftIcon, CalendarIcon, CheckCheckIcon, ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon, GripVerticalIcon, MoreHorizontalIcon, PaletteIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useDb, getDb, add, update, updateMany, remove } from "@/lib/db";
 import { byOrder, nextOrder, stale, inWeek, fmtDate } from "@/lib/tasks";
@@ -18,6 +18,7 @@ import TaskRow, { descendantsOf, People } from "@/components/tasks/TaskRow";
 import { usePeople } from "@/lib/people";
 import { ActionsContext, ActionsDropdown } from "@/components/ui/actions";
 import InlineInput from "@/components/InlineInput";
+import { PASTELS, tint } from "@/lib/colors";
 
 const T = "t:", C = "c:", D = "d:";
 // subtasks by parent id, and ids that should fade in (created after the board opened)
@@ -36,9 +37,9 @@ function collision(args) {
   return hits.length ? hits : closestCorners(a);
 }
 
-export default function Board({ board }) {
+export default function Board({ board, hideDrafts }) {
   const db = useDb();
-  const cats = useMemo(() => db.cats.filter(c => c.board === board.id).sort(byOrder), [db.cats, board.id]);
+  const cats = useMemo(() => db.cats.filter(c => c.board === board.id && !(hideDrafts && c.drafts)).sort(byOrder), [db.cats, board.id, hideDrafts]);
   const catSet = useMemo(() => new Set(cats.map(c => c.id)), [cats]);
   const all = useMemo(() => db.tasks.filter(t => catSet.has(t.cat) && !stale(t)), [db.tasks, catSet]);
   const archive = useMemo(() => db.tasks.filter(t => catSet.has(t.cat) && stale(t)).sort((a, b) => (b.doneOn || "").localeCompare(a.doneOn || "") || byOrder(a, b)), [db.tasks, catSet]);
@@ -135,10 +136,8 @@ export default function Board({ board }) {
     <div className="flex flex-col gap-4">
       <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
         <SortableContext items={catList.map(c => C + c.id)} strategy={rectSortingStrategy}>
-          <Masonry>
-            {week.length > 0 && <WeekCard tasks={week} />}
-            {catList.map(c => <CatCard key={c.id} cat={c} ids={shown[c.id] || []} taskById={taskById} />)}
-          </Masonry>
+          {week.length > 0 && <WeekCard tasks={week} />}
+          <Columns>{catList.map(c => <CatCard key={c.id} cat={c} ids={shown[c.id] || []} taskById={taskById} />)}</Columns>
         </SortableContext>
         <DragOverlay dropAnimation={null}>
           {activeTask && <div className="rounded-md border bg-card shadow-lg"><TaskRow t={activeTask} overlay /></div>}
@@ -154,28 +153,34 @@ export default function Board({ board }) {
   );
 }
 
-// two-column masonry: each card spans as many 4px rows as its height needs
-function Masonry({ children }) {
-  return <div className="grid grid-cols-1 items-start gap-x-4 [grid-auto-rows:4px] md:grid-cols-2 xl:grid-cols-3">{children}</div>;
-}
-function useSpan() {
-  const ref = useRef(null);
+// cards dealt left to right into 1–3 columns; each column is a plain stack, so a card folding
+// moves only the cards below it, smoothly, instead of reshuffling the whole grid
+const COLS = ["(min-width: 1280px)", "(min-width: 768px)"];
+function useCols() {
+  const get = () => (typeof window === "undefined" ? 1 : matchMedia(COLS[0]).matches ? 3 : matchMedia(COLS[1]).matches ? 2 : 1);
+  const [n, setN] = useState(get);
   useLayoutEffect(() => {
-    const el = ref.current; if (!el) return;
-    const set = () => { el.style.gridRowEnd = "span " + Math.ceil((el.firstElementChild.getBoundingClientRect().height + 16) / 4); };
-    set();
-    const ro = new ResizeObserver(set); ro.observe(el.firstElementChild);
-    return () => ro.disconnect();
+    const qs = COLS.map(q => matchMedia(q)), on = () => setN(get());
+    qs.forEach(q => q.addEventListener("change", on));
+    return () => qs.forEach(q => q.removeEventListener("change", on));
   }, []);
-  return ref;
+  return n;
+}
+function Columns({ children }) {
+  const n = useCols(), list = [].concat(children).filter(Boolean);
+  const cols = Array.from({ length: n }, (_, i) => list.filter((_, j) => j % n === i));
+  return (
+    <div className="grid items-start gap-4" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
+      {cols.map((c, i) => <div key={i} className="flex min-w-0 flex-col gap-4">{c}</div>)}
+    </div>
+  );
 }
 
 function WeekCard({ tasks }) {
-  const span = useSpan();
   const [folded, setFolded] = useState(() => { try { return localStorage.getItem("weekFold") === "1"; } catch { return false; } });
   const toggle = () => { setFolded(f => { try { localStorage.setItem("weekFold", f ? "0" : "1"); } catch {} return !f; }); };
   return (
-    <div ref={span} className="md:col-span-2">
+    <div>
       <section className="rounded-xl border bg-card shadow-xs">
         <header className="flex items-center gap-1.5 px-3 pt-3 pb-1">
           <FoldBtn folded={folded} onClick={toggle} />
@@ -230,7 +235,6 @@ function DoneCard({ tasks, cats }) {
 }
 
 function CatCard({ cat, ids, taskById }) {
-  const span = useSpan();
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: C + cat.id });
   const { setNodeRef: dropRef } = useDroppable({ id: D + cat.id });
   const [renaming, setRenaming] = useState(false);
@@ -251,6 +255,7 @@ function CatCard({ cat, ids, taskById }) {
     remove("cats", cat.id);
   };
   const toggle = () => update("cats", cat.id, { collapsed: !cat.collapsed });
+  const addHere = () => { if (cat.collapsed) toggle(); setTimeout(() => input.current?.focus(), 250); };
   const db = useDb();
   // move to another tab: its tasks follow, since they point at the category
   const moveTo = b => { update("cats", cat.id, { board: b.id, order: nextOrder(db.cats.filter(c => c.board === b.id)) }); toast(`«${cat.name}» перенесена во вкладку «${b.name}»`); };
@@ -261,21 +266,25 @@ function CatCard({ cat, ids, taskById }) {
   const move = own.length || others.length ? { label: "Перенести во вкладку", icon: ArrowRightLeftIcon, sub: [...own, ...(others.length ? [own.length && { sep: true }, { title: "Другие проекты" }, ...others] : [])] } : null;
   const allFolded = parents.length && parents.every(t => t.collapsed);
   const items = [
-    { label: "Добавить задачу", icon: PlusIcon, onSelect: () => { if (cat.collapsed) toggle(); setTimeout(() => input.current?.focus(), 250); } },
+    { label: "Добавить задачу", icon: PlusIcon, onSelect: addHere },
     { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setRenaming(true)) },
     { label: cat.collapsed ? "Развернуть" : "Свернуть", icon: ChevronDownIcon, onSelect: toggle },
     parents.length > 0 && { label: allFolded ? "Раскрыть все подзадачи" : "Свернуть все подзадачи", icon: allFolded ? ChevronsUpDownIcon : ChevronsDownUpIcon,
       onSelect: () => updateMany("tasks", parents.map(t => [t.id, { collapsed: !allFolded }])) },
+    { label: "Цвет", icon: PaletteIcon, sub: [
+      ...PASTELS.map(p => ({ label: p.name, active: cat.color === p.k, icon: ({ className }) => <span className={cn("size-3.5 rounded-full", className)} style={{ background: p.c }} />, onSelect: () => update("cats", cat.id, { color: p.k }) })),
+      { sep: true }, { label: "Без цвета", disabled: !cat.color, onSelect: () => update("cats", cat.id, { color: "" }) },
+    ] },
     !cat.drafts && move,
     !cat.drafts && { sep: true },
     !cat.drafts && { label: "Удалить категорию", icon: Trash2Icon, variant: "destructive", onSelect: del },
   ];
 
   return (
-    <div ref={el => { span.current = el; setNodeRef(el); }} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && "z-10 opacity-40")}>
-      <section className={cn("group/cat rounded-xl border bg-card shadow-xs", cat.drafts && "border-dashed border-primary/40")}>
+    <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && "z-10 opacity-40")}>
+      <section style={tint(cat.color)} className={cn("group/cat rounded-xl border bg-card shadow-xs transition-colors", cat.drafts && "border-dashed border-primary/40")}>
         <ActionsContext items={items}>
-          <header className="flex items-center gap-1 rounded-t-xl px-2 pt-2.5 pb-1">
+          <header className="flex items-center gap-1 rounded-t-xl px-2 pt-2 pb-1">
             <button ref={setActivatorNodeRef} {...attributes} {...listeners} aria-label={"Перетащить категорию " + cat.name}
               className="grid h-7 w-5 shrink-0 cursor-grab touch-none place-items-center rounded text-muted-foreground/60 hover:text-foreground active:cursor-grabbing">
               <GripVerticalIcon className="size-4" />
@@ -284,11 +293,15 @@ function CatCard({ cat, ids, taskById }) {
             {renaming
               ? <InlineInput value={cat.name} onDone={name => { setRenaming(false); if (name && name !== cat.name) update("cats", cat.id, { name }); }} className="h-7 text-[15px] font-semibold" />
               : <h2 className="min-w-0 cursor-text truncate text-[15px] font-semibold" onClick={() => setRenaming(true)} title="Переименовать">{cat.name}</h2>}
-            <span className="text-[13px] text-muted-foreground tabular-nums">{tasks.length ? `${tasks.filter(t => t.done).length} / ${tasks.length}` : ""}</span>
+            {tasks.length > 0 && <span title={`${tasks.filter(t => t.done).length} из ${tasks.length} сделано`}
+              className="shrink-0 rounded-full bg-foreground/[.06] px-2 py-px text-xs font-medium text-muted-foreground tabular-nums">{tasks.filter(t => !t.done).length || "✓"}</span>}
             {cat.drafts && tasks.some(t => !t.done) && <span className="truncate text-xs text-muted-foreground max-sm:hidden">разбери по категориям</span>}
-            <ActionsDropdown align="end" items={items} trigger={
-              <Button variant="ghost" size="iconSm" className="ml-auto text-muted-foreground opacity-60 md:hidden" aria-label="Действия с категорией"><MoreHorizontalIcon className="size-3.5" /></Button>
-            } />
+            <div className="ml-auto flex shrink-0 items-center">
+              <Button variant="ghost" size="iconSm" className="text-muted-foreground md:opacity-0 md:group-hover/cat:opacity-100 md:focus-visible:opacity-100" aria-label={"Добавить задачу в " + cat.name} onClick={addHere}><PlusIcon className="size-4" /></Button>
+              <ActionsDropdown align="end" items={items} trigger={
+                <Button variant="ghost" size="iconSm" className="text-muted-foreground md:opacity-0 md:group-hover/cat:opacity-100 md:focus-visible:opacity-100 data-[state=open]:opacity-100" aria-label="Действия с категорией"><MoreHorizontalIcon className="size-4" /></Button>
+              } />
+            </div>
           </header>
         </ActionsContext>
         <AnimatePresence initial={false}>
@@ -368,7 +381,7 @@ function SubList({ parent, kids, adding, setAdding }) {
       </DndContext>
       {adding && (
         <li>
-          <form onSubmit={submit} className="py-1 pl-11">
+          <form onSubmit={submit} className="py-1 pl-5">
             <Input autoFocus value={text} onChange={e => setText(e.target.value)} placeholder="Подзадача, Enter — ещё одна"
               onKeyDown={e => e.key === "Escape" && (setText(""), setAdding(false))} onBlur={() => !text.trim() && setAdding(false)}
               className="h-7 border-dashed bg-transparent text-sm shadow-none" aria-label={"Новая подзадача к " + parent.text} />

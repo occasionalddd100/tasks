@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
-import { sb, start, stop, setErrorHandler, subscribe } from "@/lib/db";
+import { sb, start, stop, setErrorHandler, setNoticeHandler, subscribe } from "@/lib/db";
 import { startNative, isApp } from "@/lib/native";
 import { webReminders } from "@/lib/reminders";
 import { getDb } from "@/lib/db";
@@ -8,6 +8,7 @@ import Login from "@/components/Login";
 import Shell from "@/components/Shell";
 
 setErrorHandler(msg => toast.error(msg));
+setNoticeHandler(msg => toast(msg));
 
 export default function App() {
   const [session, setSession] = useState(undefined);
