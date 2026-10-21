@@ -12,5 +12,5 @@ export const pastel = k => PASTELS.find(p => p.k === k)?.c || null;
 // a card tinted with the colour: faint fill, soft border
 export const tint = k => {
   const c = pastel(k); if (!c) return undefined;
-  return { "--tint": c, backgroundColor: `color-mix(in oklab, var(--card) 86%, ${c})`, borderColor: `color-mix(in oklab, var(--border) 45%, ${c})` };
+  return { "--tint": c, backgroundColor: `color-mix(in oklab, var(--card) 94%, ${c})`, borderColor: `color-mix(in oklab, var(--border) 72%, ${c})` };
 };

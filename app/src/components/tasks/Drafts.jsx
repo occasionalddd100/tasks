@@ -4,14 +4,13 @@ import { useDb } from "@/lib/db";
 import { draftTasks } from "@/lib/personal";
 import { CaptureBar } from "@/components/tasks/QuickAdd";
 import TaskRow from "@/components/tasks/TaskRow";
-import { cn } from "@/lib/utils";
 
 // "Черновики" of the personal project: a field to throw tasks in, and the list to sort out (tap a task → category)
 export default function DraftsCard({ link = true, wide = false }) {
   const db = useDb();
   const list = draftTasks(db);
   const [all, setAll] = useState(false);
-  const max = wide ? 10 : 6;
+  const max = wide ? 12 : 6;
   const head = (
     <header className="flex items-center gap-2">
       <InboxIcon className="size-5 text-primary" />
@@ -21,7 +20,10 @@ export default function DraftsCard({ link = true, wide = false }) {
     </header>
   );
   const body = list.length > 0 ? <>
-    <ul className={cn("-mx-2", wide && "xl:columns-2 xl:gap-4 [&>li]:break-inside-avoid")}>{(all ? list : list.slice(0, max)).map(t => <li key={t.id}><TaskRow t={t} /></li>)}</ul>
+    {/* wide: soft tiles that fill the row, so a long line doesn't push its marks to the far edge */}
+    <ul className={wide ? "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(16rem,1fr))]" : "-mx-2"}>
+      {(all ? list : list.slice(0, max)).map(t => <li key={t.id} className={wide ? "rounded-lg border bg-background/40 px-1" : undefined}><TaskRow t={t} /></li>)}
+    </ul>
     {list.length > max && <button type="button" onClick={() => setAll(a => !a)} className="self-start text-sm text-muted-foreground hover:text-foreground">{all ? "Свернуть" : `Показать все (${list.length})`}</button>}
   </> : <p className="text-sm text-muted-foreground">Пусто. Всё, что придёт в голову, кидай сюда и разбирай потом.</p>;
   const hint = list.length > 0 && <p className="text-xs text-muted-foreground">Открой задачу, чтобы поставить срок или перенести её в категорию.</p>;

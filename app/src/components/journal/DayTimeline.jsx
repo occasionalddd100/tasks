@@ -199,14 +199,16 @@ function Strip({ now, start, end, events, onTick }) {
 
   // pins go into lanes above the strip so labels never overlap
   const pins = useMemo(() => {
-    const last = Array(LANES).fill(-1e9);
-    return events.map(e => {
+    // when every lane is taken, the extra ones fold into the last pin as "+N" instead of stacking on top of it
+    const last = Array(LANES).fill(-1e9), tops = Array(LANES).fill(null), out = [];
+    for (const e of events) {
       const x = (pct(e.when) / 100) * w, shift = Math.max(0, x + PIN_W - w + 4), left = x - shift;
-      let lane = last.findIndex(l => left - l > PIN_W + 6);
-      if (lane < 0) lane = last.indexOf(Math.min(...last));
+      const lane = last.findIndex(l => left - l > PIN_W + 6);
+      if (lane < 0) { const p = tops[last.indexOf(Math.max(...last))]; p.more.push(e); continue; }
       last[lane] = left;
-      return { ...e, lane, x, shift };
-    });
+      out.push(tops[lane] = { ...e, lane, x, shift, more: [] });
+    }
+    return out;
   }, [events, w, start, end]);
   const used = pins.length ? Math.max(...pins.map(p => p.lane)) + 1 : 0;
   const midnight = new Date(start); midnight.setHours(24, 0, 0, 0);
@@ -236,7 +238,7 @@ function Strip({ now, start, end, events, onTick }) {
           <motion.div className="absolute inset-y-0 left-0 bg-background/60" style={{ backgroundImage: "repeating-linear-gradient(135deg, transparent 0 6px, rgba(0,0,0,.18) 6px 7px)" }}
             initial={{ width: 0 }} animate={{ width: Math.min(100, Math.max(0, pct(now))) + "%" }} transition={{ duration: 1, ease: "easeOut" }} />
           {/* stems of the pins and done/missed dots on the strip */}
-          {pins.map(e => (
+          {pins.flatMap(p => [p, ...p.more]).map(e => (
             <span key={"d" + e.t.id + e.when} className={cn("absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white/80",
               e.t.done ? "bg-good" : e.when < now ? "bg-destructive" : "bg-white")} style={{ left: pct(e.when) + "%" }} />
           ))}
@@ -278,7 +280,8 @@ function Pin({ e, now, k, onTick }) {
       initial={{ opacity: 0, y: 8, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.15 + k * 0.04, type: "spring", stiffness: 300, damping: 22 }}>
       {/* stem down to the strip */}
       <span className="absolute left-0 w-px bg-border" style={{ top: 34, height: `calc(var(--pins) - ${e.lane * LANE_H + 34}px + 8px + 1.75rem)` }} />
-      <div style={{ marginLeft: -e.shift }} className={cn("relative -translate-x-3 flex h-[38px] items-center gap-1.5 rounded-lg border px-1.5 shadow-xs", tone)} title={e.t.text}>
+      <div style={{ marginLeft: -e.shift }} className={cn("relative -translate-x-3 flex h-[38px] items-center gap-1.5 rounded-lg border px-1.5 shadow-xs", tone)}
+        title={[e, ...e.more].map(x => x.time + " " + x.t.text).join("\n")}>
         {soon && <motion.span className="absolute inset-0 rounded-lg border-2 border-amber-500" animate={{ opacity: [0.9, 0] , scale: [1, 1.08] }} transition={{ duration: 1.4, repeat: Infinity }} />}
         {missed && <motion.span className="absolute inset-0 rounded-lg border-2 border-destructive" animate={{ opacity: [0.8, 0] }} transition={{ duration: 1.2, repeat: Infinity }} />}
         <button type="button" disabled={e.t.log} onClick={() => onTick(e.t)} aria-label={(done ? "Снять отметку: " : "Отметить: ") + e.t.text}
@@ -289,6 +292,7 @@ function Pin({ e, now, k, onTick }) {
           <div className={cn("truncate text-[12px] font-semibold", done && !e.t.log && "text-muted-foreground line-through")}>{e.t.text}</div>
           <div className={cn("truncate text-[10px] whitespace-nowrap tabular-nums", missed ? "text-destructive" : soon ? "text-amber-500" : "text-muted-foreground")}>{e.time} · {hint}</div>
         </div>
+        {e.more.length > 0 && <span className="relative ml-auto shrink-0 rounded-full bg-foreground/10 px-1.5 text-[11px] font-semibold tabular-nums">+{e.more.length}</span>}
       </div>
     </motion.div>
   );
