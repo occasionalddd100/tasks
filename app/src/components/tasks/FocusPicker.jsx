@@ -7,6 +7,8 @@ import { inFocus, toFocus } from "@/lib/focus";
 import { draftsOf } from "@/lib/personal";
 import { timeOf } from "@/lib/reminders";
 import { cn } from "@/lib/utils";
+import TaskSheet from "@/components/tasks/TaskSheet";
+import TaskNoteDialog from "@/components/tasks/TaskNoteDialog";
 
 // "Что взять в фокус": every open task of mine that is not in the focus yet, as a 3D carousel of cards,
 // the important ones first. Filters narrow it; "Все" with search lets you dig up any small thing too.
@@ -89,6 +91,9 @@ export default function FocusPicker() {
 function Carousel({ list }) {
   const box = useRef(null), raf = useRef(0);
   const [taken, setTaken] = useState(null);
+  // a tap on a card opens the whole task (the card cuts long text)
+  const [opened, setOpened] = useState(null), [note, setNote] = useState(false);
+  const db = useDb(), shown = opened && db.tasks.find(t => t.id === opened);
   const paint = () => {
     const el = box.current; if (!el) return;
     const mid = el.scrollLeft + el.clientWidth / 2;
@@ -115,11 +120,13 @@ function Carousel({ list }) {
           {list.map((c, i) => (
             <motion.div key={c.t.id} data-card="1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.2 } }}
               className="relative w-[72%] shrink-0 snap-center md:w-[40%]">
-              <div style={{ transition: "opacity .15s" }}><Card c={c} n={i + 1} total={list.length} taken={taken === c.t.id} onTake={() => take(c)} /></div>
+              <div style={{ transition: "opacity .15s" }}><Card c={c} n={i + 1} total={list.length} taken={taken === c.t.id} onTake={() => take(c)} onOpen={() => setOpened(c.t.id)} /></div>
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
+      {shown && <TaskSheet t={shown} open={!!shown} onOpenChange={o => !o && setOpened(null)} onNote={() => setNote(true)} />}
+      {shown && note && <TaskNoteDialog t={shown} open={note} onOpenChange={o => { setNote(o); if (!o) setOpened(null); }} />}
       {list.length > 1 && <>
         <button type="button" onClick={() => step(-1)} aria-label="Назад" className="absolute top-1/2 left-0 z-20 hidden size-9 -translate-y-1/2 place-items-center rounded-full border bg-background/90 shadow md:grid"><ChevronLeftIcon className="size-4" /></button>
         <button type="button" onClick={() => step(1)} aria-label="Дальше" className="absolute top-1/2 right-0 z-20 hidden size-9 -translate-y-1/2 place-items-center rounded-full border bg-background/90 shadow md:grid"><ChevronRightIcon className="size-4" /></button>
@@ -128,17 +135,17 @@ function Carousel({ list }) {
   );
 }
 
-function Card({ c, n, total, taken, onTake }) {
+function Card({ c, n, total, taken, onTake, onOpen }) {
   const k = KINDS[c.kind], Icon = k.icon, t = c.t;
   const when = t.due ? dueLabel(t.due) + (timeOf(t) ? " " + timeOf(t) : "") : timeOf(t);
   return (
     <motion.div animate={taken ? { y: -30, scale: 1.04, rotateX: 12 } : { y: 0, scale: 1, rotateX: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22 }}
       style={{ transformStyle: "preserve-3d", willChange: "transform" }}
-      className="flex h-56 flex-col overflow-hidden rounded-3xl border bg-card shadow-lg">
+      onClick={e => !e.target.closest("button") && onOpen()} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && e.target === e.currentTarget && onOpen()}
+      className="flex h-56 cursor-pointer flex-col overflow-hidden rounded-3xl border bg-card shadow-lg">
       <div className={cn("relative flex items-center gap-1.5 bg-gradient-to-br px-4 py-3 text-xs font-semibold tracking-wide text-white uppercase", k.cls)}>
         <Icon className="size-3.5" />{k.label}
         {when && <span className="ml-auto rounded-full bg-white/20 px-2 py-0.5 normal-case tabular-nums">{when}</span>}
-        <span aria-hidden className="pointer-events-none absolute -right-6 -bottom-10 size-24 rounded-full bg-white/15" />
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-1 px-4 pt-3">
         {c.parent && <div className="truncate text-xs text-muted-foreground">↳ {c.parent}</div>}
