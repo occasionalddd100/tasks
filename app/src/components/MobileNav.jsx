@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { motion } from "motion/react";
-import { BookOpenIcon, CrosshairIcon, MenuIcon, SearchIcon } from "lucide-react";
+import { BookOpenIcon, CrosshairIcon, MenuIcon, PlusIcon, UserRoundIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // phone bottom bar shared by every view: a view puts its own buttons there with useNavItems,
@@ -14,10 +14,12 @@ export function useNavItems(list) {
 
 export const scrollTop = () => { document.querySelector("main")?.scrollTo?.({ top: 0, behavior: "smooth" }); window.scrollTo({ top: 0 }); };
 
-export default function MobileNav({ onMenu, onSearch, onJournal, focus }) {
+// the default bar: Журнал · Личное · ＋ (into drafts) · Фокус · Меню
+export default function MobileNav({ onMenu, onSearch, onJournal, onAdd, journal, personal, focus }) {
   const list = useSyncExternalStore(f => (subs.add(f), () => subs.delete(f)), () => items) || [
-    { k: "journal", label: "Журнал", icon: BookOpenIcon, onClick: onJournal },
-    { k: "search", label: "Поиск", icon: SearchIcon, onClick: onSearch },
+    { k: "journal", label: "Журнал", icon: BookOpenIcon, onClick: onJournal, active: journal },
+    { k: "personal", label: "Личное", icon: UserRoundIcon, ...personal },
+    { k: "add", label: "Добавить", icon: PlusIcon, onClick: onAdd, accent: true },
   ];
   // views may list "journal" / "search" without a handler: those go to the shell
   const builtin = { journal: onJournal, search: onSearch };

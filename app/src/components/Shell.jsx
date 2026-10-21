@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { freshReload } from "@/lib/reload";
-import { BookOpenIcon, CrosshairIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, CrosshairIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,8 @@ import { ProjectView } from "@/components/tasks/ProjectViews";
 import FocusView from "@/components/tasks/FocusView";
 import { focusOpen } from "@/lib/focus";
 import JournalView from "@/components/journal/JournalView";
+import { QuickAddHost, openQuickAdd } from "@/components/tasks/QuickAdd";
+import { ensurePersonal, personalOf, draftTasks } from "@/lib/personal";
 
 const NoteView = lazy(() => import("@/components/notes/NoteView").catch(e => {
   if (freshReload("chunk:note")) return new Promise(() => {}); // the page is reloading
@@ -56,6 +58,7 @@ const readHash = () => {
   if (m) return { [m[1]]: m[2] };
   if (location.hash === "#journal") return { journal: true };
   if (location.hash === "#focus") return { focus: true };
+  if (location.hash === "#personal") return { personal: true };
   return { journal: true };
 };
 
@@ -65,6 +68,8 @@ export default function Shell() {
   const [menu, setMenu] = useState(false);
 
   useEffect(() => { loadMe().catch(() => {}); }, []);
+  // everyone gets "Личное" with "Черновики" the first time the data is in
+  useEffect(() => { if (db.ready && !db.error) ensurePersonal(); }, [db.ready, db.error, !!personalOf(db)]);
   useEffect(() => {
     const on = () => setView(readHash());
     window.addEventListener("hashchange", on); window.addEventListener("popstate", on);
@@ -73,18 +78,21 @@ export default function Shell() {
 
   const go = v => {
     setMenu(false);
-    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : v.focus ? "#focus" : "#journal";
+    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : v.focus ? "#focus" : v.personal ? "#personal" : "#journal";
     if (location.hash !== hash) history.pushState(null, "", hash || location.pathname + location.search);
     setView(v);
   };
 
   // the remembered project may be gone; then the journal is home
-  const project = view.project && !(view.home && db.ready && !db.projects.some(b => b.id === view.project)) ? view.project : null;
+  const mine = personalOf(db);
+  const project = view.personal ? mine?.id || null : view.project && !(view.home && db.ready && !db.projects.some(b => b.id === view.project)) ? view.project : null;
+  const personal = !!project && project === mine?.id;
   const stash = view.stash || null;
   const shown = view.note ? db.notes.find(n => n.id === view.note) : project ? db.projects.find(b => b.id === project) : stash ? db.stashes.find(b => b.id === stash) : null;
   const focus = !view.note && !project && !stash && !!view.focus;
   const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : focus ? "Фокус" : "Журнал";
-  const sidebar = <Sidebar view={{ ...view, project, focus, journal: !view.note && !project && !stash && !focus }} go={go} email={db.email} search={menu === "search"} />;
+  const journal = !view.note && !project && !stash && !focus;
+  const sidebar = <Sidebar view={{ ...view, project, focus, personal, journal }} go={go} email={db.email} search={menu === "search"} />;
 
   return (
     <MotionConfig reducedMotion={look.motion === "off" ? "always" : "user"}>
@@ -103,12 +111,15 @@ export default function Shell() {
             ? <NoteGuard key={view.note}><Suspense fallback={<Loading />}><NoteView id={view.note} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
             : project ? <ProjectView id={project} fresh={view.fresh} go={go} />
             : stash ? <NoteGuard key={stash}><Suspense fallback={<Loading />}><StashView id={stash} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
+            : view.personal && !mine ? <Loading />
             : focus ? <FocusView go={go} />
             : <JournalView />}
         </motion.div>
       </main>
-      <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onJournal={() => go({ journal: true })}
+      <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onJournal={() => go({ journal: true })} onAdd={openQuickAdd} journal={journal}
+        personal={{ onClick: () => go({ personal: true }), active: personal, badge: draftTasks(db).length }}
         focus={{ onClick: () => go({ focus: true }), active: focus, badge: focusOpen(db) }} />
+      <QuickAddHost onOpenDrafts={() => go({ personal: true })} />
       <ConfirmHost />
       <SettingsHost />
       <IconPickerHost />
@@ -135,6 +146,11 @@ function Sidebar({ view, go, email, search }) {
         <button type="button" onClick={() => go({ journal: true })}
           className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", view.journal && "bg-accent")}>
           <BookOpenIcon className="size-4" />Журнал
+        </button>
+        <button type="button" onClick={() => go({ personal: true })}
+          className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", view.personal && "bg-accent")}>
+          <UserRoundIcon className="size-4" />Личное
+          {draftTasks(db).length > 0 && <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-xs tabular-nums text-foreground/80" title="В черновиках">{draftTasks(db).length}</span>}
         </button>
         <button type="button" onClick={() => go({ focus: true })}
           className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", view.focus && "bg-accent")}>

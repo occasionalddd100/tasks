@@ -1,7 +1,7 @@
 import { createContext, useContext, useRef, useState, useSyncExternalStore } from "react";
 import {
   AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CrosshairIcon, CalendarXIcon, ChevronRightIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlameIcon,
-  GripVerticalIcon, UserIcon, UserXIcon, PencilIcon, Trash2Icon, CheckIcon,
+  GripVerticalIcon, FolderInputIcon, UserIcon, UserXIcon, PencilIcon, Trash2Icon, CheckIcon,
 } from "lucide-react";
 import { getDb, update, updateMany, remove } from "@/lib/db";
 import { today, dueLabel, stale } from "@/lib/tasks";
@@ -58,6 +58,19 @@ export function hideTask(t) {
   updateMany("tasks", [t.id, ...descendantsOf(t.id).filter(id => done.has(id))].map(id => [id, { hidden: true }]));
 }
 
+// "Перенести" → project → "Вкладка · Категория"; subtasks follow
+function moveItem(t) {
+  const db = getDb(), here = db.projects.find(p => p.id === db.boards.find(b => b.id === db.cats.find(c => c.id === t.cat)?.board)?.project);
+  const catsOf = p => db.boards.filter(b => b.project === p.id).sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    .flatMap(b => db.cats.filter(c => c.board === b.id).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map(c => ({
+      label: b.name + " · " + c.name, active: c.id === t.cat,
+      onSelect: () => c.id !== t.cat && updateMany("tasks", [t.id, ...descendantsOf(t.id)].map(id => [id, { cat: c.id }])),
+    })));
+  const sub = [here, ...db.projects.filter(p => p !== here)].filter(Boolean)
+    .map(p => ({ label: p.name || "Без названия", icon: FolderInputIcon, sub: catsOf(p) })).filter(x => x.sub.length);
+  return sub.length ? { label: "Перенести", icon: FolderInputIcon, sub } : null;
+}
+
 export async function deleteTask(t) {
   const kids = descendantsOf(t.id);
   if (kids.length && !await confirmAction({ title: `Удалить «${t.text}»?`, description: `Вместе с ней удалятся подзадачи (${kids.length}).` })) return;
@@ -97,6 +110,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
     onAddSub && { label: "Добавить подзадачу", icon: CornerDownRightIcon, onSelect: onAddSub },
     { sep: true },
     !t.done && { label: t.prio === "urgent" ? "Снять «Срочно»" : "Срочно", icon: FlameIcon, iconClass: "text-red-500", onSelect: () => update("tasks", t.id, { prio: t.prio === "urgent" ? "" : "urgent" }) },
+    !t.parent && moveItem(t),
     { label: "Исполнитель", icon: UserIcon, sub: assignItems },
     { label: t.due ? "Изменить дату" : "Поставить дату", icon: CalendarIcon, onSelect: () => setTimeout(openDate, 50) },
     t.due && { label: t.time ? "Изменить время" : "Поставить время", icon: AlarmClockIcon, onSelect: () => setTimeout(openTime, 50) },

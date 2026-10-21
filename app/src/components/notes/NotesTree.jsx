@@ -94,7 +94,7 @@ export default function NotesTree({ view, go, query }) {
   const grantOn = (coll, id) => db.grants.some(g => g.coll === coll && g.target === id);
   const isActive = x => view[x.kind] === x.id;
   // a pinned item shows only in the pinned block on top, not a second time in the tree
-  const fileRow = (x, depth) => pins.includes(COLL[x.kind] + ":" + x.id) ? null : (
+  const fileRow = (x, depth) => pins.includes(COLL[x.kind] + ":" + x.id) || (x.kind === "project" && x.personal && isMine(x)) ? null : (
     <FileRow key={x.kind + x.id} x={x} depth={depth} active={isActive(x)} go={go} folders={db.folders} dnd={dnd(x, COLL[x.kind])} pins={pins}
       shared={x.kind !== "note" && (grantOn(COLL[x.kind], x.id) || !isMine(x))}
       onShare={() => setSharing({ coll: COLL[x.kind], id: x.id, name: itemName(x), owner: isMine(x) })} />

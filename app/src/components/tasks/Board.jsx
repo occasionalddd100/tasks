@@ -266,14 +266,14 @@ function CatCard({ cat, ids, taskById }) {
     { label: cat.collapsed ? "Развернуть" : "Свернуть", icon: ChevronDownIcon, onSelect: toggle },
     parents.length > 0 && { label: allFolded ? "Раскрыть все подзадачи" : "Свернуть все подзадачи", icon: allFolded ? ChevronsUpDownIcon : ChevronsDownUpIcon,
       onSelect: () => updateMany("tasks", parents.map(t => [t.id, { collapsed: !allFolded }])) },
-    move,
-    { sep: true },
-    { label: "Удалить категорию", icon: Trash2Icon, variant: "destructive", onSelect: del },
+    !cat.drafts && move,
+    !cat.drafts && { sep: true },
+    !cat.drafts && { label: "Удалить категорию", icon: Trash2Icon, variant: "destructive", onSelect: del },
   ];
 
   return (
     <div ref={el => { span.current = el; setNodeRef(el); }} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && "z-10 opacity-40")}>
-      <section className="group/cat rounded-xl border bg-card shadow-xs">
+      <section className={cn("group/cat rounded-xl border bg-card shadow-xs", cat.drafts && "border-dashed border-primary/40")}>
         <ActionsContext items={items}>
           <header className="flex items-center gap-1 rounded-t-xl px-2 pt-2.5 pb-1">
             <button ref={setActivatorNodeRef} {...attributes} {...listeners} aria-label={"Перетащить категорию " + cat.name}
@@ -285,6 +285,7 @@ function CatCard({ cat, ids, taskById }) {
               ? <InlineInput value={cat.name} onDone={name => { setRenaming(false); if (name && name !== cat.name) update("cats", cat.id, { name }); }} className="h-7 text-[15px] font-semibold" />
               : <h2 className="min-w-0 cursor-text truncate text-[15px] font-semibold" onClick={() => setRenaming(true)} title="Переименовать">{cat.name}</h2>}
             <span className="text-[13px] text-muted-foreground tabular-nums">{tasks.length ? `${tasks.filter(t => t.done).length} / ${tasks.length}` : ""}</span>
+            {cat.drafts && tasks.some(t => !t.done) && <span className="truncate text-xs text-muted-foreground max-sm:hidden">разбери по категориям</span>}
             <ActionsDropdown align="end" items={items} trigger={
               <Button variant="ghost" size="iconSm" className="ml-auto text-muted-foreground opacity-60 md:hidden" aria-label="Действия с категорией"><MoreHorizontalIcon className="size-3.5" /></Button>
             } />

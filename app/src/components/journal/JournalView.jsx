@@ -13,8 +13,12 @@ import { cn } from "@/lib/utils";
 import { Badge, Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import DayTimeline from "@/components/journal/DayTimeline";
-import { useNavItems, scrollTop } from "@/components/MobileNav";
-import { ClipboardPasteIcon, PencilIcon, PlusIcon, XIcon, ListChecksIcon, CornerDownRightIcon, CalendarCheckIcon, NotebookPenIcon, BarChart3Icon } from "lucide-react";
+import { PillTab, PillTabs } from "@/components/ViewHeader";
+import TaskRow from "@/components/tasks/TaskRow";
+import { CaptureBar } from "@/components/tasks/QuickAdd";
+import { draftTasks } from "@/lib/personal";
+import { focusList } from "@/lib/focus";
+import { ClipboardPasteIcon, PencilIcon, PlusIcon, XIcon, ListChecksIcon, CornerDownRightIcon, CalendarCheckIcon, NotebookPenIcon, BarChart3Icon, InboxIcon, CrosshairIcon } from "lucide-react";
 
 // how the day went: 5 moods, each with its colour; "Ужасный" is a stormy crimson that glows
 export const MOODS = [
@@ -74,9 +78,9 @@ export default function JournalView() {
   const todayMood = moodOf(mine.get(today())?.mood);
 
   const pick = (date, edit = false) => setOpen({ date, edit });
-  const [tab, setTabRaw] = useState(() => { try { return localStorage.getItem("journalTab") || "day"; } catch { return "day"; } });
+  // the lower part (diary, days, totals) is one block with its own tabs; the top is the day itself
+  const [tab, setTabRaw] = useState(() => { try { const t = localStorage.getItem("journalTab"); return TABS.some(x => x.k === t) ? t : "diary"; } catch { return "diary"; } });
   const setTab = t => { setTabRaw(t); try { localStorage.setItem("journalTab", t); } catch {} };
-  const only = t => tab !== t && "max-md:hidden"; // on the phone each tab shows its own blocks
   const memories = useMemories(info, mine);
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
@@ -97,21 +101,28 @@ export default function JournalView() {
         </div>
       </header>
 
-      <div className={cn(only("day"))}><DayTimeline /></div>
-      <div className={cn(only("day"))}><QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} /></div>
-      {/* desktop: two columns filling the width; phone: tabs switched from the bottom bar */}
-      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start">
-        <div className="flex flex-col gap-5 max-lg:contents">
-          <div className={cn("max-lg:order-2", only("days"))}><Heatmap info={info} sel={open?.date} onPick={pick} /></div>
-          <div className={cn("max-lg:order-3", only("thoughts"))}><ThoughtsCard i={info(today())} /></div>
-          <div className={cn("max-lg:order-5", only("stats"))}><Habits habits={db.habits} /></div>
-        </div>
-        <div className="flex flex-col gap-5 max-lg:contents">
-          <div className={cn("max-lg:order-1", only("day"))}><TodayPanel i={info(today())} onOpen={edit => pick(today(), edit)} /></div>
-          <div className={cn("max-lg:order-4", only("stats"))}><Stats info={info} items={items} mine={mine} streak={streak} /></div>
+      <DayTimeline />
+      {/* the working part: drafts to throw things into on the left, what's on today on the right */}
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start">
+        <DraftsCard />
+        <div className="flex flex-col gap-5">
+          <FocusCard />
+          <TodayPanel i={info(today())} onOpen={edit => pick(today(), edit)} />
         </div>
       </div>
-      <BottomNav tab={tab} setTab={setTab} thoughts={(mine.get(today())?.thoughts?.length || 0)} />
+
+      <section className="flex flex-col gap-4">
+        <PillTabs>{TABS.map(({ k, label, icon: Icon }) => <PillTab key={k} on={tab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>
+        {tab === "diary" && <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start">
+          <ThoughtsCard i={info(today())} />
+          <QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} />
+        </div>}
+        {tab === "days" && <Heatmap info={info} sel={open?.date} onPick={pick} />}
+        {tab === "stats" && <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start">
+          <Stats info={info} items={items} mine={mine} streak={streak} />
+          <Habits habits={db.habits} />
+        </div>}
+      </section>
       <DayDialog open={open} setOpen={setOpen} info={info} burst={bursts.fire} />
       {bursts.layer}
     </div>
@@ -119,16 +130,52 @@ export default function JournalView() {
 }
 
 const TABS = [
-  { k: "day", label: "Сегодня", icon: CalendarCheckIcon },
-  { k: "thoughts", label: "Мысли", icon: NotebookPenIcon },
+  { k: "diary", label: "Дневник", icon: NotebookPenIcon },
   { k: "days", label: "Дни", icon: CalendarDaysIcon },
   { k: "stats", label: "Итоги", icon: BarChart3Icon },
 ];
 
-// phone only: tabs at the thumb, instead of one long scroll
-function BottomNav({ tab, setTab, thoughts }) {
-  useNavItems(TABS.map(({ k, label, icon }) => ({ k, label, icon, active: tab === k, badge: k === "thoughts" ? thoughts : 0, onClick: () => { setTab(k); scrollTop(); } })));
-  return null;
+// "Черновики" of the personal project: a field to throw tasks in, and the list to sort out (tap a task → category)
+function DraftsCard() {
+  const db = useDb();
+  const list = draftTasks(db);
+  const [all, setAll] = useState(false);
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl border bg-card p-4 shadow-sm">
+      <header className="flex items-center gap-2">
+        <InboxIcon className="size-5 text-primary" />
+        <h2 className="text-lg font-bold tracking-tight">Черновики</h2>
+        {list.length > 0 && <span className="text-sm text-muted-foreground tabular-nums">{list.length}</span>}
+        <a href="#personal" className="ml-auto text-sm text-muted-foreground underline-offset-2 hover:underline">Личное →</a>
+      </header>
+      <CaptureBar />
+      {list.length > 0 ? <>
+        <p className="text-xs text-muted-foreground">Нажми на задачу, чтобы поставить срок или перенести в категорию.<span className="max-md:hidden"> На компьютере: правая кнопка.</span></p>
+        <ul className="-mx-2">{(all ? list : list.slice(0, 6)).map(t => <li key={t.id}><TaskRow t={t} /></li>)}</ul>
+        {list.length > 6 && <button type="button" onClick={() => setAll(a => !a)} className="self-start text-sm text-muted-foreground hover:text-foreground">{all ? "Свернуть" : `Показать все (${list.length})`}</button>}
+      </> : <p className="text-sm text-muted-foreground">Пусто. Всё, что придёт в голову, кидай сюда и разбирай потом.</p>}
+    </section>
+  );
+}
+
+// the focus list in short, with a way into the full screen
+function FocusCard() {
+  const db = useDb();
+  const list = focusList(db).filter(t => !t.done);
+  return (
+    <section className="flex flex-col gap-2 rounded-2xl border bg-card p-4 shadow-sm">
+      <header className="flex items-center gap-2">
+        <CrosshairIcon className="size-5 text-primary" />
+        <h2 className="text-lg font-bold tracking-tight">Фокус</h2>
+        {list.length > 0 && <span className="text-sm text-muted-foreground tabular-nums">{list.length}</span>}
+        <a href="#focus" className="ml-auto text-sm text-muted-foreground underline-offset-2 hover:underline">Открыть →</a>
+      </header>
+      {list.length
+        ? <ul className="-mx-2">{list.slice(0, 5).map(t => <li key={t.id}><TaskRow t={t} /></li>)}</ul>
+        : <p className="text-sm text-muted-foreground">В фокусе пусто. Смахни задачу влево, и она окажется здесь.</p>}
+      {list.length > 5 && <a href="#focus" className="text-sm text-muted-foreground hover:text-foreground">и ещё {list.length - 5}</a>}
+    </section>
+  );
 }
 
 /* ───────────── year grid ───────────── */
