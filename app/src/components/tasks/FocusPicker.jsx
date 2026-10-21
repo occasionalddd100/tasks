@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon, InboxIcon, LayersIcon, PlusIcon, SearchIcon, SparklesIcon, XIcon } from "lucide-react";
 import { useDb } from "@/lib/db";
@@ -56,9 +56,10 @@ export default function FocusPicker() {
   const f = FILTERS.find(x => x.k === filter) || FILTERS[0];
   const list = all.filter(f.test).filter(c => !q || (c.t.text + " " + c.where).toLowerCase().includes(q.toLowerCase()));
   const counts = Object.fromEntries(FILTERS.map(x => [x.k, all.filter(x.test).length]));
+  const wide = useWide();
 
   return (
-    <section className="flex flex-col gap-3 md:max-w-3xl">
+    <section className="flex flex-col gap-3">
       <header className="flex items-center gap-2 px-1">
         <SparklesIcon className="size-4 text-primary" />
         <h2 className="text-base font-semibold">Что взять в фокус</h2>
@@ -81,9 +82,67 @@ export default function FocusPicker() {
         )}
       </div>
       {list.length
-        ? <Carousel key={filter + q} list={list} />
+        ? wide ? <Grid list={list} /> : <Carousel key={filter + q} list={list} />
         : <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">{q ? "Ничего не нашлось." : filter === "hot" ? "Ничего не горит. Можно взять что-то из «Все»." : "Пусто."}</p>}
     </section>
+  );
+}
+
+// a big screen shows everything at once: one row of cards per kind (горит, сегодня, скоро, …), several across
+const WIDE = "(min-width: 768px)";
+const useWide = () => useSyncExternalStore(f => { const m = matchMedia(WIDE); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, () => matchMedia(WIDE).matches);
+
+function Grid({ list }) {
+  const [opened, setOpened] = useState(null), [note, setNote] = useState(false);
+  const db = useDb(), shown = opened && db.tasks.find(t => t.id === opened);
+  const groups = Object.keys(KINDS).map(k => ({ k, list: list.filter(c => c.kind === k) })).filter(g => g.list.length);
+  return (
+    <div className="flex flex-col gap-5">
+      {groups.map(({ k, list }) => {
+        const K = KINDS[k], Icon = K.icon;
+        return (
+          <div key={k} className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <span className={cn("grid size-6 place-items-center rounded-lg bg-gradient-to-br text-white", K.cls)}><Icon className="size-3.5" /></span>
+              <span className="text-sm font-semibold first-letter:uppercase">{K.label}</span>
+              <span className="text-sm text-muted-foreground tabular-nums">{list.length}</span>
+            </div>
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2.5">
+              <AnimatePresence initial={false}>
+                {list.map(c => <Tile key={c.t.id} c={c} onOpen={() => setOpened(c.t.id)} />)}
+              </AnimatePresence>
+            </ul>
+          </div>
+        );
+      })}
+      {shown && <TaskSheet t={shown} open={!!shown} onOpenChange={o => !o && setOpened(null)} onNote={() => setNote(true)} />}
+      {shown && note && <TaskNoteDialog t={shown} open={note} onOpenChange={o => { setNote(o); if (!o) setOpened(null); }} />}
+    </div>
+  );
+}
+
+// a compact card: coloured edge by kind, the whole text, where it lives; the round ＋ takes it into the focus
+function Tile({ c, onOpen }) {
+  const K = KINDS[c.kind], t = c.t;
+  const when = t.due ? dueLabel(t.due) + (timeOf(t) ? " " + timeOf(t) : "") : timeOf(t);
+  return (
+    <motion.li layout initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9, y: -12 }} transition={{ duration: 0.18 }}
+      onClick={e => !e.target.closest("button") && onOpen()}
+      className="group relative flex cursor-pointer gap-3 overflow-hidden rounded-2xl border bg-card p-3 pl-4 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <span className={cn("absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b", K.cls)} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {c.parent && <div className="truncate text-xs text-muted-foreground">↳ {c.parent}</div>}
+        <div className="line-clamp-4 text-[15px] leading-snug font-medium break-words">{t.text}</div>
+        <div className="mt-auto flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
+          {when && <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 whitespace-nowrap tabular-nums">{when}</span>}
+          <span className="truncate">{c.where}</span>
+        </div>
+      </div>
+      <button type="button" onClick={() => toFocus(t)} title="В фокус" aria-label={"В фокус: " + t.text}
+        className="grid size-9 shrink-0 place-items-center self-center rounded-full border text-muted-foreground transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground">
+        <PlusIcon className="size-4" />
+      </button>
+    </motion.li>
   );
 }
 

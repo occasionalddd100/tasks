@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { freshReload } from "@/lib/reload";
-import { BookOpenIcon, CrosshairIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, CrosshairIcon, InboxIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
@@ -68,6 +68,15 @@ export default function Shell() {
   const [menu, setMenu] = useState(false);
 
   useEffect(() => { loadMe().catch(() => {}); }, []);
+  // "N" anywhere outside a text field: throw a task into the drafts
+  useEffect(() => {
+    const on = e => {
+      if (e.key.toLowerCase() !== "n" && e.key.toLowerCase() !== "т") return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.("input,textarea,[contenteditable=true],[role=dialog]")) return;
+      e.preventDefault(); openQuickAdd();
+    };
+    window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
+  }, []);
   // everyone gets "Личное" with "Черновики" the first time the data is in
   useEffect(() => { if (db.ready && !db.error) ensurePersonal(); }, [db.ready, db.error, !!personalOf(db)]);
   useEffect(() => {
@@ -146,6 +155,10 @@ function Sidebar({ view, go, email, search }) {
         <button type="button" onClick={() => go({ journal: true })}
           className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", view.journal && "bg-accent")}>
           <BookOpenIcon className="size-4" />Журнал
+        </button>
+        <button type="button" onClick={openQuickAdd} title="Кинуть задачу в черновики (клавиша N)"
+          className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-dashed px-2 text-sm font-medium text-muted-foreground hover:border-primary/50 hover:bg-accent hover:text-foreground">
+          <InboxIcon className="size-4" />В черновики<kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-[11px]">N</kbd>
         </button>
         <button type="button" onClick={() => go({ personal: true })}
           className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", view.personal && "bg-accent")}>

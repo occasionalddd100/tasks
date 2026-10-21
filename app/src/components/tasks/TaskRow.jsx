@@ -104,6 +104,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
 
   const focused = inFocus(t);
   const items = [
+    { label: "Открыть", icon: PencilIcon, hint: "двойной клик", onSelect: () => setTimeout(() => setSheet(true)) },
     !t.done && { label: focused ? "Убрать из фокуса" : "В фокус", icon: CrosshairIcon, onSelect: () => (focused ? fromFocus(t) : toFocus(t)) },
     canHide && { label: "Скрыть в выполненные", icon: EyeOffIcon, onSelect: () => hideTask(t) },
     { label: hasBody ? "Открыть заметку" : "Добавить заметку", icon: FileTextIcon, onSelect: () => setNoteOpen(true) },
@@ -178,7 +179,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
           ? <InlineInput value={t.text} className="h-7 w-full text-[15px]" onDone={v => { setEditing(null); if (v && v !== t.text) update("tasks", t.id, { text: v }); }} />
           : (
             <span className="inline">
-              <span onClick={() => !overlay && !phone && setEditing("text")}
+              <span onClick={() => !overlay && !phone && setEditing("text")} onDoubleClick={() => !overlay && !phone && (setEditing(null), setSheet(true))}
                 className={cn(!phone && "cursor-text", "text-[15px] leading-snug break-words transition-colors", t.done && "text-muted-foreground line-through")}>{t.text}</span>
               {hasBody && !overlay && (
                 <HoverCard>
@@ -221,6 +222,6 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
   return <>
     {phone ? <div className="relative">{under}{row}</div> : <ActionsContext items={items}>{row}</ActionsContext>}
     {noteOpen && <TaskNoteDialog t={t} open={noteOpen} onOpenChange={setNoteOpen} />}
-    {phone && <TaskSheet t={t} open={sheet} onOpenChange={setSheet} people={people} onNote={() => setNoteOpen(true)} onAddSub={onAddSub} />}
+    {!overlay && <TaskSheet t={t} open={sheet} onOpenChange={setSheet} people={people} onNote={() => setNoteOpen(true)} onAddSub={onAddSub} />}
   </>;
 }

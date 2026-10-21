@@ -51,7 +51,7 @@ export default function FocusView({ go }) {
       </header>
 
       {legacy.length > 0 && (
-        <section className="flex flex-col gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm md:max-w-3xl">
+        <section className="flex flex-col gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
           <p>Метки «Ближайшее» больше нет: теперь есть только фокус и дата. С этой меткой осталось задач: {legacy.length}. Например: {legacy.slice(0, 3).map(t => "«" + t.text + "»").join(", ")}.</p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => takeLegacy(true)}>Перенести в фокус</Button>
@@ -60,9 +60,11 @@ export default function FocusView({ go }) {
         </section>
       )}
 
+      <div className="flex flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] xl:items-start">
+      <div className="flex flex-col gap-4 xl:sticky xl:top-4">
       <SprintBar sprint={sprint} done={done} total={list.length} onStart={startSprint} onFinish={finish} />
 
-      <section className="rounded-xl border bg-card p-2 shadow-xs md:max-w-3xl">
+      <section className="rounded-xl border bg-card p-2 shadow-xs">
         {list.length === 0 && (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">
             Тут пусто. Смахни задачу в проекте влево (на компьютере ПКМ → «В фокус») или напиши новую ниже.
@@ -77,8 +79,10 @@ export default function FocusView({ go }) {
         </DndContext>
         <AddRow />
       </section>
+      </div>
 
-      <FocusPicker />
+      <div className="min-w-0 xl:rounded-2xl xl:border xl:bg-card/40 xl:p-4"><FocusPicker /></div>
+      </div>
     </div>
   );
 }
@@ -87,7 +91,7 @@ function SprintBar({ sprint, done, total, onStart, onFinish }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
   const since = sprint && new Date(sprint.start);
   return (
-    <section className={cn("flex flex-wrap items-center gap-3 rounded-xl border p-3 shadow-xs md:max-w-3xl", sprint ? "border-primary/40 bg-primary/5" : "bg-card")}>
+    <section className={cn("flex flex-wrap items-center gap-3 rounded-xl border p-3 shadow-xs", sprint ? "border-primary/40 bg-primary/5" : "bg-card")}>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium">
           {sprint ? `Спринт идёт · ${done} из ${total}` : total ? `${total - done} в фокусе. Готов?` : "Набросай задачи и жми старт"}

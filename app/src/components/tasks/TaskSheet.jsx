@@ -20,6 +20,7 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
   const db = useDb();
   const [text, setText] = useState(t.text);
   useEffect(() => { if (open) setText(t.text); }, [open, t.text]);
+  if (!open) return null; // one per task row: nothing to work out until it opens
   const saveText = () => { const v = text.trim(); if (v && v !== t.text) update("tasks", t.id, { text: v }); else setText(t.text); };
 
   const set = f => update("tasks", t.id, f);
@@ -48,7 +49,7 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-[fade-in_150ms_ease-out]" />
         <D.Content onOpenAutoFocus={e => e.preventDefault()}
-          className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col rounded-t-2xl border-t bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,0,0,1)] md:inset-x-auto md:left-1/2 md:w-[28rem] md:-translate-x-1/2">
+          className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col rounded-t-2xl border-t bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,0,0,1)] md:inset-x-auto md:top-[10vh] md:bottom-auto md:left-1/2 md:w-[30rem] md:-translate-x-1/2 md:rounded-2xl md:border md:pb-0 md:data-[state=open]:animate-[dialog-in_180ms_ease-out]">
           <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border" />
           <D.Title className="sr-only">Задача</D.Title>
           <D.Description className="sr-only">Фокус, срок и действия с задачей</D.Description>
