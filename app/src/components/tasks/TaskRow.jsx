@@ -108,6 +108,35 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
     { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: () => deleteTask(t) },
   ];
 
+  // date and marks: right of the text on a wide screen, a line under it on the phone so the text keeps the width
+  const meta = !overlay && (
+        <div className={cn("flex shrink-0 items-center", phone && "-ml-1 mt-1 flex-wrap gap-0.5")}>
+          <button type="button" onClick={phone ? () => setSheet(true) : openDate} title={t.due ? "Срок: " + t.due + (t.time ? " " + t.time : "") : "Поставить дату"} aria-label={t.due ? "Срок " + when : "Поставить дату"}
+            className={cn("relative grid h-6 min-w-6 place-items-center rounded px-1 text-xs text-muted-foreground hover:bg-background",
+              !t.due && "opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100 max-md:hidden", t.due && "bg-muted", late && "text-destructive")}>
+            {t.due ? when : <CalendarIcon className="size-3.5" />}
+            <input ref={dateRef} type="date" tabIndex={-1} value={t.due || ""} onChange={e => update("tasks", t.id, e.target.value ? { due: e.target.value } : { due: "", time: "" })}
+              className="pointer-events-none absolute inset-0 opacity-0" aria-hidden />
+            <input ref={timeRef} type="time" tabIndex={-1} value={t.time || ""} onChange={e => update("tasks", t.id, { time: e.target.value || "" })}
+              className="pointer-events-none absolute inset-0 opacity-0" aria-hidden />
+          </button>
+          {canHide && (
+            <button type="button" onClick={() => hideTask(t)} title="Скрыть в выполненные" aria-label={"Скрыть в выполненные: " + t.text}
+              className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-background hover:text-foreground md:opacity-0 md:group-hover/task:opacity-100 md:focus-visible:opacity-100">
+              <EyeOffIcon className="size-3.5" />
+            </button>
+          )}
+          {who && (
+            <ActionsDropdown align="end" items={assignItems} trigger={
+              <button type="button" className="grid size-6 place-items-center rounded-full" aria-label={"Исполнитель: " + personName(who)}>
+                <Avatar person={who} className="size-5 text-[10px]" />
+              </button>
+            } />
+          )}
+          {focused && !t.done && <span className="grid size-6 place-items-center text-primary" title="В фокусе" aria-label="В фокусе"><CrosshairIcon className="size-3.5" /></span>}
+          {urgent && <span className="grid size-6 place-items-center text-red-500" title="Срочно" aria-label="Срочно"><FlameIcon className="size-3.5" /></span>}
+        </div>
+  );
   const swipe = useSwipe(() => toggle(!t.done), () => !t.done && (focused ? fromFocus(t) : toFocus(t)));
   const tapOpen = phone && !overlay;
   const row = (
@@ -159,35 +188,9 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
             </span>
           )}
         {t.note && <span className="mt-0.5 block text-[13px] text-muted-foreground">{t.note}</span>}
+        {phone && (t.due || canHide || who || (focused && !t.done) || urgent) && meta}
       </div>
-      {!overlay && (
-        <div className="flex shrink-0 items-center">
-          <button type="button" onClick={phone ? () => setSheet(true) : openDate} title={t.due ? "Срок: " + t.due + (t.time ? " " + t.time : "") : "Поставить дату"} aria-label={t.due ? "Срок " + when : "Поставить дату"}
-            className={cn("relative grid h-6 min-w-6 place-items-center rounded px-1 text-xs text-muted-foreground hover:bg-background",
-              !t.due && "opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100 max-md:hidden", t.due && "bg-muted", late && "text-destructive")}>
-            {t.due ? when : <CalendarIcon className="size-3.5" />}
-            <input ref={dateRef} type="date" tabIndex={-1} value={t.due || ""} onChange={e => update("tasks", t.id, e.target.value ? { due: e.target.value } : { due: "", time: "" })}
-              className="pointer-events-none absolute inset-0 opacity-0" aria-hidden />
-            <input ref={timeRef} type="time" tabIndex={-1} value={t.time || ""} onChange={e => update("tasks", t.id, { time: e.target.value || "" })}
-              className="pointer-events-none absolute inset-0 opacity-0" aria-hidden />
-          </button>
-          {canHide && (
-            <button type="button" onClick={() => hideTask(t)} title="Скрыть в выполненные" aria-label={"Скрыть в выполненные: " + t.text}
-              className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-background hover:text-foreground md:opacity-0 md:group-hover/task:opacity-100 md:focus-visible:opacity-100">
-              <EyeOffIcon className="size-3.5" />
-            </button>
-          )}
-          {who && (
-            <ActionsDropdown align="end" items={assignItems} trigger={
-              <button type="button" className="grid size-6 place-items-center rounded-full" aria-label={"Исполнитель: " + personName(who)}>
-                <Avatar person={who} className="size-5 text-[10px]" />
-              </button>
-            } />
-          )}
-          {focused && !t.done && <span className="grid size-6 place-items-center text-primary" title="В фокусе" aria-label="В фокусе"><CrosshairIcon className="size-3.5" /></span>}
-          {urgent && <span className="grid size-6 place-items-center text-red-500" title="Срочно" aria-label="Срочно"><FlameIcon className="size-3.5" /></span>}
-        </div>
-      )}
+      {!phone && meta}
     </div>
   );
   if (overlay) return row;
