@@ -16,17 +16,19 @@ export const scrollTop = () => { document.querySelector("main")?.scrollTo?.({ to
 
 // the default bar: Журнал · Личное · ＋ (into drafts) · Фокус · Меню
 export default function MobileNav({ onMenu, onSearch, onJournal, onAdd, journal, personal, focus }) {
-  const list = useSyncExternalStore(f => (subs.add(f), () => subs.delete(f)), () => items) || [
+  const own = useSyncExternalStore(f => (subs.add(f), () => subs.delete(f)), () => items);
+  const list = own || [
     { k: "journal", label: "Журнал", icon: BookOpenIcon, onClick: onJournal, active: journal },
     { k: "personal", label: "Личное", icon: UserRoundIcon, ...personal },
     { k: "add", label: "Добавить", icon: PlusIcon, onClick: onAdd, accent: true },
   ];
   // views may list "journal" / "search" without a handler: those go to the shell
   const builtin = { journal: onJournal, search: onSearch };
-  // "Фокус" sits next to "Меню" everywhere, so the current sprint is one tap away from any view
+  // "Фокус" sits next to "Меню" on the main screens
   const all = [...list.map(x => x.onClick ? x : { ...x, onClick: builtin[x.k] }),
-    { k: "focus", label: "Фокус", icon: CrosshairIcon, ...focus, active: focus?.active && !list.some(x => x.active) },
-    { k: "menu", label: "Меню", icon: MenuIcon, onClick: onMenu }];
+    // a view with its own buttons (stash, note) keeps the bar to those plus "Меню"
+    !own && { k: "focus", label: "Фокус", icon: CrosshairIcon, ...focus, active: focus?.active && !list.some(x => x.active) },
+    { k: "menu", label: "Меню", icon: MenuIcon, onClick: onMenu }].filter(Boolean);
   return (
     <nav style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/85 pb-[env(safe-area-inset-bottom)] md:hidden">

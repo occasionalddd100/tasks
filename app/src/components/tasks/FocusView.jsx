@@ -1,20 +1,20 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CrosshairIcon, FlagIcon, PlayIcon, PlusIcon, SquareCheckBigIcon } from "lucide-react";
+import { CrosshairIcon, PlayIcon, PlusIcon, SquareCheckBigIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-import { useDb, add, updateMany } from "@/lib/db";
-import { byOrder, nextOrder, today } from "@/lib/tasks";
-import { focusList, getSprint, startSprint, finishSprint, clearDone, toFocus, nextFocus, placeOf, inFocus } from "@/lib/focus";
+import { useDb, updateMany } from "@/lib/db";
+import { focusList, getSprint, startSprint, finishSprint, clearDone, nextFocus, placeOf, inFocus } from "@/lib/focus";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { VIEW } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
+import FocusPicker from "@/components/tasks/FocusPicker";
+import { addDraft } from "@/lib/personal";
 
-const DEST = "focus.dest";
 
 export default function FocusView({ go }) {
   const db = useDb();
@@ -35,10 +35,6 @@ export default function FocusView({ go }) {
     const r = finishSprint();
     toast.success(`Спринт закрыт: ${r.done} из ${r.total}` + (r.total - r.done ? `. Остальное ждёт следующего.` : ". Всё сделано!"));
   };
-  // burning tasks outside the focus, to throw in with one tap when the list is short
-  const burning = useMemo(() => db.tasks.filter(t => !t.done && !t.hidden && !inFocus(t) && t.text?.trim() &&
-    ((t.due && t.due <= today()) || t.prio === "urgent")).slice(0, 6), [db.tasks]);
-
   // the old "Ближайшее" mark is gone: offer its open tasks to the focus once, by hand
   const legacy = db.tasks.filter(t => t.prio === "today" && !t.done && !t.hidden && !inFocus(t) && t.text?.trim());
   const takeLegacy = into => {
@@ -79,22 +75,10 @@ export default function FocusView({ go }) {
             </ul>
           </SortableContext>
         </DndContext>
-        <AddRow db={db} />
+        <AddRow />
       </section>
 
-      {burning.length > 0 && list.filter(t => !t.done).length < 5 && (
-        <section className="md:max-w-3xl">
-          <h2 className="mb-1.5 flex items-center gap-1.5 px-1 text-sm font-medium text-muted-foreground"><FlagIcon className="size-3.5 text-red-500" />Горит, но не в фокусе</h2>
-          <div className="flex flex-wrap gap-1.5">
-            {burning.map(t => (
-              <button key={t.id} type="button" onClick={() => toFocus(t)}
-                className="flex max-w-full items-center gap-1 rounded-full border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-accent">
-                <PlusIcon className="size-3.5 shrink-0" /><span className="truncate">{t.text}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
+      <FocusPicker />
     </div>
   );
 }
@@ -136,30 +120,14 @@ function FocusItem({ t, place, next }) {
   );
 }
 
-// new task right into the focus; it also needs a home category, remembered between visits
-function AddRow({ db }) {
+// a new task right into the focus; it lands in "Черновики", to be given a category later
+function AddRow() {
   const [text, setText] = useState("");
-  const options = useMemo(() => {
-    const out = [];
-    for (const p of [...db.projects].sort(byOrder)) for (const b of db.boards.filter(x => x.project === p.id).sort(byOrder))
-      for (const c of db.cats.filter(x => x.board === b.id).sort(byOrder)) out.push({ id: c.id, label: [p.name || "Без названия", b.name, c.name].filter(Boolean).join(" · ") });
-    return out;
-  }, [db.projects, db.boards, db.cats]);
-  const [dest, setDest] = useState(() => { try { return localStorage.getItem(DEST) || ""; } catch { return ""; } });
-  const cat = options.find(o => o.id === dest)?.id || options[0]?.id;
-  const pick = v => { setDest(v); try { localStorage.setItem(DEST, v); } catch {} };
-  const submit = e => {
-    e.preventDefault(); const v = text.trim(); if (!v || !cat) return; setText("");
-    add("tasks", { text: v, cat, order: nextOrder(db.tasks.filter(t => t.cat === cat && !t.parent)), done: false, focus: nextFocus() });
-  };
-  if (!options.length) return null;
+  const submit = e => { e.preventDefault(); const v = text.trim(); if (!v) return; setText(""); addDraft(v, { focus: nextFocus() }); };
   return (
-    <form onSubmit={submit} className="mt-1 flex flex-col gap-1.5 border-t px-1 pt-2 sm:flex-row">
-      <Input value={text} onChange={e => setText(e.target.value)} placeholder="+ задача в фокус" className="flex-1" />
-      <select value={cat} onChange={e => pick(e.target.value)} title="Куда положить задачу"
-        className="h-9 max-w-full rounded-md border border-input bg-background px-2 text-sm text-muted-foreground sm:max-w-64">
-        {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-      </select>
+    <form onSubmit={submit} className="mt-1 flex items-center gap-2 border-t px-1 pt-2">
+      <Input value={text} onChange={e => setText(e.target.value)} placeholder="Новая задача в фокус" enterKeyHint="done" className="h-10 flex-1" />
+      <Button type="submit" size="icon" disabled={!text.trim()} aria-label="Добавить в фокус" className="size-10 shrink-0"><PlusIcon /></Button>
     </form>
   );
 }
