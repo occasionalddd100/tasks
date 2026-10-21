@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { AlarmClockIcon, BellIcon, BellRingIcon, CheckIcon, CrosshairIcon, FlameIcon, MoonStarIcon, SunIcon, SunriseIcon, SunsetIcon, CalendarClockIcon } from "lucide-react";
+import { AlarmClockIcon, BellIcon, BellRingIcon, CheckIcon, CrosshairIcon, FlameIcon, MoonStarIcon, SunIcon, SunriseIcon, SunsetIcon, CalendarClockIcon, CalendarDaysIcon, ChevronDownIcon } from "lucide-react";
 import { useDb, update } from "@/lib/db";
 import { today, plural } from "@/lib/tasks";
 import { inFocus } from "@/lib/focus";
@@ -9,7 +9,7 @@ import { isApp } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
 // The day at a glance: a 30-hour strip from 06:00 today to tomorrow noon, coloured by part of day,
-// with "now", every task that has a time, a countdown to the next one and the important untimed ones.
+// with "now", every task that has a time and a countdown to the next one; the week and reminders fold below.
 
 const H = 3600e3;
 const SLEEP = 23; // hour the day ends for "до сна"
@@ -78,9 +78,8 @@ export default function DayTimeline() {
 
   return (
     <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <Hero now={now} next={next} missed={missed.length} left={events.filter(e => !e.t.done && e.when >= now).length + untimed.length} onTick={toggle} />
+      <Hero now={now} next={next} missed={missed.length} left={events.filter(e => !e.t.done && e.when >= now).length} onTick={toggle} />
       <Strip now={now} start={start} end={end} events={events} onTick={toggle} />
-      {untimed.length > 0 && <Untimed list={untimed} onTick={toggle} />}
       <Ahead db={db} now={now} />
     </motion.section>
   );
@@ -95,7 +94,7 @@ function Hero({ now, next, missed, left, onTick }) {
   const progress = night ? 1 : Math.min(1, Math.max(0, (now - dayStart) / (dayEnd - dayStart)));
   const toSleep = night ? 0 : dayEnd - now;
   return (
-    <div className="grid gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] md:items-center">
+    <div className="grid grid-cols-1 gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] md:items-center [&>*]:min-w-0">
       <div className="flex items-center gap-3">
         <motion.div className="grid size-12 shrink-0 place-items-center rounded-2xl text-white shadow-md" style={{ background: part.bg }}
           animate={{ rotate: [0, -6, 6, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}>
@@ -296,41 +295,6 @@ function Pin({ e, now, k, onTick }) {
 
 /* ───────── important, but without a time ───────── */
 
-function Untimed({ list, onTick }) {
-  const td = today();
-  const tag = t => t.due && t.due < td ? { label: "просрочено", cls: "border-destructive/50 bg-destructive/10", icon: FlameIcon, ic: "text-destructive" }
-    : t.prio === "urgent" ? { label: "срочно", cls: "border-orange-500/50 bg-orange-500/10", icon: FlameIcon, ic: "text-orange-500" }
-    : t.due === td ? { label: "сегодня", cls: "border-amber-500/40 bg-amber-500/10", icon: SunIcon, ic: "text-amber-500" }
-    : inFocus(t) ? { label: "в фокусе", cls: "border-primary/40 bg-primary/5", icon: CrosshairIcon, ic: "text-primary" }
-    : { label: "ближайшее", cls: "bg-muted/40", icon: SunIcon, ic: "text-amber-500" };
-  return (
-    <div className="border-t p-4">
-      <div className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        Без времени, но важно
-        <span className="rounded-full bg-muted px-1.5 tabular-nums normal-case">{list.length}</span>
-      </div>
-      <motion.ul layout className="flex flex-wrap gap-2">
-        <AnimatePresence initial={false}>
-          {list.map((t, k) => {
-            const g = tag(t), I = g.icon;
-            return (
-              <motion.li key={t.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1, transition: { delay: k * 0.02 } }} exit={{ opacity: 0, scale: 0.8 }}
-                className={cn("flex max-w-full items-center gap-2 rounded-xl border py-1.5 pr-3 pl-1.5", g.cls)}>
-                <button type="button" onClick={() => onTick(t)} aria-label={"Отметить: " + t.text}
-                  className="grid size-6 shrink-0 place-items-center rounded-full border-2 border-muted-foreground/40 transition-colors hover:border-good hover:bg-good/10">
-                  <CheckIcon className="size-3.5 text-transparent hover:text-good" />
-                </button>
-                <span className="min-w-0 truncate text-[14px] font-medium" title={t.text}>{t.text}</span>
-                <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"><I className={cn("size-3", g.ic)} />{g.label}</span>
-              </motion.li>
-            );
-          })}
-        </AnimatePresence>
-      </motion.ul>
-    </div>
-  );
-}
-
 /* ───────── the days ahead and the reminders that will come ───────── */
 
 const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
@@ -350,9 +314,25 @@ function Ahead({ db, now }) {
   const next = useMemo(() => plan(db, now).slice(0, 5), [db.tasks, db.cats, db.boards, db.me, Math.floor(now / 60e3)]);
   const [perm, setPerm] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "denied"));
   const ask = async () => setPerm(await Notification.requestPermission());
-  if (!days.some(d => d.list.length) && !next.length) return null;
+  const [open, setOpenRaw] = useState(() => { try { return localStorage.getItem("ahead") === "1"; } catch { return false; } });
+  const setOpen = v => { setOpenRaw(v); try { localStorage.setItem("ahead", v ? "1" : "0"); } catch {} };
+  const count = days.reduce((n, d) => n + d.list.length, 0);
+  if (!count && !next.length) return null;
+  const when = r => (iso(r.at) === td ? "сегодня" : iso(r.at) === iso(new Date(now + 24 * H)) ? "завтра" : WD[r.at.getDay()] + " " + r.at.getDate() + "." + String(r.at.getMonth() + 1).padStart(2, "0")) + " в " + hm(r.at);
+  if (!open) return (
+    <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-2 border-t px-4 py-3 text-left text-sm hover:bg-accent/40">
+      <CalendarDaysIcon className="size-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+        <b className="text-foreground">Неделя</b>{count ? ` · ${count} ${plural(count, ["дело", "дела", "дел"])}` : ""}{next[0] ? ` · напомню ${when(next[0])}` : ""}
+      </span>
+      <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+    </button>
+  );
   return (
     <div className="grid gap-4 border-t p-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <button type="button" onClick={() => setOpen(false)} className="-mt-1 flex items-center gap-2 text-sm font-semibold lg:col-span-2">
+        <CalendarDaysIcon className="size-4 text-muted-foreground" />Неделя и напоминания<ChevronDownIcon className="ml-auto size-4 rotate-180 text-muted-foreground" />
+      </button>
       <div className="min-w-0">
         <div className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Впереди</div>
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">

@@ -79,7 +79,7 @@ export default function JournalView() {
 
   const pick = (date, edit = false) => setOpen({ date, edit });
   // the lower part (diary, days, totals) is one block with its own tabs; the top is the day itself
-  const [tab, setTabRaw] = useState(() => { try { const t = localStorage.getItem("journalTab"); return TABS.some(x => x.k === t) ? t : "diary"; } catch { return "diary"; } });
+  const [tab, setTabRaw] = useState(() => { try { const t = localStorage.getItem("journalTab"); return TABS.some(x => x.k === t) ? t : "day"; } catch { return "day"; } });
   const setTab = t => { setTabRaw(t); try { localStorage.setItem("journalTab", t); } catch {} };
   const memories = useMemories(info, mine);
 
@@ -100,7 +100,9 @@ export default function JournalView() {
           {deadline >= 0 && <Badge>до 31.10: <b>{deadline}</b> {plural(deadline, ["день", "дня", "дней"])}</Badge>}
         </div>
       </header>
+      <PillTabs>{TABS.map(({ k, label, icon: Icon }) => <PillTab key={k} on={tab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>
 
+      {tab === "day" && <>
       <DayTimeline />
       {/* the working part: drafts to throw things into on the left, what's on today on the right */}
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start">
@@ -110,9 +112,8 @@ export default function JournalView() {
           <TodayPanel i={info(today())} onOpen={edit => pick(today(), edit)} />
         </div>
       </div>
+      </>}
 
-      <section className="flex flex-col gap-4">
-        <PillTabs>{TABS.map(({ k, label, icon: Icon }) => <PillTab key={k} on={tab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>
         {tab === "diary" && <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start">
           <ThoughtsCard i={info(today())} />
           <QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} />
@@ -122,7 +123,6 @@ export default function JournalView() {
           <Stats info={info} items={items} mine={mine} streak={streak} />
           <Habits habits={db.habits} />
         </div>}
-      </section>
       <DayDialog open={open} setOpen={setOpen} info={info} burst={bursts.fire} />
       {bursts.layer}
     </div>
@@ -130,6 +130,7 @@ export default function JournalView() {
 }
 
 const TABS = [
+  { k: "day", label: "Сегодня", icon: CalendarCheckIcon },
   { k: "diary", label: "Дневник", icon: NotebookPenIcon },
   { k: "days", label: "Дни", icon: CalendarDaysIcon },
   { k: "stats", label: "Итоги", icon: BarChart3Icon },
