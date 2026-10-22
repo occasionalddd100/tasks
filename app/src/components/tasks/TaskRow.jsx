@@ -77,7 +77,7 @@ export async function deleteTask(t) {
   remove("tasks", [...kids, t.id]);
 }
 
-export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
+export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocusMark }) {
   const [editing, setEditing] = useState(null); // "text" | "note"
   const [noteOpen, setNoteOpen] = useState(false);
   const [sheet, setSheet] = useState(false);
@@ -125,7 +125,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
 
   // date and marks: right of the text on a wide screen, a line under it on the phone so the text keeps the width
   const meta = !overlay && (
-        <div className={cn("flex shrink-0 items-center", phone && "-ml-1 mt-1 flex-wrap gap-0.5")}>
+        <div className={cn("flex shrink-0 items-center", phone && "-ml-1 mt-0.5 min-w-0 flex-wrap gap-x-1")}>
           <button type="button" onClick={phone ? () => setSheet(true) : openDate} title={t.due ? "Срок: " + t.due + (t.time ? " " + t.time : "") : "Поставить дату"} aria-label={t.due ? "Срок " + when : "Поставить дату"}
             className={cn("relative grid h-6 min-w-6 place-items-center rounded px-1 text-xs text-muted-foreground hover:bg-background",
               !t.due && "opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100 max-md:hidden", t.due && "bg-muted", late && "text-destructive")}>
@@ -148,8 +148,9 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
               </button>
             } />
           )}
-          {focused && !t.done && <span className="grid size-6 place-items-center text-primary" title="В фокусе" aria-label="В фокусе"><CrosshairIcon className="size-3.5" /></span>}
+          {focused && !t.done && !noFocusMark && <span className="grid size-6 place-items-center text-primary" title="В фокусе" aria-label="В фокусе"><CrosshairIcon className="size-3.5" /></span>}
           {urgent && <span className="grid size-6 place-items-center text-red-500" title="Срочно" aria-label="Срочно"><FlameIcon className="size-3.5" /></span>}
+          {phone && sub && <span className="min-w-0 truncate pl-1 text-xs text-muted-foreground/70">{sub}</span>}
         </div>
   );
   const swipe = useSwipe(() => toggle(!t.done), () => !t.done && (focused ? fromFocus(t) : toFocus(t)));
@@ -172,7 +173,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
           className="mt-0.5 grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-background hover:text-foreground">
           <ChevronRightIcon className={cn("size-3.5 transition-transform duration-200", !kids.collapsed && "rotate-90")} />
         </button>
-      ) : grip && !t.parent && <span className="w-5 shrink-0" />}
+      ) : kids === null && !t.parent && <span className="w-5 shrink-0" />}
       <Checkbox className="mt-0.5" checked={!!t.done} onCheckedChange={v => toggle(!!v)} aria-label={t.text} disabled={overlay} />
       <div className="min-w-0 flex-1 pl-1.5">
         {editing === "text"
@@ -203,7 +204,8 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub }) {
             </span>
           )}
         {t.note && <span className="mt-0.5 block text-[13px] text-muted-foreground">{t.note}</span>}
-        {phone && (t.due || canHide || who || (focused && !t.done) || urgent) && meta}
+        {phone && (t.due || canHide || who || (focused && !t.done && !noFocusMark) || urgent || sub) && meta}
+        {!phone && sub && <div className="truncate text-xs text-muted-foreground/70">{sub}</div>}
       </div>
       {!phone && meta}
     </div>

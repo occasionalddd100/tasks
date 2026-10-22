@@ -117,8 +117,7 @@ function FocusItem({ t, place, next }) {
   return (
     <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn("relative rounded-md", isDragging && "z-10 opacity-30", next && "bg-primary/8")}>
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
-        <TaskRow t={t} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
-        <div className="-mt-1 truncate pb-1 pl-[3.25rem] text-xs text-muted-foreground/70">{next ? "▶ сейчас · " : ""}{place}</div>
+        <TaskRow t={t} noFocusMark sub={(next ? "▶ сейчас · " : "") + place} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
       </motion.div>
     </li>
   );
