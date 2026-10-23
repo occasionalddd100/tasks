@@ -1,0 +1,1 @@
+var e=new URL(`data-BLD79ES_.json`,import.meta.url).href;export{e as default};

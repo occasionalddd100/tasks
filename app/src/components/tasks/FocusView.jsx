@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { VIEW } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
 import { useFresh, setAmbient } from "@/components/tasks/QuickAdd";
+import { TagMark } from "@/components/tasks/TagMark";
 import { openTask } from "@/components/tasks/TaskSheet";
 import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
 import { Fan } from "@/components/Fan";
@@ -77,7 +78,7 @@ export default function FocusView() {
     { id: WORK, name: "В работе", n: list.length - done, on: shownTag === WORK, glyph: <CrosshairIcon className="size-5" /> },
     groups.get(NONE)?.length && { id: NONE, name: "Без тега", n: groups.get(NONE).length, on: shownTag === NONE, glyph: <InboxIcon className="size-5" /> },
     ...tags.map(t => ({ id: t.id, name: t.name, n: groups.get(t.id)?.length || 0, on: shownTag === t.id,
-      glyph: <span className="text-base font-semibold" style={t.color ? { color: t.color } : undefined}>{(t.name.trim()[0] || "#").toUpperCase()}</span> })),
+      glyph: t.emoji ? <span className="text-xl leading-none">{t.emoji}</span> : <span className="text-base font-semibold" style={t.color ? { color: t.color } : undefined}>{(t.name.trim()[0] || "#").toUpperCase()}</span> })),
   ].filter(Boolean).slice(0, 9).concat({ id: "\u0000edit", name: "Править теги", glyph: <PencilIcon className="size-5" /> });
 
   return (
@@ -90,7 +91,7 @@ export default function FocusView() {
         <TagChip on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>
         <TagChip on={shownTag === WORK} n={list.length - done} onClick={() => setFilter(shownTag === WORK ? null : WORK)}><CrosshairIcon className="size-3.5" />В работе</TagChip>
         {groups.get(NONE)?.length > 0 && <TagChip on={shownTag === NONE} onClick={() => setFilter(shownTag === NONE ? null : NONE)} n={groups.get(NONE).length}><InboxIcon className="size-3.5" />Без тега</TagChip>}
-        {tags.map(t => <TagChip key={t.id} on={shownTag === t.id} color={t.color} n={groups.get(t.id)?.length} onClick={() => setFilter(shownTag === t.id ? null : t.id)}>{t.name}</TagChip>)}
+        {tags.map(t => <TagChip key={t.id} on={shownTag === t.id} n={groups.get(t.id)?.length} onClick={() => setFilter(shownTag === t.id ? null : t.id)}><TagMark t={t} />{t.name}</TagChip>)}
         <button type="button" onClick={() => openTagEditor()} aria-label="Править теги" className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-dashed px-3 text-sm text-muted-foreground hover:text-foreground"><PencilIcon className="size-3.5" />Теги</button>
       </div>
 
@@ -109,7 +110,7 @@ export default function FocusView() {
         {shownTag
           ? <TagList tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
           : [...groups].filter(([, l]) => l.length).map(([id, l]) => (
-              <TagRow key={id} id={id} name={tagName(id)} color={tags.find(t => t.id === id)?.color} tasks={l} onOpen={() => setFilter(id)} />
+              <TagRow key={id} id={id} name={tagName(id)} tag={tags.find(t => t.id === id)} color={tags.find(t => t.id === id)?.color} tasks={l} onOpen={() => setFilter(id)} />
             ))}
         {!rest.length && <p className="text-sm text-muted-foreground">Других открытых задач нет.</p>}
       </section>}
@@ -167,7 +168,7 @@ function WorkItem({ t }) {
       {/* a soft tint and a thin bar in the tag's colour, so work from different tags reads apart */}
       {tag && <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full" style={{ background: tag.color }} />}
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
-        <TaskRow t={t} noFocusMark sub={name && "#" + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
+        <TaskRow t={t} noFocusMark sub={name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
         {kids.length > 0 && <ul className="mb-1 ml-9 border-l pl-2" aria-label={"Подзадачи: " + t.text}>{kids.map(k => <li key={k.id}><TaskRow t={k} noFocusMark /></li>)}</ul>}
       </motion.div>
     </li>
@@ -175,12 +176,12 @@ function WorkItem({ t }) {
 }
 
 // one tag: its tasks as cards in a row you scroll sideways; the rows themselves scroll down
-function TagRow({ id, name, color, tasks, onOpen }) {
+function TagRow({ id, name, tag, color, tasks, onOpen }) {
   return (
     <div className="flex flex-col gap-2">
       <button type="button" onClick={onOpen} className="flex h-7 items-center gap-1.5 self-start rounded-full px-2.5 text-sm font-semibold"
         style={color ? { background: `color-mix(in oklab, transparent 75%, ${color})` } : { background: "var(--muted)" }}>
-        {id === NONE ? <InboxIcon className="size-4 text-muted-foreground" /> : <HashIcon className="size-3.5" style={{ color }} />}
+        {id === NONE ? <InboxIcon className="size-4 text-muted-foreground" /> : tag?.emoji ? <TagMark t={tag} size="md" /> : <HashIcon className="size-3.5" style={{ color }} />}
         {name}<span className="font-normal opacity-60 tabular-nums">{tasks.length}</span>
       </button>
       <div data-hscroll className="-mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:px-0">

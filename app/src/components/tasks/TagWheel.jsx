@@ -32,7 +32,7 @@ export function TagWheelHost() {
   if (s) {
     const cur = tagOfTask(db, t)?.id;
     const work = { id: "\u0000work", name: inFocus(t) ? "Из работы" : "В работу", glyph: <CrosshairIcon className="size-4" />, on: inFocus(t), run: () => (inFocus(t) ? fromFocus(t) : toFocus(t)) };
-    const tags = tagsOf(db).slice(0, 9).map(g => ({ id: g.id, name: g.name, color: g.color, on: g.id === cur, run: () => setTag(t, g.id) }));
+    const tags = tagsOf(db).slice(0, 9).map(g => ({ id: g.id, name: g.name, color: g.color, emoji: g.emoji, on: g.id === cur, run: () => setTag(t, g.id) }));
     items = [work, ...tags];
     // keep the whole ring on screen
     cx = Math.min(innerWidth - R - 44, Math.max(R + 44, s.x)); cy = Math.min(innerHeight - R - 60, Math.max(R + 60, s.y));
@@ -66,7 +66,7 @@ export function TagWheelHost() {
               <span className={cn("grid size-12 place-items-center rounded-full text-sm font-bold shadow-lg ring-2 transition-colors",
                 hot === it ? "bg-primary text-primary-foreground ring-primary" : it.on ? "bg-foreground text-background ring-foreground" : "bg-popover text-popover-foreground ring-white/10")}
                 style={it.color && hot !== it && !it.on ? { boxShadow: `inset 0 0 0 3px ${it.color}` } : undefined}>
-                {it.glyph || (it.on ? <CheckIcon className="size-4" /> : (it.name.trim()[0] || "#").toUpperCase())}
+                {it.glyph || (it.on ? <CheckIcon className="size-4" /> : it.emoji ? <span className="text-xl leading-none">{it.emoji}</span> : (it.name.trim()[0] || "#").toUpperCase())}
               </span>
               <span className={cn("max-w-24 truncate rounded-full px-2 py-0.5 text-[11px] font-semibold shadow", hot === it ? "bg-primary text-primary-foreground" : "bg-popover/95 text-popover-foreground")}>{it.name}</span>
             </motion.button>

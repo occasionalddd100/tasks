@@ -1,10 +1,11 @@
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import * as D from "@radix-ui/react-dialog";
 import { PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useDb, getDb } from "@/lib/db";
 import { PASTELS } from "@/lib/colors";
 import { ensurePersonal } from "@/lib/personal";
-import { tagsOf, tagGroups, renameTag, colorTag, addTag, deleteTag } from "@/lib/tags";
+import { tagsOf, tagGroups, renameTag, colorTag, emojiTag, addTag, deleteTag } from "@/lib/tags";
+import { TagMark } from "@/components/tasks/TagMark";
 import { useBackClose } from "@/lib/back";
 import { confirmAction } from "@/components/Confirm";
 import { cn } from "@/lib/utils";
@@ -28,7 +29,7 @@ export function TagEditorHost() {
             <D.Title className="flex-1 text-lg font-semibold">Теги</D.Title>
             <D.Close className="grid size-8 place-items-center rounded-full text-muted-foreground active:bg-accent" aria-label="Закрыть"><XIcon className="size-5" /></D.Close>
           </div>
-          <D.Description className="px-4 text-sm text-muted-foreground">Нажми на название, чтобы переименовать, на кружок, чтобы сменить цвет. У удалённого тега задачи уходят в «Без тега».</D.Description>
+          <D.Description className="px-4 text-sm text-muted-foreground">Нажми на название, чтобы переименовать, на значок слева, чтобы выбрать эмодзи и цвет. У удалённого тега задачи уходят в «Без тега».</D.Description>
           {isOpen && <Editor />}
         </D.Content>
       </D.Portal>
@@ -59,20 +60,25 @@ function TagLine({ x, n }) {
   return (
     <li className="flex flex-col">
       <div className="flex h-12 items-center gap-2">
-        <button type="button" onClick={() => setPalette(p => !p)} aria-label="Цвет" aria-expanded={palette}
-          className="grid size-9 shrink-0 place-items-center rounded-full active:bg-accent">
-          <span className={cn("size-4 rounded-full", !x.color && "border-2 border-dashed border-muted-foreground/50")} style={x.color ? { background: x.color } : undefined} />
+        <button type="button" onClick={() => setPalette(p => !p)} aria-label="Эмодзи и цвет" aria-expanded={palette}
+          className={cn("grid size-9 shrink-0 place-items-center rounded-full active:bg-accent", palette && "bg-accent")}>
+          <TagMark t={x} size="lg" />
         </button>
-        <Name value={x.name} onSave={v => renameTag(x.id, v)} className="text-[15px]" label="Название тега" />
+        {/* an emoji typed at the start of the name moves into the tag's own emoji when the name is saved */}
+        <Name value={x.name} onSave={v => { renameTag(x.id, v); if (x.emoji && !x.ownEmoji) emojiTag(x.id, x.emoji); }} className="text-[15px]" label="Название тега" />
         <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{n || ""}</span>
         <button type="button" onClick={del} aria-label={"Удалить тег " + x.name} className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-destructive active:bg-accent"><Trash2Icon className="size-4" /></button>
       </div>
       {palette && (
-        <div className="mb-2 ml-11 flex flex-wrap gap-2">
-          {PASTELS.map(p => (
-            <button key={p.k} type="button" onClick={() => { colorTag(x.id, p.k); setPalette(false); }} aria-label={p.name}
-              className={cn("size-8 rounded-full", x.key === p.k && "ring-2 ring-foreground ring-offset-2 ring-offset-background")} style={{ background: p.c }} />
-          ))}
+        <div className="mb-3 flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2 pl-11">
+            {PASTELS.map(p => (
+              <button key={p.k} type="button" onClick={() => colorTag(x.id, p.k)} aria-label={p.name}
+                className={cn("size-7 rounded-full", x.key === p.k && "ring-2 ring-foreground ring-offset-2 ring-offset-background")} style={{ background: p.c }} />
+            ))}
+            {x.emoji && <button type="button" onClick={() => { emojiTag(x.id, ""); if (x.raw !== x.name) renameTag(x.id, x.name); }} className="ml-auto h-7 rounded-full border px-2.5 text-xs text-muted-foreground">Без эмодзи</button>}
+          </div>
+          <EmojiPick onPick={e => { emojiTag(x.id, e); if (x.raw !== x.name) renameTag(x.id, x.name); setPalette(false); }} />
         </div>
       )}
     </li>
@@ -101,4 +107,22 @@ function AddLine({ placeholder, onAdd }) {
         className="h-9 min-w-0 flex-1 rounded-md bg-transparent px-1 text-[15px] outline-none placeholder:text-muted-foreground/70 focus:bg-muted/60" />
     </form>
   );
+}
+
+// every emoji there is, with search and categories (loaded only when opened; the Russian names come with the app)
+function EmojiPick({ onPick }) {
+  const box = useRef(null), pick = useRef(onPick);
+  pick.current = onPick;
+  useEffect(() => {
+    let el = null, gone = false;
+    Promise.all([import("emoji-picker-element"), import("emoji-picker-element/i18n/ru_RU.js"), import("emoji-picker-element-data/ru/cldr/data.json?url")]).then(([m, i18n, url]) => {
+      if (gone || !box.current) return;
+      el = new m.Picker({ locale: "ru", dataSource: url.default, i18n: i18n.default });
+      el.classList.add(document.documentElement.classList.contains("dark") ? "dark" : "light");
+      el.addEventListener("emoji-click", e => pick.current(e.detail.unicode));
+      box.current.append(el);
+    });
+    return () => { gone = true; el?.remove(); };
+  }, []);
+  return <div ref={box} className="emoji-box min-h-80 overflow-hidden rounded-xl border" />;
 }

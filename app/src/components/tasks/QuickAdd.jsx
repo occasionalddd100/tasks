@@ -8,6 +8,7 @@ import { tagsOf, tagGroups, parseTag, targetCat } from "@/lib/tags";
 import { ensurePersonal } from "@/lib/personal";
 import { today, dueLabel } from "@/lib/tasks";
 import { addDone } from "@/lib/done";
+import { TagMark } from "@/components/tasks/TagMark";
 import { useBackClose } from "@/lib/back";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -91,7 +92,7 @@ export function Composer({ autoFocus, defaultTag = null, work: workDefault = fal
       {!did && tags.length > 0 && <div className="flex flex-wrap gap-1.5">
         {tags.map(t => (
           <button key={t.id} type="button" onClick={() => setTag(cur === t.id ? null : t.id)} aria-pressed={cur === t.id} className={chip(cur === t.id)}>
-            {t.color ? <span className="size-2 rounded-full" style={{ background: t.color }} /> : <HashIcon className="size-3" />}{t.name}
+            <TagMark t={t} />{t.name}
           </button>
         ))}
       </div>}

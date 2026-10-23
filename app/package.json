@@ -27,6 +27,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.4.17",
+    "emoji-picker-element": "^1.26.3",
+    "emoji-picker-element-data": "^1.8.0",
     "lucide-react": "^1.58.0",
     "marked": "^18.1.1",
     "motion": "^14.3.0",

@@ -16,6 +16,7 @@ import TaskNoteDialog from "@/components/tasks/TaskNoteDialog";
 import { toast } from "sonner";
 import { tagGroups, isPersonal, setTag } from "@/lib/tags";
 import { openTagEditor } from "@/components/tasks/TagEditor";
+import { TagMark } from "@/components/tasks/TagMark";
 
 // Everything about one task on the phone, in one place: tap a task, this slides up.
 // Top: the two things that decide when it gets done ("Фокус" now, "Когда" by date), then the 🔥 flag; below, the rest.
@@ -102,7 +103,7 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
                       <button key={x.id} type="button" onClick={() => setTag(t, x.id === t.cat ? null : x.id)} aria-pressed={x.id === t.cat}
                         className={cn("inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors active:scale-[.97]",
                           x.id === t.cat ? "border-foreground bg-foreground text-background" : "text-muted-foreground")}>
-                        {x.color && <span className="size-2 rounded-full" style={{ background: x.color }} />}{x.name}
+                        <TagMark t={x} />{x.name}
                       </button>
                     ))}
                   </div>

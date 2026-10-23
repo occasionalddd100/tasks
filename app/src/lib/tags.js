@@ -6,6 +6,10 @@ import { descendantsOf } from "@/components/tasks/TaskRow";
 
 // Tags are the categories of "Личное"; its tabs group them (Главное, Витуб, …).
 // A task with no tag waits in "Черновики". Projects (shared boards) are not tags: tasks are added there on their board.
+// "🎬 Монтаж": an emoji at the start of the name becomes the tag's icon
+const EMOJI = /^(\p{Extended_Pictographic}|\p{Regional_Indicator}{2})(\uFE0F|\u200D\p{Extended_Pictographic}|\p{Emoji_Modifier})*/u;
+export const leadEmoji = s => (s || "").trim().match(EMOJI)?.[0] || "";
+export const emojiTag = (id, emoji) => update("cats", id, { emoji });
 const slug = s => (s || "").toLowerCase().replace(/\s+/g, "");
 
 export function tagGroups(db) {
@@ -15,7 +19,8 @@ export function tagGroups(db) {
     id: b.id, name: b.name,
     // a tag with no colour of its own still gets one, so tags never blur together
     tags: db.cats.filter(c => c.board === b.id && !c.drafts).sort(byOrder)
-      .map(c => ({ id: c.id, name: c.name, group: b.name, groupId: b.id, key: c.color || "", color: pastel(c.color) || PASTELS[i++ % PASTELS.length].c })),
+      .map(c => { const lead = leadEmoji(c.name); return { id: c.id, raw: c.name, name: (lead ? c.name.slice(lead.length).trim() : c.name) || c.name, emoji: c.emoji || lead, ownEmoji: c.emoji || "",
+        group: b.name, groupId: b.id, key: c.color || "", color: pastel(c.color) || PASTELS[i++ % PASTELS.length].c }; }),
   }));
 }
 export const tagsOf = db => tagGroups(db).flatMap(g => g.tags);
