@@ -227,3 +227,8 @@
 ::-webkit-scrollbar-thumb { background: color-mix(in oklch, var(--foreground) 18%, transparent); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklch, var(--ink) 70%, transparent); }
 ::-webkit-scrollbar-corner { background: transparent; }
+
+/* phone: blocks lose their frame so the text gets the whole width; headings and space separate them */
+@media (max-width: 767px) {
+  .m-flat { border-width: 0; border-radius: 0; background: transparent; box-shadow: none; padding-left: 0; padding-right: 0; }
+}

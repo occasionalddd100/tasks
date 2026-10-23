@@ -9,8 +9,8 @@ export const PASTELS = [
   { k: "lilac", name: "Сиреневый", c: "oklch(0.78 0.1 330)" },
 ];
 export const pastel = k => PASTELS.find(p => p.k === k)?.c || null;
-// a card tinted with the colour: faint fill, soft border
+// a card tinted with the colour: faint fill, soft border (as variables, so the flat phone layout can drop them)
 export const tint = k => {
   const c = pastel(k); if (!c) return undefined;
-  return { "--tint": c, backgroundColor: `color-mix(in oklab, var(--card) 94%, ${c})`, borderColor: `color-mix(in oklab, var(--border) 72%, ${c})` };
+  return { "--tint": c, "--tint-bg": `color-mix(in oklab, var(--card) 94%, ${c})`, "--tint-bd": `color-mix(in oklab, var(--border) 72%, ${c})` };
 };

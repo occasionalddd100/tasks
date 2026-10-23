@@ -1,7 +1,8 @@
+import { toast } from "sonner";
 import { createContext, useContext, useRef, useState, useSyncExternalStore } from "react";
 import {
   AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CrosshairIcon, CalendarXIcon, ChevronRightIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlameIcon,
-  GripVerticalIcon, FolderInputIcon, UserIcon, UserXIcon, PencilIcon, Trash2Icon, CheckIcon,
+  GripVerticalIcon, FolderInputIcon, UserIcon, UserXIcon, PencilIcon, Trash2Icon, CheckIcon, CopyIcon,
 } from "lucide-react";
 import { getDb, update, updateMany, remove } from "@/lib/db";
 import { today, dueLabel, stale } from "@/lib/tasks";
@@ -119,6 +120,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
     t.due && { label: "Убрать дату", icon: CalendarXIcon, onSelect: () => update("tasks", t.id, { due: "", time: "" }) },
     { sep: true },
     { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setEditing("text")) },
+    { label: "Копировать текст", icon: CopyIcon, onSelect: () => navigator.clipboard?.writeText(t.text).then(() => toast("Текст скопирован")) },
     { sep: true },
     { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: () => deleteTask(t) },
   ];

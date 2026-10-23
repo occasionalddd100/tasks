@@ -159,7 +159,7 @@ export function Habits({ habits }) {
   };
 
   return (
-    <section className="rounded-xl border bg-card p-3 shadow-xs">
+    <section className="m-flat rounded-xl border bg-card p-3 shadow-xs">
       <h2 className="mb-1 flex items-center gap-2 px-1 text-[15px] font-semibold"><Repeat2Icon className="size-4 text-violet-500" />Повторяющиеся</h2>
       <ul>
         {now.map(h => <HabitRow key={h.id} h={h} onMark={mark} />)}

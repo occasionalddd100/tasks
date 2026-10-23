@@ -30,13 +30,13 @@ export default function DraftsCard({ link = true, wide = false }) {
 
   // the personal project: field and hint on the left, the pile to sort out on the right
   if (wide) return (
-    <section className="grid gap-4 rounded-xl border border-dashed border-primary/40 bg-card p-4 shadow-xs md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] md:gap-6">
+    <section className="m-flat grid gap-4 rounded-xl border border-dashed border-primary/40 bg-card p-4 shadow-xs md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] md:gap-6">
       <div className="flex flex-col gap-3">{head}<CaptureBar />{hint}</div>
       <div className="flex min-w-0 flex-col gap-2">{body}</div>
     </section>
   );
   return (
-    <section className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs">
+    <section className="m-flat flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs">
       {head}<CaptureBar />{hint}{body}
     </section>
   );

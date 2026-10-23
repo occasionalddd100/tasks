@@ -181,7 +181,7 @@ function WeekCard({ tasks }) {
   const toggle = () => { setFolded(f => { try { localStorage.setItem("weekFold", f ? "0" : "1"); } catch {} return !f; }); };
   return (
     <div>
-      <section className="rounded-xl border bg-card shadow-xs">
+      <section className="m-flat rounded-xl border bg-card shadow-xs">
         <header className="flex items-center gap-1.5 px-3 pt-3 pb-1">
           <FoldBtn folded={folded} onClick={toggle} />
           <h2 className="flex items-center gap-2 text-[15px] font-semibold"><CalendarIcon className="size-4" />На неделе</h2>
@@ -203,7 +203,7 @@ function DoneCard({ tasks, cats }) {
   const toggle = () => { setFolded(f => { try { localStorage.setItem("doneFold", f ? "0" : "1"); } catch {} return !f; }); };
   const catName = useMemo(() => new Map(cats.map(c => [c.id, c.name])), [cats]);
   return (
-    <section className="rounded-xl border bg-card/60 shadow-xs">
+    <section className="m-flat rounded-xl border bg-card/60 shadow-xs">
       <header className="flex items-center gap-1.5 px-3 py-2.5">
         <FoldBtn folded={folded} onClick={toggle} />
         <h2 className="flex cursor-pointer items-center gap-2 text-[15px] font-semibold text-muted-foreground" onClick={toggle}><CheckCheckIcon className="size-4" />Выполненные</h2>
@@ -282,7 +282,7 @@ function CatCard({ cat, ids, taskById }) {
 
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && "z-10 opacity-40")}>
-      <section style={tint(cat.color)} className={cn("group/cat rounded-xl border bg-card shadow-xs transition-colors", cat.drafts && "border-dashed border-primary/40")}>
+      <section style={tint(cat.color)} className={cn("m-flat group/cat rounded-xl border bg-card shadow-xs transition-colors [background-color:var(--tint-bg,var(--card))] [border-color:var(--tint-bd,var(--border))]", cat.drafts && "border-dashed border-primary/40")}>
         <ActionsContext items={items}>
           <header className="flex items-center gap-1 rounded-t-xl px-2 pt-2 pb-1">
             <button ref={setActivatorNodeRef} {...attributes} {...listeners} aria-label={"Перетащить категорию " + cat.name}
@@ -292,7 +292,7 @@ function CatCard({ cat, ids, taskById }) {
             <FoldBtn folded={cat.collapsed} onClick={toggle} />
             {renaming
               ? <InlineInput value={cat.name} onDone={name => { setRenaming(false); if (name && name !== cat.name) update("cats", cat.id, { name }); }} className="h-7 text-[15px] font-semibold" />
-              : <h2 className="min-w-0 cursor-text truncate text-[15px] font-semibold" onClick={() => setRenaming(true)} title="Переименовать">{cat.name}</h2>}
+              : <>{cat.color && <span className="size-2.5 shrink-0 rounded-full" style={{ background: "var(--tint)" }} aria-hidden />}<h2 className="min-w-0 cursor-text truncate text-[15px] font-semibold" onClick={() => setRenaming(true)} title="Переименовать">{cat.name}</h2></>}
             {tasks.length > 0 && <span title={`${tasks.filter(t => t.done).length} из ${tasks.length} сделано`}
               className="shrink-0 rounded-full bg-foreground/[.06] px-2 py-px text-xs font-medium text-muted-foreground tabular-nums">{tasks.filter(t => !t.done).length || "✓"}</span>}
             {cat.drafts && tasks.some(t => !t.done) && <span className="truncate text-xs text-muted-foreground max-sm:hidden">разбери по категориям</span>}

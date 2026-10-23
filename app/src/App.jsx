@@ -10,6 +10,16 @@ import Shell from "@/components/Shell";
 setErrorHandler(msg => toast.error(msg));
 setNoticeHandler(msg => toast(msg));
 
+// once the keyboard is up, keep the field being typed in on screen
+if (typeof window !== "undefined") window.addEventListener("focusin", e => {
+  const el = e.target;
+  if (!el.matches?.("input:not([type=checkbox]):not([type=date]):not([type=time]),textarea,[contenteditable=true]")) return;
+  setTimeout(() => {
+    const vv = window.visualViewport, r = el.getBoundingClientRect(), bottom = vv ? vv.height + vv.offsetTop : innerHeight;
+    if (r.bottom > bottom - 8 || r.top < 0) el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, 350);
+});
+
 export default function App() {
   const [session, setSession] = useState(undefined);
 

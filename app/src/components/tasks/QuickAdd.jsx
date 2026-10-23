@@ -40,10 +40,11 @@ function Field({ autoFocus, onAdded, big, done }) {
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <input ref={ref} value={text} onChange={e => setText(e.target.value)} placeholder={done ? "Что сделал? Например: сходил в зал" : "Кинуть в черновики…"} enterKeyHint="send" aria-label={done ? "Что сделал" : "Новая задача в черновики"}
-          className={cn("min-w-0 flex-1 rounded-xl border bg-background px-3 outline-none focus:ring-2 focus:ring-ring/40", big ? "h-12 text-base" : "h-10 text-[15px]")} />
+        <textarea ref={ref} rows={1} value={text} onChange={e => setText(e.target.value)} placeholder={done ? "Что сделал? Например: сходил в зал" : "Кинуть в черновики…"} enterKeyHint="send" aria-label={done ? "Что сделал" : "Новая задача в черновики"}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) submit(e); }}
+          className={cn("field-sizing-content max-h-40 min-w-0 flex-1 resize-none rounded-xl border bg-background px-3 outline-none focus:ring-2 focus:ring-ring/40", big ? "min-h-14 py-3.5 text-lg" : "min-h-10 py-2 text-[15px]")} />
         <button type="submit" disabled={!text.trim()} aria-label="Добавить"
-          className={cn("grid shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition-opacity disabled:opacity-30", big ? "size-12" : "size-10")}>
+          className={cn("grid shrink-0 place-items-center self-end rounded-xl bg-primary text-primary-foreground transition-opacity disabled:opacity-30", big ? "size-14" : "size-10")}>
           <ArrowUpIcon className="size-5" />
         </button>
       </div>

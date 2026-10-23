@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import * as D from "@radix-ui/react-dialog";
 import {
-  AlarmClockIcon, CalendarIcon, CornerDownRightIcon, CrosshairIcon, EyeOffIcon, FileTextIcon, FlameIcon, FolderInputIcon, Trash2Icon, UserIcon, XIcon,
+  AlarmClockIcon, CalendarIcon, CopyIcon, CornerDownRightIcon, CrosshairIcon, EyeOffIcon, FileTextIcon, FlameIcon, FolderInputIcon, Trash2Icon, UserIcon, XIcon,
 } from "lucide-react";
 import { getDb, update, updateMany, useDb } from "@/lib/db";
 import { today, addDays, dueLabel, byOrder } from "@/lib/tasks";
@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { personName } from "@/lib/people";
 import { descendantsOf, hideTask, deleteTask } from "@/components/tasks/TaskRow";
 import TaskNoteDialog from "@/components/tasks/TaskNoteDialog";
+import { toast } from "sonner";
 
 // Everything about one task on the phone, in one place: tap a task, this slides up.
 // Top: the two things that decide when it gets done ("Фокус" now, "Когда" by date), then the 🔥 flag; below, the rest.
@@ -97,6 +98,9 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
             </button>
 
             <div className="mt-3 flex flex-col">
+              <button type="button" className={row} onClick={() => navigator.clipboard?.writeText(t.text + (t.body?.trim() ? "\n\n" + t.body.trim() : "")).then(() => toast("Текст скопирован"), () => toast("Не получилось скопировать"))}>
+                <CopyIcon />Копировать текст
+              </button>
               {onAddSub && !t.done && <button type="button" onClick={close(onAddSub)} className={row}><CornerDownRightIcon />Добавить подзадачу</button>}
               {!t.parent && cats.length > 1 && (
                 <label className={cn(row, "relative")}><FolderInputIcon />{cats.find(c => c.id === t.cat)?.drafts ? "Перенести в категорию" : "Категория"}
