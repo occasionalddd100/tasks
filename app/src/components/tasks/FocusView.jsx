@@ -162,7 +162,10 @@ function WorkItem({ t }) {
   const name = tag?.name || (cat?.drafts ? "" : db.projects.find(p => p.id === board?.project)?.name);
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: t.id });
   return (
-    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn("relative rounded-md", isDragging && "z-10 opacity-30")}>
+    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition, ...(tag ? { background: `color-mix(in oklab, transparent 92%, ${tag.color})` } : {}) }}
+      className={cn("relative mb-1 rounded-lg", isDragging && "z-10 opacity-30")}>
+      {/* a soft tint and a thin bar in the tag's colour, so work from different tags reads apart */}
+      {tag && <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full" style={{ background: tag.color }} />}
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
         <TaskRow t={t} noFocusMark sub={name && "#" + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
         {kids.length > 0 && <ul className="mb-1 ml-9 border-l pl-2" aria-label={"Подзадачи: " + t.text}>{kids.map(k => <li key={k.id}><TaskRow t={k} noFocusMark /></li>)}</ul>}
