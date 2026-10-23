@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -13,7 +13,7 @@ import { stale, byOrder, today, dueLabel } from "@/lib/tasks";
 import { Button } from "@/components/ui/button";
 import { VIEW } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
-import { Composer } from "@/components/tasks/QuickAdd";
+import { useFresh } from "@/components/tasks/QuickAdd";
 import { openTask } from "@/components/tasks/TaskSheet";
 import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
 import { Fan } from "@/components/Fan";
@@ -61,6 +61,13 @@ export default function FocusView() {
     return by;
   }, [rest, tags.map(t => t.id).join(), drafts?.id]);
   const shownTag = filter && (filter === NONE || filter === WORK || tags.some(t => t.id === filter)) ? filter : null;
+  // a task just added from ＋ must be seen: drop a filter that would hide it
+  const freshId = useFresh(), fresh = db.tasks.find(t => t.id === freshId);
+  useEffect(() => {
+    if (!fresh || !shownTag) return;
+    const key = inFocus(fresh) ? WORK : fresh.cat === drafts?.id ? NONE : fresh.cat;
+    if (key !== shownTag) setFilter(null);
+  }, [fresh?.id]);
   const tagName = id => id === NONE ? "Без тега" : tags.find(t => t.id === id)?.name;
 
   const fanItems = [
@@ -76,8 +83,6 @@ export default function FocusView() {
       <header className="flex items-center gap-2">
         <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Задачи</h1>
       </header>
-
-      <Composer defaultTag={shownTag && shownTag !== NONE && shownTag !== WORK ? shownTag : null} work={shownTag === WORK} />
 
       <div ref={chipsRef} className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
         <TagChip on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>
@@ -168,9 +173,10 @@ function WorkItem({ t }) {
 function TagRow({ id, name, color, tasks, onOpen }) {
   return (
     <div className="flex flex-col gap-2">
-      <button type="button" onClick={onOpen} className="flex items-center gap-2 self-start text-sm font-semibold">
-        {id === NONE ? <InboxIcon className="size-4 text-muted-foreground" /> : color ? <span className="size-2.5 rounded-full" style={{ background: color }} /> : <HashIcon className="size-4 text-muted-foreground" />}
-        {name}<span className="font-normal text-muted-foreground tabular-nums">{tasks.length}</span>
+      <button type="button" onClick={onOpen} className="flex h-7 items-center gap-1.5 self-start rounded-full px-2.5 text-sm font-semibold"
+        style={color ? { background: `color-mix(in oklab, transparent 75%, ${color})` } : { background: "var(--muted)" }}>
+        {id === NONE ? <InboxIcon className="size-4 text-muted-foreground" /> : <HashIcon className="size-3.5" style={{ color }} />}
+        {name}<span className="font-normal opacity-60 tabular-nums">{tasks.length}</span>
       </button>
       <div data-hscroll className="-mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:px-0">
         {tasks.slice(0, 30).map(t => <Card key={t.id} t={t} color={color} />)}
@@ -194,14 +200,17 @@ function TagList({ tasks, name, onClear }) {
 
 // a card: tap opens the task, hold opens the tag wheel, ＋ puts it in work
 function Card({ t, color }) {
-  const db = useDb();
+  const db = useDb(), fresh = useFresh() === t.id;
+  const ref = useRef(null);
+  useEffect(() => { if (fresh) setTimeout(() => ref.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" }), 250); }, [fresh]);
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k));
   const late = t.due && t.due < today();
   const hold = useHold(t);
   return (
-    <div {...hold.handlers} onClick={() => !hold.held.current && openTask(t.id)} onContextMenu={e => { e.preventDefault(); if (!hold.held.current) openWheel(t, e.clientX, e.clientY, true); }}
-      className="relative flex h-32 w-44 shrink-0 snap-start cursor-pointer flex-col rounded-2xl border bg-card p-3 shadow-xs transition-transform select-none [-webkit-touch-callout:none] active:scale-[.98] md:w-52">
-      {color && <span className="absolute inset-y-3 left-0 w-1 rounded-r-full" style={{ background: color }} />}
+    <div ref={ref} {...hold.handlers} onClick={() => !hold.held.current && openTask(t.id)} onContextMenu={e => { e.preventDefault(); if (!hold.held.current) openWheel(t, e.clientX, e.clientY, true); }}
+      style={color ? { background: `color-mix(in oklab, var(--card) 84%, ${color})`, borderColor: `color-mix(in oklab, var(--border) 50%, ${color})` } : undefined}
+      className={cn("relative flex h-32 w-44 shrink-0 snap-start cursor-pointer flex-col rounded-2xl border bg-card p-3 shadow-xs transition-[transform,box-shadow] select-none [-webkit-touch-callout:none] active:scale-[.98] md:w-52",
+        fresh && "ring-2 ring-primary ring-offset-2 ring-offset-background")}>
       <p className="line-clamp-4 text-[14px] leading-snug font-medium">{t.text}</p>
       <div className="mt-auto flex items-center gap-1.5 pt-2 text-xs text-muted-foreground">
         {t.due && <span className={cn("rounded-md bg-muted px-1.5 py-0.5 whitespace-nowrap", late && "text-destructive")}>{dueLabel(t.due)}{t.time ? " " + t.time : ""}</span>}

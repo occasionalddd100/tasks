@@ -1,7 +1,7 @@
 import { add, getDb, remove, update, updateMany } from "@/lib/db";
 import { byOrder, nextOrder } from "@/lib/tasks";
 import { personalOf, draftsOf } from "@/lib/personal";
-import { pastel } from "@/lib/colors";
+import { pastel, PASTELS } from "@/lib/colors";
 import { descendantsOf } from "@/components/tasks/TaskRow";
 
 // Tags are the categories of "Личное"; its tabs group them (Главное, Витуб, …).
@@ -10,10 +10,12 @@ const slug = s => (s || "").toLowerCase().replace(/\s+/g, "");
 
 export function tagGroups(db) {
   const p = personalOf(db); if (!p) return [];
+  let i = 0;
   return db.boards.filter(b => b.project === p.id).sort(byOrder).map(b => ({
     id: b.id, name: b.name,
+    // a tag with no colour of its own still gets one, so tags never blur together
     tags: db.cats.filter(c => c.board === b.id && !c.drafts).sort(byOrder)
-      .map(c => ({ id: c.id, name: c.name, group: b.name, groupId: b.id, key: c.color || "", color: pastel(c.color) || "" })),
+      .map(c => ({ id: c.id, name: c.name, group: b.name, groupId: b.id, key: c.color || "", color: pastel(c.color) || PASTELS[i++ % PASTELS.length].c })),
   }));
 }
 export const tagsOf = db => tagGroups(db).flatMap(g => g.tags);
@@ -48,7 +50,8 @@ export function setTag(t, tagId) {
 export const renameTag = (id, name) => name.trim() && update("cats", id, { name: name.trim() });
 export const colorTag = (id, color) => update("cats", id, { color });
 export const moveTag = (id, groupId) => { const db = getDb(); update("cats", id, { board: groupId, order: nextOrder(db.cats.filter(c => c.board === groupId)) }); };
-export function addTag(groupId, name) {
+// the tabs of «Личное» are kept in the data but not shown: a new tag goes to the first one
+export function addTag(name, groupId = tagGroups(getDb())[0]?.id) {
   const db = getDb(), n = name.trim(); if (!n || !groupId) return null;
   return add("cats", { name: n, board: groupId, order: nextOrder(db.cats.filter(c => c.board === groupId && !c.drafts)) });
 }

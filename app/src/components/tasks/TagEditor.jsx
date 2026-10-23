@@ -1,15 +1,15 @@
 import { useState, useSyncExternalStore } from "react";
 import * as D from "@radix-ui/react-dialog";
-import { FolderInputIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
-import { useDb, remove } from "@/lib/db";
+import { PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { useDb, getDb } from "@/lib/db";
 import { PASTELS } from "@/lib/colors";
 import { ensurePersonal } from "@/lib/personal";
-import { tagGroups, renameTag, colorTag, moveTag, addTag, deleteTag, addGroup, renameGroup } from "@/lib/tags";
+import { tagsOf, tagGroups, renameTag, colorTag, addTag, deleteTag } from "@/lib/tags";
 import { useBackClose } from "@/lib/back";
 import { confirmAction } from "@/components/Confirm";
 import { cn } from "@/lib/utils";
 
-// Tags = the categories of «Личное», grouped by its tabs. Here they are named, coloured, moved and removed in one place.
+// Tags = the categories of «Личное» (its tabs stay in the data but are not shown). Named, coloured and removed in one place.
 let open = false; const subs = new Set();
 const set = v => { open = v; subs.forEach(f => f()); };
 export const openTagEditor = () => set(true);
@@ -28,7 +28,7 @@ export function TagEditorHost() {
             <D.Title className="flex-1 text-lg font-semibold">Теги</D.Title>
             <D.Close className="grid size-8 place-items-center rounded-full text-muted-foreground active:bg-accent" aria-label="Закрыть"><XIcon className="size-5" /></D.Close>
           </div>
-          <D.Description className="px-4 text-sm text-muted-foreground">Это категории «Личного». У удалённого тега задачи уходят в «Без тега».</D.Description>
+          <D.Description className="px-4 text-sm text-muted-foreground">Нажми на название, чтобы переименовать, на кружок, чтобы сменить цвет. У удалённого тега задачи уходят в «Без тега».</D.Description>
           {isOpen && <Editor />}
         </D.Content>
       </D.Portal>
@@ -38,34 +38,19 @@ export function TagEditorHost() {
 
 function Editor() {
   const db = useDb();
-  const groups = tagGroups(db);
+  const tags = tagsOf(db);
   const count = id => db.tasks.filter(t => t.cat === id && !t.done && !t.parent).length;
-  const [newGroup, setNewGroup] = useState("");
   return (
-    <div className="flex flex-col gap-5 overflow-y-auto px-4 pt-4 pb-5">
-      {groups.map(g => (
-        <section key={g.id} className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Name value={g.name} onSave={v => renameGroup(g.id, v)} className="text-xs font-semibold tracking-wide text-muted-foreground uppercase" label="Название группы" />
-            {!g.tags.length && !db.cats.some(c => c.board === g.id) && groups.length > 1 &&
-              <button type="button" onClick={() => remove("boards", g.id)} aria-label={"Удалить группу " + g.name} className="grid size-8 place-items-center rounded-full text-muted-foreground hover:text-destructive"><Trash2Icon className="size-4" /></button>}
-          </div>
-          <ul className="flex flex-col">
-            {g.tags.map(x => <TagLine key={x.id} x={x} n={count(x.id)} groups={groups} />)}
-          </ul>
-          <AddLine placeholder="Новый тег" onAdd={v => addTag(g.id, v)} />
-        </section>
-      ))}
-      <form className="flex gap-2 border-t pt-4" onSubmit={async e => { e.preventDefault(); if (!newGroup.trim()) return; if (!groups.length) await ensurePersonal(); addGroup(newGroup); setNewGroup(""); }}>
-        <input value={newGroup} onChange={e => setNewGroup(e.target.value)} placeholder="Новая группа тегов" aria-label="Новая группа тегов"
-          className="h-10 min-w-0 flex-1 rounded-lg border bg-background px-3 text-[15px] outline-none focus:ring-2 focus:ring-ring/40" />
-        <button type="submit" disabled={!newGroup.trim()} className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-30">Добавить</button>
-      </form>
+    <div className="flex flex-col overflow-y-auto px-4 pt-3 pb-5">
+      <ul className="flex flex-col">
+        {tags.map(x => <TagLine key={x.id} x={x} n={count(x.id)} />)}
+      </ul>
+      <AddLine placeholder="Новый тег" onAdd={async v => { if (!tagGroups(getDb()).length) await ensurePersonal(); addTag(v); }} />
     </div>
   );
 }
 
-function TagLine({ x, n, groups }) {
+function TagLine({ x, n }) {
   const [palette, setPalette] = useState(false);
   const del = async () => {
     if (n && !await confirmAction({ title: `Удалить тег «${x.name}»?`, description: `${n} задач${n === 1 ? "а" : n < 5 ? "и" : ""} останутся, просто без тега.` })) return;
@@ -80,20 +65,10 @@ function TagLine({ x, n, groups }) {
         </button>
         <Name value={x.name} onSave={v => renameTag(x.id, v)} className="text-[15px]" label="Название тега" />
         <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{n || ""}</span>
-        {groups.length > 1 && (
-          <label className="relative grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground active:bg-accent" aria-label="Перенести в группу">
-            <FolderInputIcon className="size-4" />
-            <select value={x.groupId} onChange={e => moveTag(x.id, e.target.value)} className="absolute inset-0 opacity-0" aria-label="Перенести в группу">
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          </label>
-        )}
         <button type="button" onClick={del} aria-label={"Удалить тег " + x.name} className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-destructive active:bg-accent"><Trash2Icon className="size-4" /></button>
       </div>
       {palette && (
         <div className="mb-2 ml-11 flex flex-wrap gap-2">
-          <button type="button" onClick={() => { colorTag(x.id, ""); setPalette(false); }} aria-label="Без цвета"
-            className={cn("size-8 rounded-full border-2 border-dashed", !x.key && "ring-2 ring-foreground ring-offset-2 ring-offset-background")} />
           {PASTELS.map(p => (
             <button key={p.k} type="button" onClick={() => { colorTag(x.id, p.k); setPalette(false); }} aria-label={p.name}
               className={cn("size-8 rounded-full", x.key === p.k && "ring-2 ring-foreground ring-offset-2 ring-offset-background")} style={{ background: p.c }} />

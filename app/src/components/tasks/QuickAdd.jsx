@@ -7,8 +7,10 @@ import { nextFocus } from "@/lib/focus";
 import { tagsOf, tagGroups, parseTag, targetCat } from "@/lib/tags";
 import { ensurePersonal } from "@/lib/personal";
 import { today } from "@/lib/tasks";
+import { addDone } from "@/lib/done";
 import { useBackClose } from "@/lib/back";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 // One way to add a task, everywhere: type it, pick a tag (or write #тег); a tag is a category of «Личное».
 // No tag: it waits in "Личное · Черновики". The ＋ in the phone bar and the N key open the same field in a sheet.
@@ -24,15 +26,21 @@ export async function addTask(raw, { tag, work, day } = {}) {
   if (!cat) { await ensurePersonal(); cat = targetCat(tagId); }
   if (!cat) return null;
   const top = Math.min(1, ...getDb().tasks.filter(x => x.cat === cat).map(x => x.order ?? 1));
-  add("tasks", { text, cat, order: top - 1, done: false, ...(work ? { focus: nextFocus() } : {}), ...(day ? { due: today() } : {}) });
-  return { text, tag: tags.find(t => t.id === tagId) || null };
+  const id = await add("tasks", { text, cat, order: top - 1, done: false, ...(work ? { focus: nextFocus() } : {}), ...(day ? { due: today() } : {}) });
+  if (id) flash(id);
+  return { id, text, tag: tags.find(t => t.id === tagId) || null };
 }
 
+// the task just added glows for a moment, so the home screen can show where it went
+let fresh = null; const freshSubs = new Set();
+function flash(id) { fresh = id; freshSubs.forEach(f => f()); setTimeout(() => { if (fresh === id) { fresh = null; freshSubs.forEach(f => f()); } }, 4000); }
+export const useFresh = () => useSyncExternalStore(f => (freshSubs.add(f), () => freshSubs.delete(f)), () => fresh);
+
 export function Composer({ autoFocus, defaultTag = null, work: workDefault = false, onAdded, className }) {
-  const db = useDb(), groups = tagGroups(db), tags = groups.flatMap(g => g.tags);
+  const db = useDb(), tags = tagsOf(db);
   const [text, setText] = useState("");
   const [tag, setTag] = useState(defaultTag);
-  const [work, setWork] = useState(workDefault), [day, setDay] = useState(false);
+  const [work, setWork] = useState(workDefault), [day, setDay] = useState(false), [did, setDid] = useState(false);
   const ref = useRef(null);
   useEffect(() => { setTag(defaultTag); }, [defaultTag]);
   useEffect(() => { if (autoFocus) setTimeout(() => ref.current?.focus(), 60); }, [autoFocus]);
@@ -42,7 +50,8 @@ export function Composer({ autoFocus, defaultTag = null, work: workDefault = fal
   const submit = async e => {
     e?.preventDefault();
     if (!text.trim()) return;
-    const r = await addTask(text, { tag: cur, work, day });
+    // "Уже сделал": no task, just a line on today's timeline
+    const r = did ? (addDone(text), { text: text.trim(), did: true }) : await addTask(text, { tag: cur, work, day });
     if (r) { onAdded?.(r); setText(""); ref.current?.focus(); }
   };
   const chip = (on, cls = "border-foreground bg-foreground text-background") =>
@@ -51,7 +60,7 @@ export function Composer({ autoFocus, defaultTag = null, work: workDefault = fal
     <form onSubmit={submit} className={cn("flex flex-col gap-2.5", className)}>
       <div className="flex items-end gap-2">
         <textarea ref={ref} rows={1} value={text} onChange={e => setText(e.target.value)} enterKeyHint="send"
-          placeholder="Новая задача… #тег" aria-label="Новая задача"
+          placeholder={did ? "Что сделал?" : "Новая задача… #тег"} aria-label={did ? "Что сделал" : "Новая задача"}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) submit(e); }}
           className="field-sizing-content max-h-48 min-h-14 min-w-0 flex-1 resize-none rounded-2xl border bg-background px-4 py-3.5 text-lg leading-snug outline-none focus:ring-2 focus:ring-ring/40" />
         <button type="submit" disabled={!text.trim()} aria-label="Добавить"
@@ -60,17 +69,19 @@ export function Composer({ autoFocus, defaultTag = null, work: workDefault = fal
         </button>
       </div>
       <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
+        <button type="button" onClick={() => setDid(d => !d)} aria-pressed={did} className={chip(did, "border-emerald-500/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400")}><CheckIcon className="size-3.5" />Уже сделал</button>
+        {!did && <>
         <button type="button" onClick={() => setWork(w => !w)} aria-pressed={work} className={chip(work, "border-primary bg-primary text-primary-foreground")}><CrosshairIcon className="size-3.5" />В работу</button>
         <button type="button" onClick={() => setDay(d => !d)} aria-pressed={day} className={chip(day, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400")}><SunIcon className="size-3.5" />Сегодня</button>
         <span className="mx-0.5 w-px shrink-0 bg-border" />
         {tags.map((t, i) => (
           <span key={t.id} className="contents">
-          {groups.length > 1 && t.groupId !== tags[i - 1]?.groupId && <span className="flex shrink-0 items-center pl-1 text-[11px] text-muted-foreground/80">{t.group}</span>}
           <button type="button" onClick={() => setTag(cur === t.id ? null : t.id)} aria-pressed={cur === t.id} className={chip(cur === t.id)}>
             {t.color ? <span className="size-2 rounded-full" style={{ background: t.color }} /> : <HashIcon className="size-3" />}{t.name}
           </button>
           </span>
         ))}
+        </>}
       </div>
     </form>
   );
@@ -84,7 +95,7 @@ function Added({ list }) {
           <motion.li key={list.length - i + r.text} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="flex items-center gap-2 text-sm text-muted-foreground">
             <CheckIcon className="size-3.5 shrink-0 text-emerald-500" /><span className="truncate">{r.text}</span>
-            <span className="shrink-0 text-xs opacity-70">{r.tag ? "→ " + r.tag.name : "→ черновики"}</span>
+            <span className="shrink-0 text-xs opacity-70">{r.did ? "→ в таймлайн" : r.tag ? "→ " + r.tag.name : "→ без тега"}</span>
           </motion.li>
         ))}
       </AnimatePresence>
@@ -105,8 +116,6 @@ export function CaptureBar({ defaultTag = null }) {
 
 export function QuickAddHost() {
   const isOpen = useSyncExternalStore(f => (subs.add(f), () => subs.delete(f)), () => open);
-  const [last, setLast] = useState([]);
-  useEffect(() => { setLast([]); }, [isOpen]);
   useBackClose(isOpen, () => setOpen(false));
   return (
     <D.Root open={isOpen} onOpenChange={setOpen}>
@@ -120,8 +129,7 @@ export function QuickAddHost() {
             <D.Close className="grid size-8 place-items-center rounded-full text-muted-foreground active:bg-accent" aria-label="Закрыть"><XIcon className="size-5" /></D.Close>
           </div>
           <D.Description className="sr-only">Задача попадёт на доску выбранного тега, без тега — в черновики</D.Description>
-          <Composer autoFocus={isOpen} defaultTag={preset} onAdded={r => setLast(l => [r, ...l].slice(0, 4))} />
-          <Added list={last} />
+          <Composer autoFocus={isOpen} defaultTag={preset} onAdded={r => { setOpen(false); toast(r.did ? "Записал в таймлайн" : "Добавил" + (r.tag ? " в «" + r.tag.name + "»" : " без тега")); }} />
         </D.Content>
       </D.Portal>
     </D.Root>

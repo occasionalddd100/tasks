@@ -95,10 +95,9 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
                 <p className="flex-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Тег</p>
                 <button type="button" onClick={close(openTagEditor)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><PencilIcon className="size-3.5" />Править</button>
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {groups.map(g => (
-                  <div key={g.id} className="flex flex-wrap items-center gap-1.5">
-                    {groups.length > 1 && <span className="mr-1 w-full text-[11px] text-muted-foreground">{g.name}</span>}
+                  <div key={g.id} className="contents">
                     {g.tags.map(x => (
                       <button key={x.id} type="button" onClick={() => setTag(t, x.id === t.cat ? null : x.id)} aria-pressed={x.id === t.cat}
                         className={cn("inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors active:scale-[.97]",

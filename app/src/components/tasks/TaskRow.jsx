@@ -19,7 +19,7 @@ import TaskSheet from "@/components/tasks/TaskSheet";
 import Avatar from "@/components/Avatar";
 import { personName } from "@/lib/people";
 import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
-import { tagGroups, tagOfTask, isPersonal, setTag } from "@/lib/tags";
+import { tagsOf, tagOfTask, isPersonal, setTag } from "@/lib/tags";
 import { openTagEditor } from "@/components/tasks/TagEditor";
 
 // people who can be assigned in the current project
@@ -130,7 +130,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
     { sep: true },
     t.prio === "urgent" && { label: "Снять «Срочно»", icon: FlameIcon, iconClass: "text-red-500", onSelect: () => update("tasks", t.id, { prio: "" }) },
     !t.parent && isPersonal(getDb(), t) && { label: "Тег", icon: HashIcon, sub: [
-      ...tagGroups(getDb()).filter(g => g.tags.length).flatMap(g => [{ title: g.name }, ...g.tags.map(x => ({ label: x.name, active: x.id === t.cat, onSelect: () => setTag(t, x.id) }))]),
+      ...tagsOf(getDb()).map(x => ({ label: x.name, active: x.id === t.cat, onSelect: () => setTag(t, x.id) })),
       { sep: true },
       { label: "Без тега", active: !tagOfTask(getDb(), t), onSelect: () => setTag(t, null) },
       { sep: true },

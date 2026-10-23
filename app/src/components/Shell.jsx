@@ -26,6 +26,7 @@ import { QuickAddHost, openQuickAdd } from "@/components/tasks/QuickAdd";
 import { TaskSheetHost } from "@/components/tasks/TaskSheet";
 import { TagWheelHost } from "@/components/tasks/TagWheel";
 import { TagEditorHost, openTagEditor } from "@/components/tasks/TagEditor";
+import { Celebrate } from "@/components/tasks/Celebrate";
 import { ensurePersonal, personalOf, draftTasks } from "@/lib/personal";
 
 const NoteView = lazy(() => import("@/components/notes/NoteView").catch(e => {
@@ -148,6 +149,7 @@ export default function Shell() {
         tasks={{ onClick: () => go({ focus: true }), active: focus, badge: focusOpen(db) }} />
       <TagWheelHost />
       <TagEditorHost />
+      <Celebrate />
       <QuickAddHost onOpenDrafts={() => go({ personal: true })} />
       <TaskSheetHost />
       <ConfirmHost />
