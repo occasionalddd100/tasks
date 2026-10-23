@@ -55,7 +55,7 @@ function useDays(db) {
   return { items, mine };
 }
 
-export default function JournalView() {
+export default function JournalView({ mode = "timeline" }) {
   const db = useDb();
   const { items, mine } = useDays(db);
   const [open, setOpen] = useState(null); // { date, edit }
@@ -80,7 +80,7 @@ export default function JournalView() {
 
   const pick = (date, edit = false) => setOpen({ date, edit });
   // the lower part (diary, days, totals) is one block with its own tabs; the top is the day itself
-  const [tab, setTabRaw] = useState(() => { try { const t = localStorage.getItem("journalTab"); return TABS.some(x => x.k === t) ? t : "day"; } catch { return "day"; } });
+  const [tab, setTabRaw] = useState(() => { try { const t = localStorage.getItem("journalTab"); return TABS.some(x => x.k === t) ? t : "diary"; } catch { return "day"; } });
   const setTab = t => { setTabRaw(t); try { localStorage.setItem("journalTab", t); } catch {} };
   const memories = useMemories(info, mine);
 
@@ -90,35 +90,26 @@ export default function JournalView() {
       {/* soft glow tinted by today's mood */}
       <motion.div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[42rem] max-w-full -translate-x-1/2 rounded-full"
         style={{ filter: "blur(64px)", WebkitFilter: "blur(64px)" }} animate={{ backgroundColor: todayMood?.color || "#64748b", opacity: todayMood ? 0.18 : 0.08 }} transition={{ duration: 0.8 }} />
+      {mode === "timeline" ? <>
+        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Таймлайн</h1>
+        <DayTimeline />
+      </> : <>
       <header className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Журнал</h1>
+          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Дневник</h1>
           <span className="ml-auto"><MemoriesButton cards={memories} onPick={pick} /></span>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge>сегодня: <b>{todayDone}</b> {plural(todayDone, ["дело", "дела", "дел"])}</Badge>
           {streak >= 2 && <Badge><FlameIcon className="size-3.5 text-orange-500" />подряд: <b>{streak}</b> {plural(streak, ["день", "дня", "дней"])}</Badge>}
-          {deadline >= 0 && <Badge>до 31.10: <b>{deadline}</b> {plural(deadline, ["день", "дня", "дней"])}</Badge>}
+          <button type="button" onClick={() => pick(today(), true)} className="ml-auto text-sm font-medium text-muted-foreground hover:text-foreground">Открыть сегодня →</button>
         </div>
-        <QuickDone extra={mine.get(today())?.extra || []} burst={bursts.fire} />
       </header>
       <PillTabs>{TABS.map(({ k, label, icon: Icon }) => <PillTab key={k} on={tab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>
-
-      {tab === "day" && <>
-      <DayTimeline />
-      {/* the day's tasks and habits on the left, drafts to sort on the right */}
-      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start">
-        <div className="flex flex-col gap-5">
-          <TodayPanel i={info(today())} onOpen={edit => pick(today(), edit)} />
-          <Habits habits={db.habits} />
-        </div>
-        <DraftsCard />
-      </div>
+      {tab === "diary" && <ThoughtsCard i={info(today())} />}
+      {tab === "days" && <Heatmap info={info} sel={open?.date} onPick={pick} />}
+      {tab === "stats" && <Stats info={info} items={items} mine={mine} streak={streak} />}
       </>}
-
-        {tab === "diary" && <ThoughtsCard i={info(today())} />}
-        {tab === "days" && <Heatmap info={info} sel={open?.date} onPick={pick} />}
-        {tab === "stats" && <Stats info={info} items={items} mine={mine} streak={streak} />}
       <DayDialog open={open} setOpen={setOpen} info={info} burst={bursts.fire} />
       {bursts.layer}
     </div>
@@ -126,7 +117,6 @@ export default function JournalView() {
 }
 
 const TABS = [
-  { k: "day", label: "Сегодня", icon: CalendarCheckIcon },
   { k: "diary", label: "Дневник", icon: NotebookPenIcon },
   { k: "days", label: "Дни", icon: CalendarDaysIcon },
   { k: "stats", label: "Итоги", icon: BarChart3Icon },

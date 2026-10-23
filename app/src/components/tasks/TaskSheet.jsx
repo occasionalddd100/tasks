@@ -67,11 +67,11 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
             {!t.done && <>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button type="button" onClick={() => (focused ? fromFocus(t) : toFocus(t))} className={chip(focused, "border-primary bg-primary text-primary-foreground")}>
-                  <CrosshairIcon className="size-4" />{focused ? "В фокусе" : "В фокус"}
+                  <CrosshairIcon className="size-4" />{focused ? "В работе" : "В работу"}
                 </button>
-                <button type="button" onClick={() => set({ prio: urgent ? "" : "urgent" })} className={chip(urgent, "border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400")}>
-                  <FlameIcon className="size-4" />Срочно
-                </button>
+                {urgent && <button type="button" onClick={() => set({ prio: "" })} className={chip(true, "border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400")}>
+                  <FlameIcon className="size-4" />Срочно ✕
+                </button>}
               </div>
 
               <p className="mt-5 mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">Когда</p>

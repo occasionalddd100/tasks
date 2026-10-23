@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { createContext, useContext, useRef, useState, useSyncExternalStore } from "react";
 import {
   AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CrosshairIcon, CalendarXIcon, ChevronRightIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlameIcon,
-  GripVerticalIcon, FolderInputIcon, UserIcon, UserXIcon, PencilIcon, Trash2Icon, CheckIcon, CopyIcon,
+  GripVerticalIcon, FolderInputIcon, UserIcon, UserXIcon, PencilIcon, Trash2Icon, CheckIcon, CopyIcon, HashIcon,
 } from "lucide-react";
 import { getDb, update, updateMany, remove } from "@/lib/db";
 import { today, dueLabel, stale } from "@/lib/tasks";
@@ -18,6 +18,8 @@ import TaskNoteDialog from "@/components/tasks/TaskNoteDialog";
 import TaskSheet from "@/components/tasks/TaskSheet";
 import Avatar from "@/components/Avatar";
 import { personName } from "@/lib/people";
+import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
+import { tagsOf, setTag } from "@/lib/tags";
 
 // people who can be assigned in the current project
 export const People = createContext([]);
@@ -28,22 +30,33 @@ const usePhone = () => useSyncExternalStore(f => { const m = matchMedia(PHONE); 
 const SWIPE = 80;
 
 // a horizontal drag on the row: right past SWIPE = done, left = focus. Vertical moves stay page scrolls.
-function useSwipe(onRight, onLeft) {
+// holding still for a moment opens the tag wheel instead; the same finger then picks on it
+function useSwipe(onRight, onLeft, onHold) {
   const [dx, setDx] = useState(0);
-  const g = useRef(null);
-  const onTouchStart = e => { const p = e.touches[0]; g.current = { x: p.clientX, y: p.clientY, on: false, off: false }; };
+  const g = useRef(null), held = useRef(false), timer = useRef(0);
+  const onTouchStart = e => {
+    const p = e.touches[0]; g.current = { x: p.clientX, y: p.clientY, on: false, off: false }; held.current = false;
+    clearTimeout(timer.current);
+    if (onHold) timer.current = setTimeout(() => { const s = g.current; if (s && !s.on && !s.off) { held.current = true; onHold(s.x, s.y); } }, 450);
+  };
   const onTouchMove = e => {
-    const s = g.current; if (!s || s.off) return;
-    const p = e.touches[0], x = p.clientX - s.x, y = p.clientY - s.y;
+    const s = g.current; if (!s) return;
+    const p = e.touches[0];
+    if (held.current) return moveWheel(p.clientX, p.clientY);
+    if (s.off) return;
+    const x = p.clientX - s.x, y = p.clientY - s.y;
+    if (Math.abs(x) > 8 || Math.abs(y) > 8) clearTimeout(timer.current);
     if (!s.on) { if (Math.abs(y) > 10) { s.off = true; return; } if (Math.abs(x) < 12) return; s.on = true; }
     setDx(Math.max(-140, Math.min(140, x)));
   };
   const onTouchEnd = () => {
+    clearTimeout(timer.current);
+    if (held.current) { g.current = null; endWheel(); setTimeout(() => { held.current = false; }, 400); return; }
     const s = g.current; g.current = null;
     if (s?.on) { if (dx > SWIPE) onRight(); else if (dx < -SWIPE) onLeft(); }
     setDx(0);
   };
-  return { dx, handlers: { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel: () => { g.current = null; setDx(0); } }, swiping: () => !!g.current?.on };
+  return { dx, handlers: { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel: () => { clearTimeout(timer.current); g.current = null; setDx(0); if (held.current) endWheel(); } }, swiping: () => !!g.current?.on, held };
 }
 
 // all subtasks below a task, any depth
@@ -109,12 +122,13 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
   const focused = inFocus(t);
   const items = [
     { label: "Открыть", icon: PencilIcon, hint: "двойной клик", onSelect: () => setTimeout(() => setSheet(true)) },
-    !t.done && { label: focused ? "Убрать из фокуса" : "В фокус", icon: CrosshairIcon, onSelect: () => (focused ? fromFocus(t) : toFocus(t)) },
+    !t.done && { label: focused ? "Убрать из работы" : "В работу", icon: CrosshairIcon, onSelect: () => (focused ? fromFocus(t) : toFocus(t)) },
     canHide && { label: "Скрыть в выполненные", icon: EyeOffIcon, onSelect: () => hideTask(t) },
     { label: hasBody ? "Открыть заметку" : "Добавить заметку", icon: FileTextIcon, onSelect: () => setNoteOpen(true) },
     onAddSub && { label: "Добавить подзадачу", icon: CornerDownRightIcon, onSelect: onAddSub },
     { sep: true },
-    !t.done && { label: t.prio === "urgent" ? "Снять «Срочно»" : "Срочно", icon: FlameIcon, iconClass: "text-red-500", onSelect: () => update("tasks", t.id, { prio: t.prio === "urgent" ? "" : "urgent" }) },
+    t.prio === "urgent" && { label: "Снять «Срочно»", icon: FlameIcon, iconClass: "text-red-500", onSelect: () => update("tasks", t.id, { prio: "" }) },
+    { label: "Тег", icon: HashIcon, sub: tagsOf(getDb()).map(g => ({ label: g.name, onSelect: () => setTag(t, g.id) })) },
     !t.parent && moveItem(t),
     { label: "Исполнитель", icon: UserIcon, sub: assignItems },
     { label: t.due ? "Изменить дату" : "Поставить дату", icon: CalendarIcon, onSelect: () => setTimeout(openDate, 50) },
@@ -158,14 +172,15 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
           {stack && sub && <span className="min-w-0 truncate pl-1 text-xs text-muted-foreground/70">{sub}</span>}
         </div>
   );
-  const swipe = useSwipe(() => toggle(!t.done), () => !t.done && (focused ? fromFocus(t) : toFocus(t)));
+  const swipe = useSwipe(() => toggle(!t.done), () => !t.done && (focused ? fromFocus(t) : toFocus(t)), (x, y) => openWheel(t, x, y));
   const tapOpen = phone && !overlay;
   const row = (
     <div {...(tapOpen ? swipe.handlers : {})}
-      onClick={tapOpen ? e => { if (!e.target.closest("button,[role=checkbox],input,label,a")) setSheet(true); } : undefined}
+      onClick={tapOpen ? e => { if (!swipe.held.current && !e.target.closest("button,[role=checkbox],input,label,a")) setSheet(true); } : undefined}
+      onContextMenu={tapOpen ? e => e.preventDefault() : undefined}
       style={swipe.dx ? { transform: `translateX(${swipe.dx}px)` } : undefined}
       className={cn("group/task relative flex items-start gap-1 rounded-md py-1.5 pr-1 md:py-1 transition-colors hover:bg-accent/50 data-[state=open]:bg-accent/70",
-        swipe.dx ? "bg-background" : "transition-transform", tapOpen && "touch-pan-y",
+        swipe.dx ? "bg-background" : "transition-transform", tapOpen && "touch-pan-y select-none [-webkit-touch-callout:none]",
         urgent && "before:absolute before:top-2 before:bottom-2 before:-left-0.5 before:w-0.5 before:rounded-full before:bg-red-500")}>
       {grip ? (
         <button {...grip} ref={grip.ref} aria-label={"Перетащить: " + t.text}
@@ -222,7 +237,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
       swipe.dx > 0 ? "justify-start bg-emerald-500" : "justify-end bg-primary", Math.abs(swipe.dx) < SWIPE && "opacity-60")}>
       {swipe.dx > 0
         ? <span className="flex items-center gap-1.5"><CheckIcon className="size-4" />{t.done ? "Вернуть" : "Готово"}</span>
-        : !t.done && <span className="flex items-center gap-1.5"><CrosshairIcon className="size-4" />{focused ? "Из фокуса" : "В фокус"}</span>}
+        : !t.done && <span className="flex items-center gap-1.5"><CrosshairIcon className="size-4" />{focused ? "Из работы" : "В работу"}</span>}
     </div>
   );
   // the dialog sits outside the menu trigger so right-clicks inside the editor don't open the task menu

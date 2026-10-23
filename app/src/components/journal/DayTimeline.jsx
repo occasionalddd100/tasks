@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AlarmClockIcon, BellIcon, BellRingIcon, CheckIcon, CrosshairIcon, FlameIcon, MoonStarIcon, SunIcon, SunriseIcon, SunsetIcon, CalendarClockIcon, CalendarDaysIcon, ChevronDownIcon } from "lucide-react";
 import { useDb, update } from "@/lib/db";
@@ -39,8 +39,12 @@ function useNow(step) {
   return now;
 }
 
+const PHONE = "(max-width: 767px)";
+const usePhone = () => useSyncExternalStore(f => { const m = matchMedia(PHONE); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, () => matchMedia(PHONE).matches);
+
 export default function DayTimeline() {
   const db = useDb();
+  const phone = usePhone();
   const now = useNow(20e3);
   // 6 hours behind, a day ahead: "now" sits near the left and tomorrow morning is always in view
   const start = useMemo(() => { const d = new Date(now); d.setMinutes(0, 0, 0); return d.getTime() - 6 * H; }, [Math.floor(now / H)]);
@@ -88,9 +92,9 @@ export default function DayTimeline() {
   const toggle = t => update("tasks", t.id, t.done ? { done: false, doneOn: "", doneBy: "", hidden: false } : { done: true, doneOn: today(), doneBy: db.me });
 
   return (
-    <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+    <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="m-flat overflow-hidden rounded-2xl border bg-card shadow-sm">
       <Hero now={now} next={next} missed={missed.length} logged={logged} left={events.filter(e => !e.t.done && e.when >= now).length} onTick={toggle} />
-      <Strip now={now} start={start} end={end} events={events} onTick={toggle} />
+      {phone ? <VStrip now={now} start={start} end={end} events={events} onTick={toggle} /> : <Strip now={now} start={start} end={end} events={events} onTick={toggle} />}
       <Ahead db={db} now={now} />
     </motion.section>
   );
@@ -172,6 +176,76 @@ function NextUp({ next, onTick }) {
 }
 
 /* ───────── the strip ───────── */
+
+/* ───────── the phone: the same day, top to bottom ───────── */
+
+// parts of the day as headed blocks; inside, what happens in time order, spaced by how far apart it is;
+// a line marks "now". Nothing is placed on top of anything, so nothing overlaps.
+function VStrip({ now, start, end, events, onTick }) {
+  const nowRef = useRef(null);
+  useEffect(() => { nowRef.current?.scrollIntoView?.({ block: "center" }); }, []);
+  const blocks = useMemo(() => {
+    const out = [];
+    for (let t = start; t < end;) {
+      const h = new Date(t).getHours(), p = partAt(h);
+      const d = new Date(t); const stop = new Date(d); stop.setHours(p.to % 24, 0, 0, 0); if (stop <= d) stop.setDate(stop.getDate() + 1);
+      const e = Math.min(end, stop.getTime());
+      const list = events.filter(x => x.when >= t && x.when < e).map(x => ({ k: "e", ...x }));
+      if (now >= t && now < e) list.push({ k: "now", when: now });
+      list.sort((a, b) => a.when - b.when);
+      out.push({ p, from: t, to: e, list, tomorrow: iso(new Date(t)) !== today() && new Date(t) > new Date(now) });
+      t = e;
+    }
+    return out;
+  }, [start, end, events, Math.floor(now / 60e3)]);
+  return (
+    <div className="flex flex-col px-3 py-3">
+      {blocks.map(({ p, from, list, tomorrow }) => {
+        const Icon = p.icon;
+        return (
+          <div key={from} className="relative flex flex-col pb-2">
+            <div className="sticky top-12 z-[1] -mx-3 flex items-center gap-2 px-3 py-1.5" style={{ background: "color-mix(in oklab, var(--card) 92%, transparent)" }}>
+              <span className="grid size-7 place-items-center rounded-lg text-white" style={{ background: p.bg }}><Icon className="size-4" /></span>
+              <span className="text-sm font-semibold">{p.label}</span>
+              <span className="text-xs text-muted-foreground tabular-nums">{hm(from)}{tomorrow ? " · завтра" : ""}</span>
+            </div>
+            <ol className="relative ml-[3.25rem] border-l-2 pl-4" style={{ borderColor: "color-mix(in oklab, " + p.dot + " 45%, transparent)" }}>
+              {list.length === 0 && <li className="py-1.5 text-xs text-muted-foreground/70">—</li>}
+              {list.map((x, i) => {
+                const gap = i ? Math.min(40, Math.max(4, (x.when - list[i - 1].when) / 60e3 / 6)) : 6;
+                if (x.k === "now") return (
+                  <li key="now" ref={nowRef} className="relative flex items-center" style={{ marginTop: gap }}>
+                    <span className="absolute -left-[1.4rem] size-3 rounded-full bg-white ring-4 ring-white/25" />
+                    <span className="absolute -left-[4.2rem] w-11 text-right text-xs font-bold tabular-nums">{hm(now)}</span>
+                    <span className="h-0.5 flex-1 rounded-full bg-white/80" /><span className="ml-2 text-xs font-semibold">сейчас</span>
+                  </li>
+                );
+                const done = x.t.done, missed = !done && x.when < now, soon = !done && !missed && x.when - now < H;
+                return (
+                  <li key={x.t.id + x.when} className="relative" style={{ marginTop: gap }}>
+                    <span className={cn("absolute top-3 -left-[1.35rem] size-2.5 rounded-full ring-2 ring-card", done ? "bg-good" : missed ? "bg-destructive" : "bg-muted-foreground")} />
+                    <span className={cn("absolute top-2 -left-[4.2rem] w-11 text-right text-xs tabular-nums", missed ? "text-destructive" : "text-muted-foreground")}>{x.time}</span>
+                    <div className={cn("flex items-center gap-2.5 rounded-xl border px-2.5 py-2",
+                      done ? "border-good/40 bg-good/10" : missed ? "border-destructive/50 bg-destructive/10" : soon ? "border-amber-500/60 bg-amber-500/10" : "bg-card")}>
+                      <button type="button" disabled={x.t.log} onClick={() => onTick(x.t)} aria-label={(done ? "Снять отметку: " : "Отметить: ") + x.t.text}
+                        className={cn("grid size-6 shrink-0 place-items-center rounded-full border-2", done ? "border-good bg-good text-white" : "border-muted-foreground/50")}>
+                        {done && <CheckIcon className="size-3.5" strokeWidth={3} />}
+                      </button>
+                      <button type="button" disabled={x.t.log} onClick={() => openTask(x.t.id)} className="min-w-0 flex-1 text-left">
+                        <span className={cn("block text-[15px] leading-snug", done && !x.t.log && "text-muted-foreground line-through")}>{x.t.text}</span>
+                        {!done && <span className={cn("text-xs", missed ? "text-destructive" : soon ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>{missed ? span(now - x.when) + " назад" : "через " + span(x.when - now)}</span>}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const PIN_W = 156, LANE_H = 44, LANES = 3;
 

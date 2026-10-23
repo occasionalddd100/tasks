@@ -10,6 +10,7 @@ import ShareDialog from "@/components/ShareDialog";
 import { VIEW, ViewHeader, PillTab, PillTabs } from "@/components/ViewHeader";
 import { ItemIcon } from "@/components/IconPicker";
 import { useNavItems, scrollTop } from "@/components/MobileNav";
+import { Fan } from "@/components/Fan";
 import { canUseFolders, addFolder, access, allow, fileUrl, useFolders } from "@/lib/localFolders";
 const FolderPortal = lazy(() => import("@/components/stash/FolderPortal"));
 import { isMine } from "@/lib/db";
@@ -703,52 +704,6 @@ function LocalMedia({ c, compact, autoplay }) {
 // phone: pick a board from the bottom bar
 // boards and tags fan up out of their button in a slight arc, like a Stack in the macOS Dock
 const FAN_MAX = 9;
-const ANCHORS = {
-  navRight: { right: "calc(30% - 22px)", bottom: "calc(4.5rem + env(safe-area-inset-bottom))" },
-  navLeft: { left: "calc(10% - 22px)", bottom: "calc(4.5rem + env(safe-area-inset-bottom))" },
-  dock: { right: "1.5rem", bottom: "5.5rem" },
-};
-function Fan({ open, setOpen, items, onPick, anchor }) {
-  const style = typeof anchor === "string" ? ANCHORS[anchor] : anchor;
-  const left = anchor === "navLeft" || (style && "left" in style && !("right" in style));
-  useBackClose(open, () => setOpen(false));
-  useEffect(() => { if (!open) return; const k = e => e.key === "Escape" && setOpen(false); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [open]);
-  return (
-    <AnimatePresence>
-      {open && (
-        <div className="fixed inset-0 z-30">
-          <motion.button type="button" aria-label="Закрыть" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/40"
-            style={{ backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} />
-          <ul className={cn("absolute flex flex-col-reverse gap-2", left ? "items-start" : "items-end")} style={style}>
-            {items.map((t, i) => {
-              // the further up, the more it leans and drifts sideways
-              const x = (left ? 1 : -1) * i * i * 1.4, r = (left ? 1 : -1) * i * 1.3;
-              return (
-                <motion.li key={t.id} style={{ originX: left ? 0 : 1, originY: 1 }}
-                  initial={{ opacity: 0, y: 40 + i * 30, x: 0, rotate: 0, scale: 0.4 }}
-                  animate={{ opacity: 1, y: 0, x, rotate: r, scale: 1, transition: { type: "spring", stiffness: 420, damping: 28, delay: i * 0.025 } }}
-                  exit={{ opacity: 0, y: 30 + i * 24, x: 0, rotate: 0, scale: 0.5, transition: { duration: 0.16, delay: (items.length - i) * 0.012 } }}>
-                  <button type="button" onClick={() => { if (!onPick(t)) setOpen(false); }} className={cn("flex items-center gap-2.5", left && "flex-row-reverse")}>
-                    <span className={cn("max-w-[60vw] truncate rounded-full px-3 py-1.5 text-sm font-medium shadow-lg transition-colors md:max-w-xs",
-                      t.on ? "bg-foreground text-background" : "bg-popover/95 text-popover-foreground hover:bg-accent")}>
-                      {t.name}{t.n != null && <span className="ml-1.5 opacity-60 tabular-nums">{t.n}</span>}
-                    </span>
-                    <span className={cn("grid size-11 shrink-0 place-items-center rounded-2xl shadow-lg ring-1 ring-black/5 transition-transform hover:scale-110",
-                      t.on ? "bg-[var(--ink)] text-white" : t.dashed ? "border border-dashed bg-popover/95 text-muted-foreground" : "bg-popover text-foreground")}>
-                      {t.glyph}
-                    </span>
-                  </button>
-                </motion.li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-}
-
 const initial = s => <span className="text-base font-semibold">{s.trim()[0]?.toUpperCase() || "•"}</span>;
 function BoardsFan({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, onMore, anchor }) {
   const list = [{ id: ALL, name: "Все", n: total, glyph: <LayoutGridIcon className="size-5" /> }, ...tabs.map(t => ({ id: t.id, name: t.name, n: counts(t.id), glyph: initial(t.name) }))];

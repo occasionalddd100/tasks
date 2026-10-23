@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { freshReload } from "@/lib/reload";
-import { BookOpenIcon, CrosshairIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
-import { sb, useDb } from "@/lib/db";
+import { BookOpenIcon, CrosshairIcon, GanttChartIcon, ListTodoIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { sb, updateMany, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import { focusOpen } from "@/lib/focus";
 import JournalView from "@/components/journal/JournalView";
 import { QuickAddHost, openQuickAdd } from "@/components/tasks/QuickAdd";
 import { TaskSheetHost } from "@/components/tasks/TaskSheet";
+import { TagWheelHost } from "@/components/tasks/TagWheel";
 import { ensurePersonal, personalOf, draftTasks } from "@/lib/personal";
 
 const NoteView = lazy(() => import("@/components/notes/NoteView").catch(e => {
@@ -61,7 +62,9 @@ const readHash = () => {
   if (location.hash === "#journal") return { journal: true };
   if (location.hash === "#focus") return { focus: true };
   if (location.hash === "#personal") return { personal: true };
-  return { journal: true };
+  if (location.hash === "#diary") return { diary: true };
+  // home is the task list: open the app, add what's on your mind
+  return { focus: true };
 };
 
 export default function Shell() {
@@ -81,6 +84,15 @@ export default function Shell() {
   }, []);
   // everyone gets "Личное" with "Черновики" the first time the data is in
   useEffect(() => { if (db.ready && !db.error) ensurePersonal(); }, [db.ready, db.error, !!personalOf(db)]);
+  // «Срочно» is gone: my open urgent tasks move into "В работе", once
+  useEffect(() => {
+    if (!db.ready || db.error) return;
+    try { if (localStorage.getItem("urgentGone")) return; } catch { return; }
+    const me = db.me, list = db.tasks.filter(t => t.prio === "urgent" && !t.done && (t.assignee ? t.assignee === me : t._owner === me));
+    let n = Math.max(0, ...db.tasks.filter(t => typeof t.focus === "number").map(t => t.focus));
+    if (list.length) updateMany("tasks", list.map(t => [t.id, { prio: "", ...(typeof t.focus === "number" ? {} : { focus: ++n }) }]));
+    try { localStorage.setItem("urgentGone", "1"); } catch {}
+  }, [db.ready, db.error]);
   useEffect(() => {
     const on = () => setView(readHash());
     window.addEventListener("hashchange", on); window.addEventListener("popstate", on);
@@ -89,7 +101,7 @@ export default function Shell() {
 
   const go = v => {
     setMenu(false);
-    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : v.focus ? "#focus" : v.personal ? "#personal" : "#journal";
+    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : v.focus ? "#focus" : v.personal ? "#personal" : v.diary ? "#diary" : "#journal";
     if (location.hash !== hash) history.pushState(null, "", hash || location.pathname + location.search);
     setView(v);
   };
@@ -101,9 +113,10 @@ export default function Shell() {
   const stash = view.stash || null;
   const shown = view.note ? db.notes.find(n => n.id === view.note) : project ? db.projects.find(b => b.id === project) : stash ? db.stashes.find(b => b.id === stash) : null;
   const focus = !view.note && !project && !stash && !!view.focus;
-  const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : focus ? "Фокус" : "Журнал";
-  const journal = !view.note && !project && !stash && !focus;
-  const sidebar = <Sidebar view={{ ...view, project, focus, personal, journal }} go={go} email={db.email} search={menu === "search"} />;
+  const diary = !view.note && !project && !stash && !focus && !!view.diary;
+  const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : focus ? "Задачи" : diary ? "Дневник" : "Таймлайн";
+  const journal = !view.note && !project && !stash && !focus && !diary;
+  const sidebar = <Sidebar view={{ ...view, project, focus, personal, journal, diary }} go={go} email={db.email} search={menu === "search"} />;
 
   return (
     <MotionConfig reducedMotion={look.motion === "off" ? "always" : "user"}>
@@ -118,19 +131,21 @@ export default function Shell() {
           {db.pending > 0 && <span className="ml-auto mr-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400" title="Сохранится, когда появится интернет">не отправлено: {db.pending}</span>}
         </div>
         {db.error && <p className="m-4 rounded-md border border-destructive/40 p-3 text-sm text-destructive">Нет связи с базой: {db.error}. Обнови страницу.</p>}
-        <motion.div key={view.note || project || stash || (focus ? "focus" : "journal")} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+        <motion.div key={view.note || project || stash || (focus ? "focus" : diary ? "diary" : "journal")} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
           {view.note
             ? <NoteGuard key={view.note}><Suspense fallback={<Loading />}><NoteView id={view.note} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
             : project ? <ProjectView id={project} fresh={view.fresh} go={go} />
             : stash ? <NoteGuard key={stash}><Suspense fallback={<Loading />}><StashView id={stash} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
             : view.personal && !mine ? <Loading />
             : focus ? <FocusView go={go} />
-            : <JournalView />}
+            : <JournalView mode={diary ? "diary" : "timeline"} />}
         </motion.div>
       </main>
-      <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onJournal={() => go({ journal: true })} onAdd={m => m && openQuickAdd(m)} journal={journal}
-        personal={{ onClick: () => go({ personal: true }), active: personal, badge: draftTasks(db).length }}
-        focus={{ onClick: () => go({ focus: true }), active: focus, badge: focusOpen(db) }} />
+      <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onAdd={() => openQuickAdd()}
+        journal={{ onClick: () => go({ journal: true }), active: journal }}
+        diary={{ onClick: () => go({ diary: true }), active: diary }}
+        tasks={{ onClick: () => go({ focus: true }), active: focus, badge: focusOpen(db) }} />
+      <TagWheelHost />
       <QuickAddHost onOpenDrafts={() => go({ personal: true })} />
       <TaskSheetHost />
       <ConfirmHost />
@@ -156,23 +171,21 @@ function Sidebar({ view, go, email, search }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="p-2">
-        <button type="button" onClick={() => go({ journal: true })}
-          className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", view.journal && "bg-accent")}>
-          <BookOpenIcon className="size-4" />Журнал
-        </button>
-        <button type="button" onClick={openQuickAdd} title="Кинуть задачу в черновики (клавиша N)"
-          className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-dashed px-2 text-sm font-medium text-muted-foreground hover:border-primary/50 hover:bg-accent hover:text-foreground">
-          <InboxIcon className="size-4" />В черновики<kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-[11px]">N</kbd>
-        </button>
-        <button type="button" onClick={() => go({ personal: true })}
-          className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", view.personal && "bg-accent")}>
-          <UserRoundIcon className="size-4" />Личное
-          {draftTasks(db).length > 0 && <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-xs tabular-nums text-foreground/80" title="В черновиках">{draftTasks(db).length}</span>}
-        </button>
-        <button type="button" onClick={() => go({ focus: true })}
-          className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", view.focus && "bg-accent")}>
-          <CrosshairIcon className="size-4" />Фокус
-          {focusOpen(db) > 0 && <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-xs tabular-nums text-foreground/80">{focusOpen(db)}</span>}
+        {[
+          { k: "focus", label: "Задачи", icon: ListTodoIcon, n: focusOpen(db), on: view.focus },
+          { k: "journal", label: "Таймлайн", icon: GanttChartIcon, on: view.journal },
+          { k: "diary", label: "Дневник", icon: BookOpenIcon, on: view.diary },
+          { k: "personal", label: "Личное", icon: UserRoundIcon, n: draftTasks(db).length, on: view.personal },
+        ].map(({ k, label, icon: Icon, n, on }) => (
+          <button key={k} type="button" onClick={() => go({ [k]: true })}
+            className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", on && "bg-accent")}>
+            <Icon className="size-4" />{label}
+            {n > 0 && <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-xs tabular-nums text-foreground/80">{n}</span>}
+          </button>
+        ))}
+        <button type="button" onClick={() => openQuickAdd()} title="Новая задача (клавиша N)"
+          className="mt-1 flex h-9 w-full items-center gap-2 rounded-md border border-dashed px-2 text-sm font-medium text-muted-foreground hover:border-primary/50 hover:bg-accent hover:text-foreground">
+          <PlusIcon className="size-4" />Новая задача<kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-[11px]">N</kbd>
         </button>
       </div>
       <div className="flex h-8 items-center gap-0.5 px-4 pt-2 pb-1">

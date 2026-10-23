@@ -1,25 +1,121 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CrosshairIcon, PlusIcon } from "lucide-react";
+import { CrosshairIcon, FlameIcon, HashIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { useDb, updateMany } from "@/lib/db";
-import { focusList, clearDone, nextFocus, placeOf, inFocus } from "@/lib/focus";
+import { focusList, clearDone, inFocus, toFocus } from "@/lib/focus";
+import { tagsOf, tagOfTask } from "@/lib/tags";
+import { draftsOf } from "@/lib/personal";
 import { cn } from "@/lib/utils";
-import { stale, byOrder } from "@/lib/tasks";
+import { stale, byOrder, today, dueLabel } from "@/lib/tasks";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { VIEW } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
-import FocusPicker from "@/components/tasks/FocusPicker";
-import { addDraft } from "@/lib/personal";
+import { Composer } from "@/components/tasks/QuickAdd";
+import { openTask } from "@/components/tasks/TaskSheet";
+import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
+import { Fan } from "@/components/Fan";
+import { useTasksTap } from "@/components/MobileNav";
+import { Habits } from "@/components/tasks/ProjectViews";
 
+// The home screen. On top: add a task (with a tag it lands on that board). Then "В работе": what I'm on now,
+// added and removed at will. Below, everything else: one row per tag, scrolled sideways (or one tag as a list).
+const NONE = "\u0000none";
+let lastTag = null;
+const store = { get: () => { try { return localStorage.getItem("tasksTag"); } catch { return null; } }, set: v => { try { v ? localStorage.setItem("tasksTag", v) : localStorage.removeItem("tasksTag"); } catch {} } };
 
-export default function FocusView({ go }) {
+export default function FocusView() {
   const db = useDb();
+  const tags = tagsOf(db);
+  const [filter, setFilterRaw] = useState(() => lastTag ?? store.get());
+  const setFilter = v => { lastTag = v; store.set(v); setFilterRaw(v); };
+  const [fan, setFan] = useState(false);
+  useTasksTap(() => setFan(f => !f));
   const list = focusList(db);
   const done = list.filter(t => t.done).length;
+  const drafts = draftsOf(db);
+
+  // open tasks not in work, top level, not someone else's
+  const rest = useMemo(() => {
+    const me = db.me, now = today();
+    const rank = t => (t.due && t.due < now ? 0 : t.due === now ? 1 : t.prio === "urgent" ? 2 : t.due ? 3 : 4);
+    return db.tasks.filter(t => !t.done && !t.hidden && !t.parent && !inFocus(t) && t.text?.trim() && (!t.assignee || t.assignee === me))
+      .sort((a, b) => rank(a) - rank(b) || (a.due || "9").localeCompare(b.due || "9") || byOrder(a, b));
+  }, [db.tasks, db.me]);
+  const groups = useMemo(() => {
+    const by = new Map([[NONE, []], ...tags.map(t => [t.id, []])]);
+    for (const t of rest) {
+      const g = tagOfTask(db, t); if (!g) continue;
+      by.get(g.drafts && t.cat === drafts?.id ? NONE : g.project)?.push(t);
+    }
+    return by;
+  }, [rest, tags.map(t => t.id).join(), drafts?.id]);
+  const shownTag = filter && (filter === NONE || tags.some(t => t.id === filter)) ? filter : null;
+  const tagName = id => id === NONE ? "Без тега" : tags.find(t => t.id === id)?.name;
+
+  const fanItems = [
+    { id: "\u0000all", name: "Все теги", on: !shownTag, glyph: <ListTodoIcon className="size-5" /> },
+    groups.get(NONE)?.length && { id: NONE, name: "Без тега", n: groups.get(NONE).length, on: shownTag === NONE, glyph: <InboxIcon className="size-5" /> },
+    ...tags.map(t => ({ id: t.id, name: t.name, n: groups.get(t.id)?.length || 0, on: shownTag === t.id,
+      glyph: <span className="text-base font-semibold" style={t.color ? { color: t.color } : undefined}>{(t.name.trim()[0] || "#").toUpperCase()}</span> })),
+  ].filter(Boolean).slice(0, 10);
+
+  return (
+    <div className={cn(VIEW, "max-w-5xl")}>
+      <header className="flex items-center gap-2">
+        <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Задачи</h1>
+      </header>
+
+      <Composer defaultTag={shownTag && shownTag !== NONE ? shownTag : null} />
+
+      <section className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <h2 className="flex items-center gap-2 text-base font-semibold"><CrosshairIcon className="size-4 text-primary" />В работе</h2>
+          {list.length > 0 && <span className="rounded-full bg-foreground/[.06] px-2 py-px text-xs font-medium text-muted-foreground tabular-nums">{list.length - done}</span>}
+          {done > 0 && <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={clearDone}>Убрать сделанные</Button>}
+        </div>
+        {list.length === 0
+          ? <p className="py-3 text-sm text-muted-foreground">Пусто. Смахни задачу влево или нажми ＋ на карточке ниже, и она окажется тут.</p>
+          : <WorkList list={list} />}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
+          <TagChip on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>
+          {groups.get(NONE)?.length > 0 && <TagChip on={shownTag === NONE} onClick={() => setFilter(shownTag === NONE ? null : NONE)} n={groups.get(NONE).length}><InboxIcon className="size-3.5" />Без тега</TagChip>}
+          {tags.map(t => <TagChip key={t.id} on={shownTag === t.id} color={t.color} n={groups.get(t.id)?.length} onClick={() => setFilter(shownTag === t.id ? null : t.id)}>{t.name}</TagChip>)}
+        </div>
+        {shownTag
+          ? <TagList tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
+          : [...groups].filter(([, l]) => l.length).map(([id, l]) => (
+              <TagRow key={id} id={id} name={tagName(id)} color={tags.find(t => t.id === id)?.color} tasks={l} onOpen={() => setFilter(id)} />
+            ))}
+        {!rest.length && <p className="text-sm text-muted-foreground">Других открытых задач нет.</p>}
+      </section>
+
+      {db.habits.length > 0 && <Habits habits={db.habits} />}
+
+      <Fan open={fan} setOpen={setFan} items={fanItems} anchor="navRight"
+        onPick={t => { setFilter(t.id === "\u0000all" ? null : t.id); return false; }} />
+    </div>
+  );
+}
+
+function TagChip({ on, color, n, onClick, children }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={on}
+      className={cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors",
+        on ? "border-foreground bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}>
+      {color && <span className="size-2 rounded-full" style={{ background: color }} />}{children}
+      {n > 0 && <span className="opacity-60 tabular-nums">{n}</span>}
+    </button>
+  );
+}
+
+// "В работе": drag to reorder, subtasks under their task
+function WorkList({ list }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
@@ -31,78 +127,99 @@ export default function FocusView({ go }) {
     const next = arrayMove(ids, ids.indexOf(active.id), ids.indexOf(over.id));
     updateMany("tasks", next.map((id, i) => [id, i + 1]).filter(([id, f]) => list.find(t => t.id === id)?.focus !== f).map(([id, focus]) => [id, { focus }]));
   };
-  // the old "Ближайшее" mark is gone: offer its open tasks to the focus once, by hand
-  const legacy = db.tasks.filter(t => t.prio === "today" && !t.done && !t.hidden && !inFocus(t) && t.text?.trim());
-  const takeLegacy = into => {
-    let n = Math.max(0, ...db.tasks.filter(inFocus).map(x => x.focus));
-    updateMany("tasks", legacy.map(t => [t.id, into ? { prio: "", focus: ++n } : { prio: "" }]));
-  };
-
   return (
-    <div className={VIEW}>
-      <header className="flex items-center gap-2">
-        <CrosshairIcon className="size-7 text-primary" />
-        <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Фокус</h1>
-        {done > 0 && <Button variant="ghost" size="sm" onClick={clearDone}>Убрать сделанные</Button>}
-      </header>
-
-      {legacy.length > 0 && (
-        <section className="flex flex-col gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <p>Метки «Ближайшее» больше нет: теперь есть только фокус и дата. С этой меткой осталось задач: {legacy.length}. Например: {legacy.slice(0, 3).map(t => "«" + t.text + "»").join(", ")}.</p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => takeLegacy(true)}>Перенести в фокус</Button>
-            <Button size="sm" variant="ghost" onClick={() => takeLegacy(false)}>Просто снять метку</Button>
-          </div>
-        </section>
-      )}
-
-      <div className="flex flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] xl:items-start">
-      <div className="flex flex-col gap-4 xl:sticky xl:top-4">
-      <section className="m-flat rounded-xl border bg-card p-2 shadow-xs">
-        {list.length === 0 && (
-          <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-            Тут пусто. Напиши задачу ниже или возьми из предложки.
-          </p>
-        )}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={list.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <ul>
-              {list.map((t, i) => <FocusItem key={t.id} t={t} place={placeOf(db, t)} next={false} />)}
-            </ul>
-          </SortableContext>
-        </DndContext>
-        <AddRow />
-      </section>
-      </div>
-
-      <div className="min-w-0 xl:rounded-2xl xl:border xl:bg-card/40 xl:p-4"><FocusPicker /></div>
-      </div>
-    </div>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <SortableContext items={list.map(t => t.id)} strategy={verticalListSortingStrategy}>
+        <ul className="-mx-1">{list.map(t => <WorkItem key={t.id} t={t} />)}</ul>
+      </SortableContext>
+    </DndContext>
   );
 }
 
-function FocusItem({ t, place, next }) {
+function WorkItem({ t }) {
   const db = useDb();
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);
+  const tag = tagOfTask(db, t), name = tag?.drafts ? "без тега" : db.projects.find(p => p.id === tag?.project)?.name;
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: t.id });
   return (
-    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn("relative rounded-md", isDragging && "z-10 opacity-30", next && "bg-primary/8")}>
+    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn("relative rounded-md", isDragging && "z-10 opacity-30")}>
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
-        <TaskRow t={t} noFocusMark sub={(next ? "▶ сейчас · " : "") + place} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
+        <TaskRow t={t} noFocusMark sub={name && "#" + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
         {kids.length > 0 && <ul className="mb-1 ml-9 border-l pl-2" aria-label={"Подзадачи: " + t.text}>{kids.map(k => <li key={k.id}><TaskRow t={k} noFocusMark /></li>)}</ul>}
       </motion.div>
     </li>
   );
 }
 
-// a new task right into the focus; it lands in "Черновики", to be given a category later
-function AddRow() {
-  const [text, setText] = useState("");
-  const submit = e => { e.preventDefault(); const v = text.trim(); if (!v) return; setText(""); addDraft(v, { focus: nextFocus() }); };
+// one tag: its tasks as cards in a row you scroll sideways; the rows themselves scroll down
+function TagRow({ id, name, color, tasks, onOpen }) {
   return (
-    <form onSubmit={submit} className="mt-1 flex items-center gap-2 border-t px-1 pt-2">
-      <Input value={text} onChange={e => setText(e.target.value)} placeholder="Новая задача в фокус" enterKeyHint="done" className="h-12 flex-1 text-base" />
-      <Button type="submit" size="icon" disabled={!text.trim()} aria-label="Добавить в фокус" className="size-12 shrink-0"><PlusIcon /></Button>
-    </form>
+    <div className="flex flex-col gap-2">
+      <button type="button" onClick={onOpen} className="flex items-center gap-2 self-start text-sm font-semibold">
+        {id === NONE ? <InboxIcon className="size-4 text-muted-foreground" /> : color ? <span className="size-2.5 rounded-full" style={{ background: color }} /> : <HashIcon className="size-4 text-muted-foreground" />}
+        {name}<span className="font-normal text-muted-foreground tabular-nums">{tasks.length}</span>
+      </button>
+      <div data-hscroll className="-mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:px-0">
+        {tasks.slice(0, 30).map(t => <Card key={t.id} t={t} color={color} />)}
+        {tasks.length > 30 && <button type="button" onClick={onOpen} className="grid w-28 shrink-0 snap-start place-items-center rounded-2xl border border-dashed text-sm text-muted-foreground">ещё {tasks.length - 30}</button>}
+      </div>
+    </div>
   );
+}
+
+function TagList({ tasks, name, onClear }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span>{tasks.length ? `${tasks.length} в «${name}»` : `В «${name}» открытых задач нет`}</span>
+        <button type="button" onClick={onClear} className="ml-auto inline-flex items-center gap-1 hover:text-foreground"><XIcon className="size-3.5" />Все теги</button>
+      </div>
+      <ul className="-mx-1">{tasks.map(t => <li key={t.id}><TaskRow t={t} /></li>)}</ul>
+    </div>
+  );
+}
+
+// a card: tap opens the task, hold opens the tag wheel, ＋ puts it in work
+function Card({ t, color }) {
+  const db = useDb();
+  const kids = db.tasks.filter(k => k.parent === t.id && !stale(k));
+  const late = t.due && t.due < today();
+  const hold = useHold(t);
+  return (
+    <div {...hold.handlers} onClick={() => !hold.held.current && openTask(t.id)} onContextMenu={e => { e.preventDefault(); if (!hold.held.current) openWheel(t, e.clientX, e.clientY, true); }}
+      className="relative flex h-32 w-44 shrink-0 snap-start cursor-pointer flex-col rounded-2xl border bg-card p-3 shadow-xs transition-transform select-none [-webkit-touch-callout:none] active:scale-[.98] md:w-52">
+      {color && <span className="absolute inset-y-3 left-0 w-1 rounded-r-full" style={{ background: color }} />}
+      <p className="line-clamp-4 text-[14px] leading-snug font-medium">{t.text}</p>
+      <div className="mt-auto flex items-center gap-1.5 pt-2 text-xs text-muted-foreground">
+        {t.due && <span className={cn("rounded-md bg-muted px-1.5 py-0.5 whitespace-nowrap", late && "text-destructive")}>{dueLabel(t.due)}{t.time ? " " + t.time : ""}</span>}
+        {t.prio === "urgent" && <FlameIcon className="size-3.5 text-red-500" />}
+        {kids.length > 0 && <span className="tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
+        <button type="button" onClick={e => { e.stopPropagation(); toFocus(t); }} aria-label={"В работу: " + t.text}
+          className="ml-auto grid size-8 place-items-center rounded-full bg-foreground/[.06] text-foreground hover:bg-primary hover:text-primary-foreground">
+          <PlusIcon className="size-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// hold a card still for a moment: the tag wheel opens under the finger, the same finger picks
+function useHold(t) {
+  const timer = useRef(0), start = useRef(null), held = useRef(false);
+  const stopScroll = (el, on) => { const s = el?.closest("[data-hscroll]"); if (s) s.style.overflowX = on ? "hidden" : ""; };
+  const handlers = {
+    onPointerDown: e => {
+      if (e.pointerType === "mouse") return;
+      held.current = false; start.current = { x: e.clientX, y: e.clientY, el: e.currentTarget };
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => { held.current = true; stopScroll(start.current.el, true); openWheel(t, start.current.x, start.current.y); }, 450);
+    },
+    onPointerMove: e => {
+      if (held.current) return moveWheel(e.clientX, e.clientY);
+      if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 8) clearTimeout(timer.current);
+    },
+    onPointerUp: () => { clearTimeout(timer.current); if (held.current) { endWheel(); stopScroll(start.current?.el, false); setTimeout(() => { held.current = false; }, 400); } start.current = null; },
+    onPointerCancel: () => { clearTimeout(timer.current); if (held.current) { endWheel(); stopScroll(start.current?.el, false); held.current = false; } start.current = null; },
+  };
+  return { handlers, held };
 }
