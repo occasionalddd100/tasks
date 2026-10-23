@@ -33,6 +33,14 @@ export default function FocusView() {
   const [filter, setFilterRaw] = useState(() => lastTag ?? store.get());
   const setFilter = v => { lastTag = v; store.set(v); setFilterRaw(v); };
   const [fan, setFan] = useState(false);
+  const tagsRef = useRef(null);
+  // a tag picked in the fan: jump to its list, it sits below «В работе»
+  const jump = () => setTimeout(() => {
+    const el = tagsRef.current; if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const chip = el.querySelector("[aria-pressed=true]"), row = chip?.parentElement;
+    if (row) row.scrollTo({ left: chip.offsetLeft - row.clientWidth / 2 + chip.offsetWidth / 2, behavior: "smooth" });
+  }, 60);
   useTasksTap(() => setFan(f => !f));
   const list = focusList(db);
   const done = list.filter(t => t.done).length;
@@ -82,7 +90,7 @@ export default function FocusView() {
           : <WorkList list={list} />}
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section ref={tagsRef} className={cn("flex scroll-mt-16 flex-col gap-3", shownTag && "min-h-[calc(100dvh-9rem)]")}>
         <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
           <TagChip on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>
           {groups.get(NONE)?.length > 0 && <TagChip on={shownTag === NONE} onClick={() => setFilter(shownTag === NONE ? null : NONE)} n={groups.get(NONE).length}><InboxIcon className="size-3.5" />Без тега</TagChip>}
@@ -100,7 +108,7 @@ export default function FocusView() {
       {db.habits.length > 0 && <Habits habits={db.habits} />}
 
       <Fan open={fan} setOpen={setFan} items={fanItems} anchor="navRight"
-        onPick={t => { if (t.id === "\u0000edit") { openTagEditor(); return; } setFilter(t.id === "\u0000all" ? null : t.id); return false; }} />
+        onPick={t => { if (t.id === "\u0000edit") { openTagEditor(); return; } setFilter(t.id === "\u0000all" ? null : t.id); jump(); }} />
     </div>
   );
 }
