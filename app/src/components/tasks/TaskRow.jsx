@@ -32,7 +32,8 @@ const SWIPE = 80;
 
 // a horizontal drag on the row: right past SWIPE = done, left = focus. Vertical moves stay page scrolls.
 // holding still for a moment opens the tag wheel instead; the same finger then picks on it
-function useSwipe(onRight, onLeft, onHold) {
+// swipe = false: only the hold works (a kanban card, where sideways belongs to scrolling the board)
+function useSwipe(onRight, onLeft, onHold, swipe = true) {
   const [dx, setDx] = useState(0);
   const g = useRef(null), held = useRef(false), timer = useRef(0);
   const onTouchStart = e => {
@@ -47,7 +48,7 @@ function useSwipe(onRight, onLeft, onHold) {
     if (s.off) return;
     const x = p.clientX - s.x, y = p.clientY - s.y;
     if (Math.abs(x) > 8 || Math.abs(y) > 8) clearTimeout(timer.current);
-    if (!s.on) { if (Math.abs(y) > 10) { s.off = true; return; } if (Math.abs(x) < 12) return; s.on = true; }
+    if (!s.on) { if (Math.abs(y) > 10 || (!swipe && Math.abs(x) > 8)) { s.off = true; return; } if (Math.abs(x) < 12) return; s.on = true; }
     setDx(Math.max(-140, Math.min(140, x)));
   };
   const onTouchEnd = () => {
@@ -99,7 +100,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
   const [editing, setEditing] = useState(null); // "text" | "note"
   const [noteOpen, setNoteOpen] = useState(false);
   const [sheet, setSheet] = useState(false);
-  const phone = usePhone(), stack = phone || useContext(Stacked);
+  const phone = usePhone(), inCard = useContext(Stacked), stack = phone || inCard;
   const dateRef = useRef(null), timeRef = useRef(null);
 
   const toggle = v => update("tasks", t.id, v ? { done: true, doneOn: today(), doneBy: getDb().me } : { done: false, doneOn: "", doneBy: "", hidden: false });
@@ -179,7 +180,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
           {stack && sub && <span className="min-w-0 truncate pl-1 text-xs text-muted-foreground/70">{sub}</span>}
         </div>
   );
-  const swipe = useSwipe(() => toggle(!t.done), () => !t.done && (focused ? fromFocus(t) : toFocus(t)), (x, y) => openWheel(t, x, y));
+  const swipe = useSwipe(() => toggle(!t.done), () => !t.done && (focused ? fromFocus(t) : toFocus(t)), (x, y) => openWheel(t, x, y), !inCard);
   const tapOpen = phone && !overlay;
   const row = (
     <div {...(tapOpen ? swipe.handlers : {})}
