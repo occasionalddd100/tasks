@@ -23,7 +23,7 @@ import { openTagEditor } from "@/components/tasks/TagEditor";
 
 // The home screen. On top: add a task (with a tag it lands on that board). Then "В работе": what I'm on now,
 // added and removed at will. Below, the rest of «Личное»: one row per tag (its categories), scrolled sideways (or one tag as a list).
-const NONE = "\u0000none";
+const NONE = "\u0000none", WORK = "\u0000work";
 let lastTag = null;
 const store = { get: () => { try { return localStorage.getItem("tasksTag"); } catch { return null; } }, set: v => { try { v ? localStorage.setItem("tasksTag", v) : localStorage.removeItem("tasksTag"); } catch {} } };
 
@@ -33,13 +33,12 @@ export default function FocusView() {
   const [filter, setFilterRaw] = useState(() => lastTag ?? store.get());
   const setFilter = v => { lastTag = v; store.set(v); setFilterRaw(v); };
   const [fan, setFan] = useState(false);
-  const tagsRef = useRef(null);
-  // a tag picked in the fan: jump to its list, it sits below «В работе»
+  const chipsRef = useRef(null);
+  // a filter picked in the fan: the page starts over at the top, its chip in view
   const jump = () => setTimeout(() => {
-    const el = tagsRef.current; if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    const chip = el.querySelector("[aria-pressed=true]"), row = chip?.parentElement;
-    if (row) row.scrollTo({ left: chip.offsetLeft - row.clientWidth / 2 + chip.offsetWidth / 2, behavior: "smooth" });
+    document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
+    const row = chipsRef.current, chip = row?.querySelector("[aria-pressed=true]");
+    if (chip) row.scrollTo({ left: chip.offsetLeft - row.clientWidth / 2 + chip.offsetWidth / 2, behavior: "smooth" });
   }, 60);
   useTasksTap(() => setFan(f => !f));
   const list = focusList(db);
@@ -61,11 +60,12 @@ export default function FocusView() {
     }
     return by;
   }, [rest, tags.map(t => t.id).join(), drafts?.id]);
-  const shownTag = filter && (filter === NONE || tags.some(t => t.id === filter)) ? filter : null;
+  const shownTag = filter && (filter === NONE || filter === WORK || tags.some(t => t.id === filter)) ? filter : null;
   const tagName = id => id === NONE ? "Без тега" : tags.find(t => t.id === id)?.name;
 
   const fanItems = [
-    { id: "\u0000all", name: "Все теги", on: !shownTag, glyph: <ListTodoIcon className="size-5" /> },
+    { id: "\u0000all", name: "Все", on: !shownTag, glyph: <ListTodoIcon className="size-5" /> },
+    { id: WORK, name: "В работе", n: list.length - done, on: shownTag === WORK, glyph: <CrosshairIcon className="size-5" /> },
     groups.get(NONE)?.length && { id: NONE, name: "Без тега", n: groups.get(NONE).length, on: shownTag === NONE, glyph: <InboxIcon className="size-5" /> },
     ...tags.map(t => ({ id: t.id, name: t.name, n: groups.get(t.id)?.length || 0, on: shownTag === t.id,
       glyph: <span className="text-base font-semibold" style={t.color ? { color: t.color } : undefined}>{(t.name.trim()[0] || "#").toUpperCase()}</span> })),
@@ -77,9 +77,17 @@ export default function FocusView() {
         <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Задачи</h1>
       </header>
 
-      <Composer defaultTag={shownTag && shownTag !== NONE ? shownTag : null} />
+      <Composer defaultTag={shownTag && shownTag !== NONE && shownTag !== WORK ? shownTag : null} work={shownTag === WORK} />
 
-      <section className="flex flex-col gap-1">
+      <div ref={chipsRef} className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
+        <TagChip on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>
+        <TagChip on={shownTag === WORK} n={list.length - done} onClick={() => setFilter(shownTag === WORK ? null : WORK)}><CrosshairIcon className="size-3.5" />В работе</TagChip>
+        {groups.get(NONE)?.length > 0 && <TagChip on={shownTag === NONE} onClick={() => setFilter(shownTag === NONE ? null : NONE)} n={groups.get(NONE).length}><InboxIcon className="size-3.5" />Без тега</TagChip>}
+        {tags.map(t => <TagChip key={t.id} on={shownTag === t.id} color={t.color} n={groups.get(t.id)?.length} onClick={() => setFilter(shownTag === t.id ? null : t.id)}>{t.name}</TagChip>)}
+        <button type="button" onClick={() => openTagEditor()} aria-label="Править теги" className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-dashed px-3 text-sm text-muted-foreground hover:text-foreground"><PencilIcon className="size-3.5" />Теги</button>
+      </div>
+
+      {(!shownTag || shownTag === WORK) && <section className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <h2 className="flex items-center gap-2 text-base font-semibold"><CrosshairIcon className="size-4 text-primary" />В работе</h2>
           {list.length > 0 && <span className="rounded-full bg-foreground/[.06] px-2 py-px text-xs font-medium text-muted-foreground tabular-nums">{list.length - done}</span>}
@@ -88,24 +96,18 @@ export default function FocusView() {
         {list.length === 0
           ? <p className="py-3 text-sm text-muted-foreground">Пусто. Смахни задачу влево или нажми ＋ на карточке ниже, и она окажется тут.</p>
           : <WorkList list={list} />}
-      </section>
+      </section>}
 
-      <section ref={tagsRef} className={cn("flex scroll-mt-16 flex-col gap-3", shownTag && "min-h-[calc(100dvh-9rem)]")}>
-        <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
-          <TagChip on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>
-          {groups.get(NONE)?.length > 0 && <TagChip on={shownTag === NONE} onClick={() => setFilter(shownTag === NONE ? null : NONE)} n={groups.get(NONE).length}><InboxIcon className="size-3.5" />Без тега</TagChip>}
-          {tags.map(t => <TagChip key={t.id} on={shownTag === t.id} color={t.color} n={groups.get(t.id)?.length} onClick={() => setFilter(shownTag === t.id ? null : t.id)}>{t.name}</TagChip>)}
-          <button type="button" onClick={() => openTagEditor()} aria-label="Править теги" className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-dashed px-3 text-sm text-muted-foreground hover:text-foreground"><PencilIcon className="size-3.5" />Теги</button>
-        </div>
+      {shownTag !== WORK && <section className="flex flex-col gap-3">
         {shownTag
           ? <TagList tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
           : [...groups].filter(([, l]) => l.length).map(([id, l]) => (
               <TagRow key={id} id={id} name={tagName(id)} color={tags.find(t => t.id === id)?.color} tasks={l} onOpen={() => setFilter(id)} />
             ))}
         {!rest.length && <p className="text-sm text-muted-foreground">Других открытых задач нет.</p>}
-      </section>
+      </section>}
 
-      {db.habits.length > 0 && <Habits habits={db.habits} />}
+      {!shownTag && db.habits.length > 0 && <Habits habits={db.habits} />}
 
       <Fan open={fan} setOpen={setFan} items={fanItems} anchor="navRight"
         onPick={t => { if (t.id === "\u0000edit") { openTagEditor(); return; } setFilter(t.id === "\u0000all" ? null : t.id); jump(); }} />
