@@ -58,6 +58,7 @@ export function Composer({ autoFocus, defaultTag = null, work: workDefault = fal
     const r = did ? (addDone(text), { text: text.trim(), did: true }) : await addTask(text, { tag: cur, work, due, time: due ? time : "" });
     if (r) { onAdded?.(r); setText(""); setDue(""); setTime(""); ref.current?.focus(); }
   };
+  const tile = (on, cls) => cn("flex h-14 flex-col items-center justify-center gap-1 rounded-xl border text-[12px] leading-none font-medium transition-colors disabled:opacity-40 [&_svg]:size-4", on ? cls : "text-muted-foreground");
   const chip = (on, cls = "border-foreground bg-foreground text-background") =>
     cn("inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-[13px] font-medium transition-colors", on ? cls : "text-muted-foreground");
   return (
@@ -72,23 +73,22 @@ export function Composer({ autoFocus, defaultTag = null, work: workDefault = fal
           <ArrowUpIcon className="size-6" />
         </button>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        <button type="button" onClick={() => setDid(d => !d)} aria-pressed={did} className={chip(did, "border-emerald-500/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400")}><CheckIcon className="size-3.5" />Уже сделал</button>
-        {!did && <>
-        <button type="button" onClick={() => setWork(w => !w)} aria-pressed={work} className={chip(work, "border-primary bg-primary text-primary-foreground")}><CrosshairIcon className="size-3.5" />В работу</button>
-        <button type="button" onClick={() => setDue(d => (d === today() ? "" : today()))} aria-pressed={due === today()} className={chip(due === today(), "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400")}><SunIcon className="size-3.5" />Сегодня</button>
-        {/* the phone's own calendar and clock sit on top of the chips */}
-        <label className={cn(chip(due && due !== today(), "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), "relative")}>
-          <CalendarIcon className="size-3.5" />{due && due !== today() ? dueLabel(due) : "Дата"}
+      {/* four small tiles in one row: what kind of entry and when */}
+      <div className="grid grid-cols-4 gap-1.5">
+        <button type="button" onClick={() => setDid(d => !d)} aria-pressed={did} className={tile(did, "border-emerald-500/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400")}><CheckIcon />Сделал</button>
+        <button type="button" disabled={did} onClick={() => setWork(w => !w)} aria-pressed={work} className={tile(work && !did, "border-primary bg-primary text-primary-foreground")}><CrosshairIcon />В работу</button>
+        <button type="button" disabled={did} onClick={() => { setDue(d => (d === today() ? "" : today())); }} aria-pressed={due === today()} className={tile(due === today() && !did, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400")}><SunIcon />Сегодня</button>
+        {/* the phone's own calendar and clock sit on top of the tile */}
+        <label className={cn(tile(!!due && due !== today() && !did, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), "relative", did && "pointer-events-none opacity-40")}>
+          <CalendarIcon />{due && due !== today() ? dueLabel(due) : "Дата"}
           <input type="date" value={due} onChange={e => { setDue(e.target.value); if (!e.target.value) setTime(""); }} className="absolute inset-0 opacity-0" aria-label="Дата" />
         </label>
-        {due && <label className={cn(chip(!!time, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), "relative")}>
-          <AlarmClockIcon className="size-3.5" />{time || "Время"}
-          <input type="time" value={time} onChange={e => setTime(e.target.value)} className="absolute inset-0 opacity-0" aria-label="Время" />
-        </label>}
-        </>}
       </div>
-      {!did && tags.length > 0 && <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
+      {due && !did && <label className={cn(chip(!!time, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), "relative self-start")}>
+        <AlarmClockIcon className="size-3.5" />{time ? "в " + time : "Указать время"}
+        <input type="time" value={time} onChange={e => setTime(e.target.value)} className="absolute inset-0 opacity-0" aria-label="Время" />
+      </label>}
+      {!did && tags.length > 0 && <div className="flex flex-wrap gap-1.5">
         {tags.map(t => (
           <button key={t.id} type="button" onClick={() => setTag(cur === t.id ? null : t.id)} aria-pressed={cur === t.id} className={chip(cur === t.id)}>
             {t.color ? <span className="size-2 rounded-full" style={{ background: t.color }} /> : <HashIcon className="size-3" />}{t.name}
