@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { AlarmClockIcon, BellIcon, BellRingIcon, CheckIcon, CrosshairIcon, FlameIcon, MoonStarIcon, SunIcon, SunriseIcon, SunsetIcon, CalendarClockIcon, CalendarDaysIcon, ChevronDownIcon } from "lucide-react";
+import { AlarmClockIcon, BellIcon, BellRingIcon, CheckIcon, CrosshairIcon, FlameIcon, MoonStarIcon, SunIcon, SunriseIcon, SunsetIcon, CalendarClockIcon, CalendarDaysIcon, ChevronDownIcon, PlusIcon, XIcon } from "lucide-react";
 import { useDb, update } from "@/lib/db";
 import { today, plural } from "@/lib/tasks";
 import { inFocus } from "@/lib/focus";
@@ -8,6 +8,7 @@ import { timeOf, plan } from "@/lib/reminders";
 import { isApp } from "@/lib/native";
 import { exText, exAt } from "@/lib/done";
 import { openTask } from "@/components/tasks/TaskSheet";
+import { addTask } from "@/components/tasks/QuickAdd";
 import { cn } from "@/lib/utils";
 
 // The day at a glance: a 30-hour strip from 06:00 today to tomorrow noon, coloured by part of day,
@@ -95,6 +96,7 @@ export default function DayTimeline() {
     <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="m-flat overflow-hidden rounded-2xl border bg-card shadow-sm">
       <Hero now={now} next={next} missed={missed.length} logged={logged} left={events.filter(e => !e.t.done && e.when >= now).length} onTick={toggle} />
       {phone ? <VStrip now={now} start={start} end={end} events={events} onTick={toggle} /> : <Strip now={now} start={start} end={end} events={events} onTick={toggle} />}
+      {!phone && <ul className="border-t px-4 py-2"><AddSlot when={now} label="Запланировать на время" /></ul>}
       <Ahead db={db} now={now} />
     </motion.section>
   );
@@ -210,19 +212,20 @@ function VStrip({ now, start, end, events, onTick }) {
               <span className="text-xs text-muted-foreground tabular-nums">{hm(from)}{tomorrow ? " · завтра" : ""}</span>
             </div>
             <ol className="relative ml-[3.25rem] border-l-2 pl-4" style={{ borderColor: "color-mix(in oklab, " + p.dot + " 45%, transparent)" }}>
-              {list.length === 0 && <li className="py-1.5 text-xs text-muted-foreground/70">—</li>}
+              {list.length === 0 && <AddSlot when={Math.max(from, now)} empty />}
               {list.map((x, i) => {
                 const gap = i ? Math.min(40, Math.max(4, (x.when - list[i - 1].when) / 60e3 / 6)) : 6;
                 if (x.k === "now") return (
-                  <li key="now" ref={nowRef} className="relative flex items-center" style={{ marginTop: gap }}>
+                  <Fragment key="now"><li ref={nowRef} className="relative flex items-center" style={{ marginTop: gap }}>
                     <span className="absolute -left-[1.4rem] size-3 rounded-full bg-white ring-4 ring-white/25" />
                     <span className="absolute -left-[4.2rem] w-11 text-right text-xs font-bold tabular-nums">{hm(now)}</span>
                     <span className="h-0.5 flex-1 rounded-full bg-white/80" /><span className="ml-2 text-xs font-semibold">сейчас</span>
                   </li>
+                  <AddSlot when={now} label="Добавить на время" /></Fragment>
                 );
                 const done = x.t.done, missed = !done && x.when < now, soon = !done && !missed && x.when - now < H;
                 return (
-                  <li key={x.t.id + x.when} className="relative" style={{ marginTop: gap }}>
+                  <Fragment key={x.t.id + x.when}><li className="relative" style={{ marginTop: gap }}>
                     <span className={cn("absolute top-3 -left-[1.35rem] size-2.5 rounded-full ring-2 ring-card", done ? "bg-good" : missed ? "bg-destructive" : "bg-muted-foreground")} />
                     <span className={cn("absolute top-2 -left-[4.2rem] w-11 text-right text-xs tabular-nums", missed ? "text-destructive" : "text-muted-foreground")}>{x.time}</span>
                     <div className={cn("flex items-center gap-2.5 rounded-xl border px-2.5 py-2",
@@ -237,6 +240,7 @@ function VStrip({ now, start, end, events, onTick }) {
                       </button>
                     </div>
                   </li>
+                  <AddSlot when={Math.max(x.when + 30 * 60e3, now)} /></Fragment>
                 );
               })}
             </ol>
@@ -244,6 +248,42 @@ function VStrip({ now, start, end, events, onTick }) {
         );
       })}
     </div>
+  );
+}
+
+// plan the day right on the timeline: "+" after a task opens a line to add the next one at a chosen time
+const q15 = ms => Math.ceil(ms / 900e3) * 900e3;
+function AddSlot({ when, empty, label }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(""), [time, setTime] = useState("");
+  const start = () => { setTime(hm(q15(when))); setOpen(true); };
+  const submit = async e => {
+    e.preventDefault(); if (!text.trim() || !time) return;
+    // a time earlier than the slot's start belongs to the next day (planning past midnight)
+    const base = new Date(q15(when)), d = new Date(base); const [h, m] = time.split(":").map(Number); d.setHours(h, m, 0, 0);
+    if (d < base && base - d > 12 * H) d.setDate(d.getDate() + 1);
+    await addTask(text, { due: iso(d), time });
+    setText(""); setOpen(false);
+  };
+  if (!open) return (
+    <li className={cn("relative", empty ? "py-1" : "mt-1")}>
+      <button type="button" onClick={start} className="flex h-7 items-center gap-1.5 rounded-full pr-2.5 text-xs text-muted-foreground/70 hover:text-foreground active:text-foreground">
+        <span className="grid size-5 place-items-center rounded-full border border-dashed border-current"><PlusIcon className="size-3" /></span>{empty ? "Запланировать" : label || <span className="sr-only">Добавить после</span>}
+      </button>
+    </li>
+  );
+  return (
+    <li className="relative mt-1.5">
+      <form onSubmit={submit} className="flex flex-col gap-2 rounded-xl border border-primary/50 bg-background p-2">
+        <input autoFocus value={text} onChange={e => setText(e.target.value)} placeholder="Что сделать… #тег" aria-label="Новая задача на время" enterKeyHint="done"
+          onKeyDown={e => e.key === "Escape" && setOpen(false)} className="h-10 rounded-lg bg-transparent px-2 text-[15px] outline-none" />
+        <div className="flex items-center gap-2">
+          <input type="time" value={time} onChange={e => setTime(e.target.value)} aria-label="Время" className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-2 text-sm tabular-nums" />
+          <button type="button" onClick={() => setOpen(false)} aria-label="Отмена" className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground"><XIcon className="size-4" /></button>
+          <button type="submit" disabled={!text.trim()} className="h-9 shrink-0 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-40">Добавить</button>
+        </div>
+      </form>
+    </li>
   );
 }
 

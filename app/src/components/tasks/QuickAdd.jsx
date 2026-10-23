@@ -18,7 +18,7 @@ let open = false, preset = null; const subs = new Set();
 const setOpen = (v, tag) => { open = v; if (v) preset = tag ?? null; subs.forEach(f => f()); };
 export const openQuickAdd = tag => setOpen(true, typeof tag === "string" ? tag : null);
 
-export async function addTask(raw, { tag, work, day } = {}) {
+export async function addTask(raw, { tag, work, day, due, time } = {}) {
   const tags = tagsOf(getDb()), p = parseTag(raw, tags);
   const text = p.text; if (!text) return null;
   const tagId = p.tag?.id ?? tag ?? null;
@@ -26,7 +26,7 @@ export async function addTask(raw, { tag, work, day } = {}) {
   if (!cat) { await ensurePersonal(); cat = targetCat(tagId); }
   if (!cat) return null;
   const top = Math.min(1, ...getDb().tasks.filter(x => x.cat === cat).map(x => x.order ?? 1));
-  const id = await add("tasks", { text, cat, order: top - 1, done: false, ...(work ? { focus: nextFocus() } : {}), ...(day ? { due: today() } : {}) });
+  const id = await add("tasks", { text, cat, order: top - 1, done: false, ...(work ? { focus: nextFocus() } : {}), ...(day ? { due: today() } : {}), ...(due ? { due } : {}), ...(time ? { time } : {}) });
   if (id) flash(id);
   return { id, text, tag: tags.find(t => t.id === tagId) || null };
 }
