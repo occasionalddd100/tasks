@@ -176,7 +176,7 @@ function Sidebar({ view, go, email, search }) {
         </button>
       </div>
       <div className="flex h-8 items-center gap-0.5 px-4 pt-2 pb-1">
-        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Проекты и заметки</span>
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Доски и заметки</span>
         <span className="ml-auto" />
         <IconBtn label="Поиск" onClick={() => { setSearching(s => !s); setQuery(""); }}>{searching ? <XIcon /> : <SearchIcon />}</IconBtn>
         <CreateMenu onCreate={create} trigger={<IconBtn label="Создать"><PlusIcon /></IconBtn>} />
@@ -190,7 +190,7 @@ function Sidebar({ view, go, email, search }) {
       )}
       <ActionsContext items={[
         { title: "Создать" },
-        { label: "Проект с задачами", icon: ListChecksIcon, onSelect: () => create("project") },
+        { label: "Канбан-доску", icon: ListChecksIcon, onSelect: () => create("project") },
         { label: "Заметку", icon: FileTextIcon, onSelect: () => create("note") },
         { label: "Стэш", icon: LayoutGridIcon, onSelect: () => create("stash") },
         { label: "Папку", icon: FolderPlusIcon, onSelect: () => create("folder") },

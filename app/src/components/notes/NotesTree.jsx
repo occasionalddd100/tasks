@@ -119,7 +119,7 @@ export default function NotesTree({ view, go, query }) {
   const folderItems = (f, sharedWithMe) => {
     const mine = isMine(f);
     return [
-      { label: "Новый проект", icon: ListChecksIcon, onSelect: () => create("project", f.id) },
+      { label: "Новая доска", icon: ListChecksIcon, onSelect: () => create("project", f.id) },
       { label: "Новая заметка", icon: FileTextIcon, onSelect: () => create("note", f.id) },
       { label: "Новый стэш", icon: LayoutGridIcon, onSelect: () => create("stash", f.id) },
       { label: "Новая папка", icon: FolderPlusIcon, onSelect: () => create("folder", f.id) },
