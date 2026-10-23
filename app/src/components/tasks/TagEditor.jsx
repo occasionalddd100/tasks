@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import * as D from "@radix-ui/react-dialog";
-import { PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { PlusIcon, SmileIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useDb, getDb } from "@/lib/db";
 import { PASTELS } from "@/lib/colors";
 import { ensurePersonal } from "@/lib/personal";
@@ -52,7 +52,7 @@ function Editor() {
 }
 
 function TagLine({ x, n }) {
-  const [palette, setPalette] = useState(false);
+  const [palette, setPalette] = useState(false), [emoji, setEmoji] = useState(false);
   const del = async () => {
     if (n && !await confirmAction({ title: `Удалить тег «${x.name}»?`, description: `${n} задач${n === 1 ? "а" : n < 5 ? "и" : ""} останутся, просто без тега.` })) return;
     deleteTag(x.id);
@@ -78,10 +78,35 @@ function TagLine({ x, n }) {
             ))}
             {x.emoji && <button type="button" onClick={() => { emojiTag(x.id, ""); if (x.raw !== x.name) renameTag(x.id, x.name); }} className="ml-auto h-7 rounded-full border px-2.5 text-xs text-muted-foreground">Без эмодзи</button>}
           </div>
-          <EmojiPick onPick={e => { emojiTag(x.id, e); if (x.raw !== x.name) renameTag(x.id, x.name); setPalette(false); }} />
+          <button type="button" onClick={() => setEmoji(true)} className="ml-11 flex h-11 items-center justify-center gap-2 rounded-xl border text-sm font-medium active:bg-accent">
+            <SmileIcon className="size-4" />{x.emoji ? "Сменить эмодзи" : "Выбрать эмодзи"}
+          </button>
         </div>
       )}
+      <EmojiSheet open={emoji} setOpen={setEmoji} name={x.name}
+        onPick={e => { emojiTag(x.id, e); if (x.raw !== x.name) renameTag(x.id, x.name); setEmoji(false); setPalette(false); }} />
     </li>
+  );
+}
+
+// the picker gets a sheet of its own: full width, search on top, room for the keyboard
+function EmojiSheet({ open, setOpen, name, onPick }) {
+  useBackClose(open, () => setOpen(false));
+  return (
+    <D.Root open={open} onOpenChange={setOpen}>
+      <D.Portal>
+        <D.Overlay className="fixed inset-0 z-[60] bg-black/40" />
+        <D.Content onOpenAutoFocus={e => e.preventDefault()}
+          className="fixed inset-x-0 bottom-0 z-[60] flex h-[min(75dvh,34rem)] flex-col rounded-t-2xl border-t bg-popover pb-[env(safe-area-inset-bottom)] shadow-2xl data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,0,0,1)] md:inset-x-auto md:top-[12vh] md:bottom-auto md:left-1/2 md:w-[26rem] md:-translate-x-1/2 md:rounded-2xl md:border">
+          <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+            <D.Title className="flex-1 truncate text-base font-semibold">Эмодзи для «{name}»</D.Title>
+            <D.Close className="grid size-8 place-items-center rounded-full text-muted-foreground active:bg-accent" aria-label="Закрыть"><XIcon className="size-5" /></D.Close>
+          </div>
+          <D.Description className="sr-only">Найди эмодзи поиском или выбери в категориях</D.Description>
+          {open && <EmojiPick onPick={onPick} />}
+        </D.Content>
+      </D.Portal>
+    </D.Root>
   );
 }
 
@@ -124,5 +149,5 @@ function EmojiPick({ onPick }) {
     });
     return () => { gone = true; el?.remove(); };
   }, []);
-  return <div ref={box} className="emoji-box min-h-80 overflow-hidden rounded-xl border" />;
+  return <div ref={box} className="emoji-box min-h-0 flex-1" />;
 }

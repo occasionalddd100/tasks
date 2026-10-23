@@ -234,4 +234,5 @@
 }
 
 /* the tag emoji picker */
-.emoji-box emoji-picker { width: 100%; height: 20rem; --border-size: 0; --background: var(--popover); --input-border-color: var(--border); --input-font-color: var(--foreground); --input-placeholder-color: var(--muted-foreground); --indicator-color: var(--primary); --outline-color: var(--ring); --button-hover-background: var(--accent); --button-active-background: var(--accent); --category-font-color: var(--muted-foreground); --emoji-size: 1.6rem; --num-columns: 8; }
+.emoji-box emoji-picker { width: 100%; height: 100%; --border-size: 0; --background: var(--popover); --input-border-color: var(--border); --input-font-color: var(--foreground); --input-placeholder-color: var(--muted-foreground); --indicator-color: var(--primary); --outline-color: var(--ring); --button-hover-background: var(--accent); --button-active-background: var(--accent); --category-font-color: var(--muted-foreground); --emoji-size: 1.75rem; --emoji-padding: 0.4rem; --num-columns: 8; --category-emoji-size: 1.2rem; --category-emoji-padding: 0.45rem; }
+@media (max-width: 380px) { .emoji-box emoji-picker { --num-columns: 7; --emoji-size: 1.6rem; } }
