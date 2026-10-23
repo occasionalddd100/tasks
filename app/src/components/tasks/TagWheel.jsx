@@ -30,7 +30,7 @@ export function TagWheelHost() {
 
   let items = [], cx = 0, cy = 0, hot = null;
   if (s) {
-    const cur = tagOfTask(db, t)?.project;
+    const cur = tagOfTask(db, t)?.id;
     const work = { id: "\u0000work", name: inFocus(t) ? "Из работы" : "В работу", glyph: <CrosshairIcon className="size-4" />, on: inFocus(t), run: () => (inFocus(t) ? fromFocus(t) : toFocus(t)) };
     const tags = tagsOf(db).slice(0, 9).map(g => ({ id: g.id, name: g.name, color: g.color, on: g.id === cur, run: () => setTag(t, g.id) }));
     items = [work, ...tags];

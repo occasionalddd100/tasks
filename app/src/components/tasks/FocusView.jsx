@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CrosshairIcon, FlameIcon, HashIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon } from "lucide-react";
+import { CrosshairIcon, FlameIcon, HashIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { useDb, updateMany } from "@/lib/db";
 import { focusList, clearDone, inFocus, toFocus } from "@/lib/focus";
@@ -19,9 +19,10 @@ import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
 import { Fan } from "@/components/Fan";
 import { useTasksTap } from "@/components/MobileNav";
 import { Habits } from "@/components/tasks/ProjectViews";
+import { openTagEditor } from "@/components/tasks/TagEditor";
 
 // The home screen. On top: add a task (with a tag it lands on that board). Then "В работе": what I'm on now,
-// added and removed at will. Below, everything else: one row per tag, scrolled sideways (or one tag as a list).
+// added and removed at will. Below, the rest of «Личное»: one row per tag (its categories), scrolled sideways (or one tag as a list).
 const NONE = "\u0000none";
 let lastTag = null;
 const store = { get: () => { try { return localStorage.getItem("tasksTag"); } catch { return null; } }, set: v => { try { v ? localStorage.setItem("tasksTag", v) : localStorage.removeItem("tasksTag"); } catch {} } };
@@ -41,14 +42,14 @@ export default function FocusView() {
   const rest = useMemo(() => {
     const me = db.me, now = today();
     const rank = t => (t.due && t.due < now ? 0 : t.due === now ? 1 : t.prio === "urgent" ? 2 : t.due ? 3 : 4);
-    return db.tasks.filter(t => !t.done && !t.hidden && !t.parent && !inFocus(t) && t.text?.trim() && (!t.assignee || t.assignee === me))
+    const mine = new Set([drafts?.id, ...tags.map(t => t.id)]);
+    return db.tasks.filter(t => mine.has(t.cat) && !t.done && !t.hidden && !t.parent && !inFocus(t) && t.text?.trim() && (!t.assignee || t.assignee === me))
       .sort((a, b) => rank(a) - rank(b) || (a.due || "9").localeCompare(b.due || "9") || byOrder(a, b));
-  }, [db.tasks, db.me]);
+  }, [db.tasks, db.me, drafts?.id, tags.map(t => t.id).join()]);
   const groups = useMemo(() => {
     const by = new Map([[NONE, []], ...tags.map(t => [t.id, []])]);
     for (const t of rest) {
-      const g = tagOfTask(db, t); if (!g) continue;
-      by.get(g.drafts && t.cat === drafts?.id ? NONE : g.project)?.push(t);
+      by.get(t.cat === drafts?.id ? NONE : t.cat)?.push(t);
     }
     return by;
   }, [rest, tags.map(t => t.id).join(), drafts?.id]);
@@ -60,7 +61,7 @@ export default function FocusView() {
     groups.get(NONE)?.length && { id: NONE, name: "Без тега", n: groups.get(NONE).length, on: shownTag === NONE, glyph: <InboxIcon className="size-5" /> },
     ...tags.map(t => ({ id: t.id, name: t.name, n: groups.get(t.id)?.length || 0, on: shownTag === t.id,
       glyph: <span className="text-base font-semibold" style={t.color ? { color: t.color } : undefined}>{(t.name.trim()[0] || "#").toUpperCase()}</span> })),
-  ].filter(Boolean).slice(0, 10);
+  ].filter(Boolean).slice(0, 9).concat({ id: "\u0000edit", name: "Править теги", glyph: <PencilIcon className="size-5" /> });
 
   return (
     <div className={cn(VIEW, "max-w-5xl")}>
@@ -86,6 +87,7 @@ export default function FocusView() {
           <TagChip on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>
           {groups.get(NONE)?.length > 0 && <TagChip on={shownTag === NONE} onClick={() => setFilter(shownTag === NONE ? null : NONE)} n={groups.get(NONE).length}><InboxIcon className="size-3.5" />Без тега</TagChip>}
           {tags.map(t => <TagChip key={t.id} on={shownTag === t.id} color={t.color} n={groups.get(t.id)?.length} onClick={() => setFilter(shownTag === t.id ? null : t.id)}>{t.name}</TagChip>)}
+          <button type="button" onClick={() => openTagEditor()} aria-label="Править теги" className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-dashed px-3 text-sm text-muted-foreground hover:text-foreground"><PencilIcon className="size-3.5" />Теги</button>
         </div>
         {shownTag
           ? <TagList tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
@@ -98,7 +100,7 @@ export default function FocusView() {
       {db.habits.length > 0 && <Habits habits={db.habits} />}
 
       <Fan open={fan} setOpen={setFan} items={fanItems} anchor="navRight"
-        onPick={t => { setFilter(t.id === "\u0000all" ? null : t.id); return false; }} />
+        onPick={t => { if (t.id === "\u0000edit") { openTagEditor(); return; } setFilter(t.id === "\u0000all" ? null : t.id); return false; }} />
     </div>
   );
 }
@@ -139,7 +141,8 @@ function WorkList({ list }) {
 function WorkItem({ t }) {
   const db = useDb();
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);
-  const tag = tagOfTask(db, t), name = tag?.drafts ? "без тега" : db.projects.find(p => p.id === tag?.project)?.name;
+  const tag = tagOfTask(db, t), cat = db.cats.find(c => c.id === t.cat), board = db.boards.find(b => b.id === cat?.board);
+  const name = tag?.name || (cat?.drafts ? "" : db.projects.find(p => p.id === board?.project)?.name);
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: t.id });
   return (
     <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn("relative rounded-md", isDragging && "z-10 opacity-30")}>

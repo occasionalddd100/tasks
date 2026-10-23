@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import * as D from "@radix-ui/react-dialog";
 import {
-  AlarmClockIcon, CalendarIcon, CopyIcon, CornerDownRightIcon, CrosshairIcon, EyeOffIcon, FileTextIcon, FlameIcon, FolderInputIcon, Trash2Icon, UserIcon, XIcon,
+  AlarmClockIcon, CalendarIcon, CopyIcon, CornerDownRightIcon, CrosshairIcon, EyeOffIcon, FileTextIcon, FlameIcon, ColumnsIcon, PencilIcon, Trash2Icon, UserIcon, XIcon,
 } from "lucide-react";
 import { getDb, update, updateMany, useDb } from "@/lib/db";
 import { today, addDays, dueLabel, byOrder } from "@/lib/tasks";
@@ -14,6 +14,8 @@ import { personName } from "@/lib/people";
 import { descendantsOf, hideTask, deleteTask } from "@/components/tasks/TaskRow";
 import TaskNoteDialog from "@/components/tasks/TaskNoteDialog";
 import { toast } from "sonner";
+import { tagGroups, isPersonal, setTag } from "@/lib/tags";
+import { openTagEditor } from "@/components/tasks/TagEditor";
 
 // Everything about one task on the phone, in one place: tap a task, this slides up.
 // Top: the two things that decide when it gets done ("Фокус" now, "Когда" by date), then the 🔥 flag; below, the rest.
@@ -30,15 +32,12 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
   const done = v => set(v ? { done: true, doneOn: today(), doneBy: getDb().me } : { done: false, doneOn: "", doneBy: "", hidden: false });
   const day = d => set(t.due === d ? { due: "", time: "" } : { due: d });
 
-  // categories of the same project, for "Перенести"; subtasks follow their parent so they don't get the picker
-  // this project's categories first, then every other project's, so drafts can go anywhere
+  // a task of «Личное» gets a tag (one of its categories); a task on a shared board can only change its column
+  const personal = isPersonal(db, t), groups = personal ? tagGroups(db).filter(g => g.tags.length) : [];
   const board = db.boards.find(b => b.id === db.cats.find(c => c.id === t.cat)?.board);
-  const catsOf = p => db.boards.filter(b => b.project === p.id).sort(byOrder)
-    .flatMap(b => db.cats.filter(c => c.board === b.id).sort(byOrder).map(c => ({ id: c.id, name: b.name + " · " + c.name, drafts: c.drafts })));
-  const here = db.projects.find(p => p.id === board?.project);
-  const groups = [here, ...db.projects.filter(p => p !== here).sort((a, b) => (a.name || "").localeCompare(b.name || ""))]
-    .filter(Boolean).map(p => ({ id: p.id, name: p.name || "Без названия", cats: catsOf(p) })).filter(g => g.cats.length);
-  const cats = groups.flatMap(g => g.cats);
+  const cols = personal || !board ? [] : db.boards.filter(b => b.project === board.project).sort(byOrder)
+    .flatMap(b => db.cats.filter(c => c.board === b.id && !c.drafts).sort(byOrder).map(c => ({ id: c.id, board: b.name, name: c.name })));
+  const multiBoard = new Set(cols.map(c => c.board)).size > 1;
   const move = cat => { if (cat && cat !== t.cat) updateMany("tasks", [t.id, ...descendantsOf(t.id)].map(id => [id, { cat }])); };
   const close = then => () => { onOpenChange(false); then && setTimeout(then, 220); };
 
@@ -91,6 +90,28 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
               </div>
             </>}
 
+            {personal && !t.parent && <>
+              <div className="mt-5 mb-2 flex items-center">
+                <p className="flex-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Тег</p>
+                <button type="button" onClick={close(openTagEditor)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><PencilIcon className="size-3.5" />Править</button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {groups.map(g => (
+                  <div key={g.id} className="flex flex-wrap items-center gap-1.5">
+                    {groups.length > 1 && <span className="mr-1 w-full text-[11px] text-muted-foreground">{g.name}</span>}
+                    {g.tags.map(x => (
+                      <button key={x.id} type="button" onClick={() => setTag(t, x.id === t.cat ? null : x.id)} aria-pressed={x.id === t.cat}
+                        className={cn("inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors active:scale-[.97]",
+                          x.id === t.cat ? "border-foreground bg-foreground text-background" : "text-muted-foreground")}>
+                        {x.color && <span className="size-2 rounded-full" style={{ background: x.color }} />}{x.name}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+                {!groups.length && <button type="button" onClick={close(openTagEditor)} className="self-start text-sm text-primary">Создать первый тег</button>}
+              </div>
+            </>}
+
             <button type="button" onClick={close(onNote)} className="mt-5 block w-full rounded-lg border bg-muted/40 p-3 text-left active:bg-accent">
               {t.body?.trim()
                 ? <div className="md line-clamp-4 text-sm" dangerouslySetInnerHTML={{ __html: renderMd(t.body) }} />
@@ -102,11 +123,13 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
                 <CopyIcon />Копировать текст
               </button>
               {onAddSub && !t.done && <button type="button" onClick={close(onAddSub)} className={row}><CornerDownRightIcon />Добавить подзадачу</button>}
-              {!t.parent && cats.length > 1 && (
-                <label className={cn(row, "relative")}><FolderInputIcon />{cats.find(c => c.id === t.cat)?.drafts ? "Перенести в категорию" : "Категория"}
-                  <span className={cn("ml-auto max-w-[55%] truncate text-sm", cats.find(c => c.id === t.cat)?.drafts ? "font-medium text-primary" : "text-muted-foreground")}>{cats.find(c => c.id === t.cat)?.drafts ? "Разобрать…" : cats.find(c => c.id === t.cat)?.name.split(" · ").pop()}</span>
-                  <select value={t.cat} onChange={e => move(e.target.value)} className="absolute inset-0 opacity-0" aria-label="Перенести в категорию">
-                    {groups.map(g => <optgroup key={g.id} label={g.name}>{g.cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>)}
+              {!t.parent && cols.length > 1 && (
+                <label className={cn(row, "relative")}><ColumnsIcon />Колонка
+                  <span className="ml-auto max-w-[55%] truncate text-sm text-muted-foreground">{cols.find(c => c.id === t.cat)?.name}</span>
+                  <select value={t.cat} onChange={e => move(e.target.value)} className="absolute inset-0 opacity-0" aria-label="Колонка">
+                    {multiBoard
+                      ? [...new Set(cols.map(c => c.board))].map(n => <optgroup key={n} label={n}>{cols.filter(c => c.board === n).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>)
+                      : cols.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </label>
               )}

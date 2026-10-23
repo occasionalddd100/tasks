@@ -19,7 +19,8 @@ import TaskSheet from "@/components/tasks/TaskSheet";
 import Avatar from "@/components/Avatar";
 import { personName } from "@/lib/people";
 import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
-import { tagsOf, setTag } from "@/lib/tags";
+import { tagGroups, tagOfTask, isPersonal, setTag } from "@/lib/tags";
+import { openTagEditor } from "@/components/tasks/TagEditor";
 
 // people who can be assigned in the current project
 export const People = createContext([]);
@@ -128,7 +129,13 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
     onAddSub && { label: "Добавить подзадачу", icon: CornerDownRightIcon, onSelect: onAddSub },
     { sep: true },
     t.prio === "urgent" && { label: "Снять «Срочно»", icon: FlameIcon, iconClass: "text-red-500", onSelect: () => update("tasks", t.id, { prio: "" }) },
-    { label: "Тег", icon: HashIcon, sub: tagsOf(getDb()).map(g => ({ label: g.name, onSelect: () => setTag(t, g.id) })) },
+    !t.parent && isPersonal(getDb(), t) && { label: "Тег", icon: HashIcon, sub: [
+      ...tagGroups(getDb()).filter(g => g.tags.length).flatMap(g => [{ title: g.name }, ...g.tags.map(x => ({ label: x.name, active: x.id === t.cat, onSelect: () => setTag(t, x.id) }))]),
+      { sep: true },
+      { label: "Без тега", active: !tagOfTask(getDb(), t), onSelect: () => setTag(t, null) },
+      { sep: true },
+      { label: "Править теги…", icon: PencilIcon, onSelect: () => setTimeout(openTagEditor, 50) },
+    ] },
     !t.parent && moveItem(t),
     { label: "Исполнитель", icon: UserIcon, sub: assignItems },
     { label: t.due ? "Изменить дату" : "Поставить дату", icon: CalendarIcon, onSelect: () => setTimeout(openDate, 50) },

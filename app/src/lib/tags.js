@@ -1,32 +1,31 @@
-import { getDb, updateMany } from "@/lib/db";
-import { byOrder } from "@/lib/tasks";
+import { add, getDb, remove, update, updateMany } from "@/lib/db";
+import { byOrder, nextOrder } from "@/lib/tasks";
 import { personalOf, draftsOf } from "@/lib/personal";
+import { pastel } from "@/lib/colors";
 import { descendantsOf } from "@/components/tasks/TaskRow";
 
-// A tag is a board (a project): putting #работа on a task drops it into that board's first column.
-// "Личное" comes first; a task with no tag goes to its "Черновики".
+// Tags are the categories of "Личное"; its tabs group them (Главное, Витуб, …).
+// A task with no tag waits in "Черновики". Projects (shared boards) are not tags: tasks are added there on their board.
 const slug = s => (s || "").toLowerCase().replace(/\s+/g, "");
 
-export function tagsOf(db) {
-  const mine = personalOf(db);
-  const list = db.projects.filter(p => !p.archived && firstCat(db, p.id))
-    .sort((a, b) => (b === mine) - (a === mine) || (a.name || "").localeCompare(b.name || "", "ru"));
-  return list.map(p => ({ id: p.id, name: p.name || "Без названия", color: p.color || "", personal: p === mine }));
+export function tagGroups(db) {
+  const p = personalOf(db); if (!p) return [];
+  return db.boards.filter(b => b.project === p.id).sort(byOrder).map(b => ({
+    id: b.id, name: b.name,
+    tags: db.cats.filter(c => c.board === b.id && !c.drafts).sort(byOrder)
+      .map(c => ({ id: c.id, name: c.name, group: b.name, groupId: b.id, key: c.color || "", color: pastel(c.color) || "" })),
+  }));
 }
+export const tagsOf = db => tagGroups(db).flatMap(g => g.tags);
 
-// the column a new task with this tag lands in: the first board's first column (not the drafts)
-export function firstCat(db, projectId) {
-  const boards = db.boards.filter(b => b.project === projectId).sort(byOrder);
-  for (const b of boards) { const c = db.cats.filter(c => c.board === b.id && !c.drafts).sort(byOrder)[0]; if (c) return c; }
-  return null;
-}
-
+// the task's tag, or null for drafts and for tasks on other boards
 export function tagOfTask(db, t) {
-  const c = db.cats.find(x => x.id === t.cat), b = c && db.boards.find(x => x.id === c.board);
-  return b ? { project: b.project, drafts: !!c.drafts } : null;
+  const tags = tagsOf(db);
+  return tags.find(x => x.id === t.cat) || null;
 }
+export const isPersonal = (db, t) => !!tagOfTask(db, t) || t.cat === draftsOf(db)?.id;
 
-// "#дом купить молоко" → { text: "купить молоко", tag: <Дом> }; the word only has to start the tag's name
+// "#дом купить молоко" → { text: "купить молоко", tag: <дом> }; the word only has to start the tag's name
 export function parseTag(text, tags) {
   let tag = null;
   const rest = text.replace(/(^|\s)#([\p{L}\p{N}_-]+)/gu, (m, sp, w) => {
@@ -37,17 +36,31 @@ export function parseTag(text, tags) {
   return { text: rest.replace(/\s{2,}/g, " ").trim(), tag };
 }
 
-// where a new task goes: the tag's first column, or the personal drafts
-export function targetCat(tagId) {
-  const db = getDb();
-  if (tagId) { const c = firstCat(db, tagId); if (c) return c.id; }
-  return draftsOf(db)?.id || null;
-}
+export const targetCat = tagId => tagId || draftsOf(getDb())?.id || null;
 
-// retag: the task and its subtasks move to the tag's first column; already on that board → stays put
+// retag: the task and its subtasks move to that category; null = back to drafts
 export function setTag(t, tagId) {
-  const db = getDb(), cur = tagOfTask(db, t);
-  if (cur?.project === tagId && !cur.drafts) return;
   const cat = targetCat(tagId); if (!cat || cat === t.cat) return;
   updateMany("tasks", [t.id, ...descendantsOf(t.id)].map(id => [id, { cat, ...(id === t.id ? { parent: "" } : {}) }]));
 }
+
+// editing
+export const renameTag = (id, name) => name.trim() && update("cats", id, { name: name.trim() });
+export const colorTag = (id, color) => update("cats", id, { color });
+export const moveTag = (id, groupId) => { const db = getDb(); update("cats", id, { board: groupId, order: nextOrder(db.cats.filter(c => c.board === groupId)) }); };
+export function addTag(groupId, name) {
+  const db = getDb(), n = name.trim(); if (!n || !groupId) return null;
+  return add("cats", { name: n, board: groupId, order: nextOrder(db.cats.filter(c => c.board === groupId && !c.drafts)) });
+}
+// a deleted tag's tasks go back to the drafts, nothing is lost
+export function deleteTag(id) {
+  const db = getDb(), drafts = draftsOf(db)?.id; if (!drafts) return;
+  const ids = db.tasks.filter(t => t.cat === id).map(t => t.id);
+  if (ids.length) updateMany("tasks", ids.map(x => [x, { cat: drafts }]));
+  remove("cats", id);
+}
+export function addGroup(name) {
+  const db = getDb(), p = personalOf(db), n = name.trim(); if (!p || !n) return null;
+  return add("boards", { name: n, project: p.id, order: nextOrder(db.boards.filter(b => b.project === p.id)) });
+}
+export const renameGroup = (id, name) => name.trim() && update("boards", id, { name: name.trim() });

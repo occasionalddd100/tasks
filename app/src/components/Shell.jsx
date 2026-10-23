@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { freshReload } from "@/lib/reload";
-import { BookOpenIcon, CrosshairIcon, GanttChartIcon, ListTodoIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, HashIcon, CrosshairIcon, GanttChartIcon, ListTodoIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, updateMany, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ import JournalView from "@/components/journal/JournalView";
 import { QuickAddHost, openQuickAdd } from "@/components/tasks/QuickAdd";
 import { TaskSheetHost } from "@/components/tasks/TaskSheet";
 import { TagWheelHost } from "@/components/tasks/TagWheel";
+import { TagEditorHost, openTagEditor } from "@/components/tasks/TagEditor";
 import { ensurePersonal, personalOf, draftTasks } from "@/lib/personal";
 
 const NoteView = lazy(() => import("@/components/notes/NoteView").catch(e => {
@@ -146,6 +147,7 @@ export default function Shell() {
         diary={{ onClick: () => go({ diary: true }), active: diary }}
         tasks={{ onClick: () => go({ focus: true }), active: focus, badge: focusOpen(db) }} />
       <TagWheelHost />
+      <TagEditorHost />
       <QuickAddHost onOpenDrafts={() => go({ personal: true })} />
       <TaskSheetHost />
       <ConfirmHost />
@@ -175,9 +177,9 @@ function Sidebar({ view, go, email, search }) {
           { k: "focus", label: "Задачи", icon: ListTodoIcon, n: focusOpen(db), on: view.focus },
           { k: "journal", label: "Таймлайн", icon: GanttChartIcon, on: view.journal },
           { k: "diary", label: "Дневник", icon: BookOpenIcon, on: view.diary },
-          { k: "personal", label: "Личное", icon: UserRoundIcon, n: draftTasks(db).length, on: view.personal },
-        ].map(({ k, label, icon: Icon, n, on }) => (
-          <button key={k} type="button" onClick={() => go({ [k]: true })}
+          { k: "tags", label: "Теги", icon: HashIcon, run: openTagEditor },
+        ].map(({ k, label, icon: Icon, n, on, run }) => (
+          <button key={k} type="button" onClick={() => (run ? run() : go({ [k]: true }))}
             className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", on && "bg-accent")}>
             <Icon className="size-4" />{label}
             {n > 0 && <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-xs tabular-nums text-foreground/80">{n}</span>}

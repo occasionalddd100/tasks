@@ -4,13 +4,13 @@ import { motion, AnimatePresence } from "motion/react";
 import { ArrowUpIcon, CheckIcon, CrosshairIcon, HashIcon, SunIcon, XIcon } from "lucide-react";
 import { add, getDb, useDb } from "@/lib/db";
 import { nextFocus } from "@/lib/focus";
-import { tagsOf, parseTag, targetCat } from "@/lib/tags";
+import { tagsOf, tagGroups, parseTag, targetCat } from "@/lib/tags";
 import { ensurePersonal } from "@/lib/personal";
 import { today } from "@/lib/tasks";
 import { useBackClose } from "@/lib/back";
 import { cn } from "@/lib/utils";
 
-// One way to add a task, everywhere: type it, pick a tag (or write #тег), it lands on that board.
+// One way to add a task, everywhere: type it, pick a tag (or write #тег); a tag is a category of «Личное».
 // No tag: it waits in "Личное · Черновики". The ＋ in the phone bar and the N key open the same field in a sheet.
 let open = false, preset = null; const subs = new Set();
 const setOpen = (v, tag) => { open = v; if (v) preset = tag ?? null; subs.forEach(f => f()); };
@@ -29,7 +29,7 @@ export async function addTask(raw, { tag, work, day } = {}) {
 }
 
 export function Composer({ autoFocus, defaultTag = null, work: workDefault = false, onAdded, className }) {
-  const db = useDb(), tags = tagsOf(db);
+  const db = useDb(), groups = tagGroups(db), tags = groups.flatMap(g => g.tags);
   const [text, setText] = useState("");
   const [tag, setTag] = useState(defaultTag);
   const [work, setWork] = useState(workDefault), [day, setDay] = useState(false);
@@ -63,10 +63,13 @@ export function Composer({ autoFocus, defaultTag = null, work: workDefault = fal
         <button type="button" onClick={() => setWork(w => !w)} aria-pressed={work} className={chip(work, "border-primary bg-primary text-primary-foreground")}><CrosshairIcon className="size-3.5" />В работу</button>
         <button type="button" onClick={() => setDay(d => !d)} aria-pressed={day} className={chip(day, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400")}><SunIcon className="size-3.5" />Сегодня</button>
         <span className="mx-0.5 w-px shrink-0 bg-border" />
-        {tags.map(t => (
-          <button key={t.id} type="button" onClick={() => setTag(cur === t.id ? null : t.id)} aria-pressed={cur === t.id} className={chip(cur === t.id)}>
+        {tags.map((t, i) => (
+          <span key={t.id} className="contents">
+          {groups.length > 1 && t.groupId !== tags[i - 1]?.groupId && <span className="flex shrink-0 items-center pl-1 text-[11px] text-muted-foreground/80">{t.group}</span>}
+          <button type="button" onClick={() => setTag(cur === t.id ? null : t.id)} aria-pressed={cur === t.id} className={chip(cur === t.id)}>
             {t.color ? <span className="size-2 rounded-full" style={{ background: t.color }} /> : <HashIcon className="size-3" />}{t.name}
           </button>
+          </span>
         ))}
       </div>
     </form>
