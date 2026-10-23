@@ -129,7 +129,8 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
     { label: hasBody ? "Открыть заметку" : "Добавить заметку", icon: FileTextIcon, onSelect: () => setNoteOpen(true) },
     onAddSub && { label: "Добавить подзадачу", icon: CornerDownRightIcon, onSelect: onAddSub },
     { sep: true },
-    t.prio === "urgent" && { label: "Снять «Срочно»", icon: FlameIcon, iconClass: "text-red-500", onSelect: () => update("tasks", t.id, { prio: "" }) },
+    // «Срочно» lives on the boards; personal tasks have «В работе» instead
+    (t.prio === "urgent" || (!t.done && !isPersonal(getDb(), t))) && { label: t.prio === "urgent" ? "Снять «Срочно»" : "Срочно", icon: FlameIcon, iconClass: "text-red-500", onSelect: () => update("tasks", t.id, { prio: t.prio === "urgent" ? "" : "urgent" }) },
     !t.parent && isPersonal(getDb(), t) && { label: "Тег", icon: HashIcon, sub: [
       ...tagsOf(getDb()).map(x => ({ label: x.name, active: x.id === t.cat, onSelect: () => setTag(t, x.id) })),
       { sep: true },

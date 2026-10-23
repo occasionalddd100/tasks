@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { freshReload } from "@/lib/reload";
 import { BookOpenIcon, HashIcon, CrosshairIcon, GanttChartIcon, ListTodoIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
-import { sb, updateMany, useDb } from "@/lib/db";
+import { sb, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -86,15 +86,6 @@ export default function Shell() {
   }, []);
   // everyone gets "Личное" with "Черновики" the first time the data is in
   useEffect(() => { if (db.ready && !db.error) ensurePersonal(); }, [db.ready, db.error, !!personalOf(db)]);
-  // «Срочно» is gone: my open urgent tasks move into "В работе", once
-  useEffect(() => {
-    if (!db.ready || db.error) return;
-    try { if (localStorage.getItem("urgentGone")) return; } catch { return; }
-    const me = db.me, list = db.tasks.filter(t => t.prio === "urgent" && !t.done && (t.assignee ? t.assignee === me : t._owner === me));
-    let n = Math.max(0, ...db.tasks.filter(t => typeof t.focus === "number").map(t => t.focus));
-    if (list.length) updateMany("tasks", list.map(t => [t.id, { prio: "", ...(typeof t.focus === "number" ? {} : { focus: ++n }) }]));
-    try { localStorage.setItem("urgentGone", "1"); } catch {}
-  }, [db.ready, db.error]);
   useEffect(() => {
     const on = () => setView(readHash());
     window.addEventListener("hashchange", on); window.addEventListener("popstate", on);
