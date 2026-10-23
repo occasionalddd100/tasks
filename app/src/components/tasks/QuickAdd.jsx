@@ -14,8 +14,10 @@ import { toast } from "sonner";
 
 // One way to add a task, everywhere: type it, pick a tag (or write #тег); a tag is a category of «Личное».
 // No tag: it waits in "Личное · Черновики". The ＋ in the phone bar and the N key open the same field in a sheet.
-let open = false, preset = null; const subs = new Set();
-const setOpen = (v, tag) => { open = v; if (v) preset = tag ?? null; subs.forEach(f => f()); };
+let open = false, preset = null, presetWork = false, ambient = null; const subs = new Set();
+// the screen I'm on can say where ＋ should put things (the tag or «В работе» picked on the home screen)
+export const setAmbient = a => { ambient = a; };
+const setOpen = (v, tag) => { open = v; if (v) { preset = tag ?? ambient?.tag ?? null; presetWork = !tag && !!ambient?.work; } subs.forEach(f => f()); };
 export const openQuickAdd = tag => setOpen(true, typeof tag === "string" ? tag : null);
 
 export async function addTask(raw, { tag, work, day, due, time } = {}) {
@@ -37,7 +39,9 @@ function flash(id) { fresh = id; freshSubs.forEach(f => f()); setTimeout(() => {
 export const useFresh = () => useSyncExternalStore(f => (freshSubs.add(f), () => freshSubs.delete(f)), () => fresh);
 
 export function Composer({ autoFocus, defaultTag = null, work: workDefault = false, onAdded, className }) {
-  const db = useDb(), tags = tagsOf(db);
+  const db = useDb(), all = tagsOf(db);
+  // the tag I came from goes first, so I see where the task will land
+  const tags = defaultTag ? [...all.filter(t => t.id === defaultTag), ...all.filter(t => t.id !== defaultTag)] : all;
   const [text, setText] = useState("");
   const [tag, setTag] = useState(defaultTag);
   const [work, setWork] = useState(workDefault), [day, setDay] = useState(false), [did, setDid] = useState(false);
@@ -129,7 +133,7 @@ export function QuickAddHost() {
             <D.Close className="grid size-8 place-items-center rounded-full text-muted-foreground active:bg-accent" aria-label="Закрыть"><XIcon className="size-5" /></D.Close>
           </div>
           <D.Description className="sr-only">Задача попадёт на доску выбранного тега, без тега — в черновики</D.Description>
-          <Composer autoFocus={isOpen} defaultTag={preset} onAdded={r => { setOpen(false); toast(r.did ? "Записал в таймлайн" : "Добавил" + (r.tag ? " в «" + r.tag.name + "»" : " без тега")); }} />
+          <Composer autoFocus={isOpen} defaultTag={preset} work={presetWork} onAdded={r => { setOpen(false); toast(r.did ? "Записал в таймлайн" : "Добавил" + (r.tag ? " в «" + r.tag.name + "»" : " без тега")); }} />
         </D.Content>
       </D.Portal>
     </D.Root>

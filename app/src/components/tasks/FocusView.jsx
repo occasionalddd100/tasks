@@ -13,7 +13,7 @@ import { stale, byOrder, today, dueLabel } from "@/lib/tasks";
 import { Button } from "@/components/ui/button";
 import { VIEW } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
-import { useFresh } from "@/components/tasks/QuickAdd";
+import { useFresh, setAmbient } from "@/components/tasks/QuickAdd";
 import { openTask } from "@/components/tasks/TaskSheet";
 import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
 import { Fan } from "@/components/Fan";
@@ -68,6 +68,8 @@ export default function FocusView() {
     const key = inFocus(fresh) ? WORK : fresh.cat === drafts?.id ? NONE : fresh.cat;
     if (key !== shownTag) setFilter(null);
   }, [fresh?.id]);
+  // ＋ adds to what's on screen: the picked tag, or straight into work
+  useEffect(() => { setAmbient({ tag: shownTag && shownTag !== NONE && shownTag !== WORK ? shownTag : null, work: shownTag === WORK }); return () => setAmbient(null); }, [shownTag]);
   const tagName = id => id === NONE ? "Без тега" : tags.find(t => t.id === id)?.name;
 
   const fanItems = [
