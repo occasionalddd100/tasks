@@ -75,8 +75,9 @@ export function ProjectView({ id, fresh, go }) {
         onFocus={() => { editing.current = true; }} onChange={e => setName(e.target.value)} onBlur={saveName}
         onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setName(project.name); editing.current = false; setTimeout(() => e.target.blur()); } }}>
         {path.length > 0 && <span className="max-w-40 truncate text-sm text-muted-foreground max-sm:hidden" title={path.map(f => f.name).join(" / ")}>{path.at(-1).name}</span>}
-        <Button variant="ghost" size="iconSm" onClick={() => setSharing(true)} aria-label={isMine(project) ? "Поделиться" : "Участники"} title={isMine(project) ? "Поделиться" : "Участники"}
-          className={cn(shared && "text-foreground")}><UsersIcon /></Button>
+        {/* «Личное» is never shared */}
+        {!project.personal && <Button variant="ghost" size="iconSm" onClick={() => setSharing(true)} aria-label={isMine(project) ? "Поделиться" : "Участники"} title={isMine(project) ? "Поделиться" : "Участники"}
+          className={cn(shared && "text-foreground")}><UsersIcon /></Button>}
         <FileMenu x={{ ...project, kind: "project" }} folders={db.folders} after={() => go({ journal: true })}
           trigger={<Button variant="ghost" size="iconSm" aria-label="Действия с проектом"><MoreHorizontalIcon /></Button>} />
       </ViewHeader>

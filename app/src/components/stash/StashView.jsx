@@ -703,8 +703,10 @@ function BoardsFan({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, onM
   const list = [{ id: ALL, name: "Все", n: total, glyph: <LayoutGridIcon className="size-5" /> }, ...tabs.map(t => ({ id: t.id, name: t.name, n: counts(t.id), glyph: initial(t.name) }))];
   const items = [...list.slice(0, FAN_MAX).map(t => ({ ...t, on: t.id === cur })),
     list.length > FAN_MAX ? { id: "more", name: `Ещё ${list.length - FAN_MAX}…`, dashed: true, glyph: <MoreHorizontalIcon className="size-5" /> }
-      : { id: "new", name: "Новая доска", dashed: true, glyph: <PlusIcon className="size-5" /> }];
-  const pick = t => { if (t.id === "more") onMore(); else if (t.id === "new") onAdd(); else { setTab(t.id); scrollTop(); } };
+      : { id: "new", name: "Новая доска", dashed: true, glyph: <PlusIcon className="size-5" /> },
+    // renaming lives in the full list of boards
+    { id: "edit", name: "Править доски", dashed: true, glyph: <PencilIcon className="size-5" /> }];
+  const pick = t => { if (t.id === "more" || t.id === "edit") onMore(); else if (t.id === "new") onAdd(); else { setTab(t.id); scrollTop(); } };
   return <Fan open={open} setOpen={setOpen} items={items} onPick={pick} anchor={anchor} />;
 }
 
