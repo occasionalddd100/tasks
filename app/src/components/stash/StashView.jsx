@@ -120,7 +120,7 @@ export default function StashView({ id, fresh, go }) {
       <TagsFan open={tagsOpen} setOpen={setTagsOpen} tagCounts={tagCounts} tags={tags} setTags={setTags} unseen={unseen} setUnseen={setUnseen} anchor={isPhone ? "navLeft" : dockAnchor || "dock"} />
       <Dock board={cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски"} fan={fan} setFan={setFan} tagsOpen={tagsOpen} setTagsOpen={setTagsOpen} nTags={tags.length + (unseen ? 1 : 0)} setAnchor={setDockAnchor} />
       <UpButton className="fixed right-4 z-30 md:hidden bottom-[calc(5rem+env(safe-area-inset-bottom))]" />
-      <BoardsSheet open={boards} setOpen={setBoards} tabs={tabs} cur={cur} setTab={t => { setTab(t); setBoards(false); }} counts={t => all.filter(c => c.tab === t).length} total={all.length} onAdd={addTab} />
+      <BoardsSheet open={boards} setOpen={setBoards} tabs={tabs} cur={cur} setTab={t => { setTab(t); setBoards(false); }} counts={t => all.filter(c => c.tab === t).length} total={all.length} onAdd={addTab} onRename={renameTab} />
 
       <div className="max-md:hidden"><Tabs tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
         onAdd={addTab} onRename={renameTab} onDelete={deleteTab} dragTab={dragTab} setDragTab={setDragTab} onDrop={dropOnTab} dragging={() => !!dragged.current} /></div>
@@ -347,7 +347,7 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
       exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }} transition={{ type: "spring", stiffness: 260, damping: 22 }}
       {...drag} draggable={grab} onDragStart={e => { setDragging(true); drag.onDragStart(e); }} onDragEnd={e => { setDragging(false); drag.onDragEnd(e); }}
       className="group relative overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-lg sm:rounded-2xl">
-      {hasMedia && <div className={cn(tiny && "max-h-56 overflow-hidden [&>*]:max-h-56")} onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)}><Preview c={c} compact /></div>}
+      {hasMedia && <div className={cn(tiny && "max-h-56 overflow-hidden [&>*]:max-h-56")} onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)} onClick={onOpen}><Preview c={c} compact onOpen={onOpen} /></div>}
       <div className={cn("flex flex-col gap-1.5 p-2.5 sm:p-3", small && "gap-1 p-2 sm:p-2")} onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}>
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Brand p={c.provider} />
@@ -382,11 +382,7 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
 function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
   const [open, setOpen] = useState(false);
   useBackClose(open, () => setOpen(false));
-  const [tag, setTag] = useState("");
   const g = useGrid();
-  const tags = c.tags || [];
-  const addTag = raw => { const t = tagOf(raw); if (t && !tags.includes(t)) update("clips", c.id, { tags: [...tags, t] }); setTag(""); };
-  const suggest = allTags.filter(t => !tags.includes(t) && (!tag || t.includes(tag.toLowerCase()))).slice(0, 10);
   const act = f => () => { setOpen(false); f(); };
   const Row = ({ icon: Icon, children, onClick, danger }) => (
     <button type="button" onClick={onClick} className={cn("flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-sm hover:bg-accent", danger && "text-destructive hover:bg-destructive/10")}>
@@ -394,7 +390,7 @@ function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
     </button>
   );
   return (
-    <Pop.Root open={open} onOpenChange={o => { setOpen(o); if (!o) setTag(""); }}>
+    <Pop.Root open={open} onOpenChange={setOpen}>
       <Pop.Trigger asChild>
         <button type="button" aria-label="Действия с карточкой" onClick={e => e.stopPropagation()} className="grid size-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur hover:bg-black/75 max-md:size-7"><MoreHorizontalIcon className="size-4" /></button>
       </Pop.Trigger>
@@ -403,21 +399,7 @@ function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
           className="z-50 flex w-72 max-w-[calc(100vw-24px)] flex-col gap-3 rounded-2xl border bg-popover p-3 text-popover-foreground shadow-xl origin-(--radix-popover-content-transform-origin) data-[state=open]:animate-[menu-in_120ms_ease-out]">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><TagIcon className="size-3.5" />Теги</div>
-            <div className="flex flex-wrap gap-1">
-              {tags.map(t => (
-                <span key={t} className="inline-flex h-7 items-center gap-0.5 rounded-full bg-accent pr-1 pl-2.5 text-xs font-medium">#{t}
-                  <button type="button" onClick={() => update("clips", c.id, { tags: tags.filter(x => x !== t) })} aria-label={"Убрать тег " + t} className="grid size-5 place-items-center rounded-full hover:bg-foreground/10"><XIcon className="size-3" /></button>
-                </span>
-              ))}
-              <input value={tag} onChange={e => setTag(e.target.value)} placeholder="+ тег" aria-label="Новый тег" enterKeyHint="done"
-                onKeyDown={e => { if (e.key === "Enter" || e.key === "," || e.key === " ") { e.preventDefault(); addTag(tag); } if (e.key === "Backspace" && !tag && tags.length) update("clips", c.id, { tags: tags.slice(0, -1) }); }}
-                className="h-7 min-w-20 flex-1 rounded-full border border-dashed bg-transparent px-2.5 text-xs outline-none focus:border-solid" />
-            </div>
-            {suggest.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {suggest.map(t => <button key={t} type="button" onClick={() => addTag(t)} className="h-6 rounded-full border px-2 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground">+ #{t}</button>)}
-              </div>
-            )}
+            <ClipTags c={c} allTags={allTags} />
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><MaximizeIcon className="size-3.5" />Размер всех карточек</div>
@@ -450,13 +432,40 @@ function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
   );
 }
 
+// tags on a card, as with tasks: every tag is a chip to tap on or off, a new one is typed and added with ✓
+// (no reliance on Enter or space keys, which phone keyboards often don't report)
+function ClipTags({ c, allTags }) {
+  const [v, setV] = useState("");
+  const tags = c.tags || [];
+  const set = list => update("clips", c.id, { tags: list });
+  const toggle = t => set(tags.includes(t) ? tags.filter(x => x !== t) : [...tags, t]);
+  const add = raw => { const t = tagOf(raw); if (t && !tags.includes(t)) set([...tags, t]); setV(""); };
+  const shown = [...new Set([...tags, ...allTags])].filter(t => !v || t.includes(tagOf(v)) || tags.includes(t));
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap gap-1.5">
+        {shown.map(t => (
+          <button key={t} type="button" onClick={() => toggle(t)} aria-pressed={tags.includes(t)}
+            className={cn("inline-flex h-8 items-center rounded-full border px-3 text-[13px] font-medium transition-colors", tags.includes(t) ? "border-foreground bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}>#{t}</button>
+        ))}
+      </div>
+      <form className="flex gap-1.5" onSubmit={e => { e.preventDefault(); add(v); }}>
+        <input value={v} enterKeyHint="done" placeholder="Новый тег" aria-label="Новый тег"
+          onChange={e => { const x = e.target.value; if (/[,\s]$/.test(x) && x.trim()) add(x); else setV(x); }}
+          className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
+        <button type="submit" disabled={!tagOf(v)} aria-label="Добавить тег" className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground disabled:opacity-30"><CheckIcon className="size-4" /></button>
+      </form>
+    </div>
+  );
+}
+
 function delClip(c) {
   remove("clips", c.id);
   if (c.photo?.path) deletePhoto(c.photo.path);
 }
 
 // the media itself: a cover with a play button that turns into the real player, or the video/photo right away
-function Preview({ c, compact, autoplay }) {
+function Preview({ c, compact, autoplay, onOpen }) {
   const [play, setPlay] = useState(!!autoplay);
   const [broken, setBroken] = useState(false);
   const [xEmbed, setXEmbed] = useState(false);
@@ -505,7 +514,7 @@ function Preview({ c, compact, autoplay }) {
   const thumb = !broken && (c.thumb || (c.provider === "youtube" ? `https://i.ytimg.com/vi/${c.vid}/hqdefault.jpg` : ""));
   if (!thumb && !embed) return null;
   return (
-    <button type="button" onClick={e => { e.stopPropagation(); if (embed) setPlay(true); else if (c.url) window.open(c.url, "_blank", "noopener"); }}
+    <button type="button" onClick={e => { e.stopPropagation(); if (onOpen) return onOpen(); if (embed) setPlay(true); else if (c.url) window.open(c.url, "_blank", "noopener"); }}
       className={cn(box, "group/p block")} style={{ aspectRatio: thumb ? ratio : 16 / 9 }} aria-label={embed ? "Смотреть" : "Открыть"}>
       {thumb ? <img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover/p:scale-105"
         onError={() => { setBroken(true); if (c.url && c.provider !== "youtube") refresh(c.id, c.url); }} />
@@ -556,21 +565,14 @@ function Brand({ p, size = 14 }) {
 function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
   const db = useDb();
   const c = db.clips.find(x => x.id === id);
-  const [tag, setTag] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
-  useEffect(() => { setTag(""); setNoteOpen(!!c?.note); }, [id]);
+  useEffect(() => { setNoteOpen(!!c?.note); }, [id]);
   if (!c) return <Dialog open={false} onOpenChange={() => setOpen(null)} />;
   const save = f => update("clips", c.id, f);
-  const addTag = raw => {
-    const t = raw.trim().replace(/^#/, "").replace(/\s+/g, "-").toLowerCase();
-    if (t && !c.tags?.includes(t)) save({ tags: [...(c.tags || []), t] });
-    setTag("");
-  };
-  const suggest = allTags.filter(t => !c.tags?.includes(t) && (!tag || t.includes(tag.toLowerCase()))).slice(0, 8);
 
   return (
     <Dialog open={!!id} onOpenChange={o => !o && setOpen(null)}>
-      <DialogContent className="max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[env(safe-area-inset-bottom)]">
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[env(safe-area-inset-bottom)]">
         <DialogTitle className="sr-only">{c.title || "Карточка"}</DialogTitle>
         {(c.provider !== "note" && c.provider !== "link") || c.thumb ? <div className="overflow-hidden rounded-t-lg max-sm:rounded-t-2xl"><Preview key={c.id} c={c} autoplay={c.provider !== "x"} /></div> : null}
         <div className="flex flex-col gap-4 p-5">
@@ -588,17 +590,9 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
           <textarea value={c.desc || ""} onChange={e => save({ desc: e.target.value })} rows={2} placeholder="Короткое описание: зачем сохранил, что посмотреть"
             className="w-full resize-none bg-transparent text-sm leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/50" aria-label="Описание" />
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            <TagIcon className="size-4 text-muted-foreground" />
-            {c.tags?.map(t => (
-              <span key={t} className="inline-flex h-7 items-center gap-1 rounded-full bg-accent pr-1 pl-2.5 text-xs font-medium">#{t}
-                <button type="button" onClick={() => save({ tags: c.tags.filter(x => x !== t) })} aria-label={"Убрать тег " + t} className="grid size-5 place-items-center rounded-full hover:bg-foreground/10"><XIcon className="size-3" /></button>
-              </span>
-            ))}
-            <input value={tag} onChange={e => setTag(e.target.value)} placeholder="+ тег" aria-label="Новый тег"
-              onKeyDown={e => { if (e.key === "Enter" || e.key === "," || e.key === " ") { e.preventDefault(); addTag(tag); } if (e.key === "Backspace" && !tag && c.tags?.length) save({ tags: c.tags.slice(0, -1) }); }}
-              className="h-7 w-24 rounded-full border border-dashed bg-transparent px-2.5 text-xs outline-none focus:w-32 focus:border-solid" />
-            {suggest.map(t => <button key={t} type="button" onClick={() => addTag(t)} className="h-7 rounded-full px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground">#{t}</button>)}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><TagIcon className="size-3.5" />Теги</div>
+            <ClipTags c={c} allTags={allTags} />
           </div>
 
           <div className="rounded-xl border">
@@ -795,16 +789,26 @@ function Dock({ board, fan, setFan, tagsOpen, setTagsOpen, nTags, setAnchor }) {
   );
 }
 
-function BoardsSheet({ open, setOpen, tabs, cur, setTab, counts, total, onAdd }) {
+function BoardsSheet({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, onRename }) {
+  const [editing, setEditing] = useState(null);
+  useEffect(() => { if (!open) setEditing(null); }, [open]);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="gap-2 p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="gap-2 p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <DialogTitle className="px-1 pb-1 text-base">Доски</DialogTitle>
-        {[{ id: ALL, name: "Все", n: total }, ...tabs.map(t => ({ ...t, n: counts(t.id) }))].map(t => (
-          <button key={t.id} type="button" onClick={() => setTab(t.id)}
-            className={cn("flex h-11 items-center gap-3 rounded-xl px-3 text-left text-[15px]", cur === t.id ? "bg-foreground font-medium text-background" : "hover:bg-accent")}>
-            <Columns3Icon className="size-4 opacity-60" /><span className="flex-1 truncate">{t.name}</span><span className="text-sm opacity-60">{t.n}</span>
-          </button>
+        {[{ id: ALL, name: "Все", n: total }, ...tabs.map(t => ({ ...t, n: counts(t.id) }))].map(t => editing === t.id ? (
+          <form key={t.id} className="flex h-11 items-center gap-2" onSubmit={e => { e.preventDefault(); onRename(t, new FormData(e.currentTarget).get("name") || ""); setEditing(null); }}>
+            <input name="name" autoFocus defaultValue={t.name} onFocus={e => e.target.select()} aria-label="Название доски" enterKeyHint="done"
+              className="h-11 min-w-0 flex-1 rounded-xl border bg-background px-3 text-[15px] outline-none focus:ring-2 focus:ring-ring/40" />
+            <button type="submit" aria-label="Сохранить" className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><CheckIcon className="size-4" /></button>
+          </form>
+        ) : (
+          <div key={t.id} className={cn("flex h-11 items-center rounded-xl", cur === t.id ? "bg-foreground font-medium text-background" : "hover:bg-accent")}>
+            <button type="button" onClick={() => setTab(t.id)} className="flex h-full min-w-0 flex-1 items-center gap-3 px-3 text-left text-[15px]">
+              <Columns3Icon className="size-4 opacity-60" /><span className="flex-1 truncate">{t.name}</span><span className="text-sm opacity-60">{t.n}</span>
+            </button>
+            {t.id !== ALL && <button type="button" onClick={() => setEditing(t.id)} aria-label={"Переименовать " + t.name} className="grid size-11 shrink-0 place-items-center opacity-60"><PencilIcon className="size-4" /></button>}
+          </div>
         ))}
         <button type="button" onClick={() => { onAdd(); setOpen(false); }} className="flex h-11 items-center gap-3 rounded-xl border border-dashed px-3 text-[15px] text-muted-foreground"><PlusIcon className="size-4" />Новая доска</button>
       </DialogContent>

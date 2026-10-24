@@ -52,6 +52,7 @@ async function loadAll() {
   for (const c of COLLS) cache[c].clear();
   for (const r of data) cache[r.coll]?.set(r.id, val(r));
   replay();
+  dropForeignPersonal();
   state = { ...state, grants };
   emit(...COLLS);
 }
@@ -65,6 +66,7 @@ const isNet = e => (typeof navigator !== "undefined" && !navigator.onLine) || e 
 // pending edits on top of freshly loaded data, so a reload doesn't undo them
 function replay() {
   for (const op of outbox) {
+    if (op.me && op.me !== state.me) continue;
     if (op.t === "ins") for (const r of op.rows) cache[r.coll]?.set(r.id, { ...(cache[r.coll].get(r.id) || {}), ...r.data, id: r.id, _owner: state.me });
     if (op.t === "merge") { const o = cache[op.coll]?.get(op.id); if (o) cache[op.coll].set(op.id, { ...o, ...op.f }); }
     if (op.t === "del") op.ids.forEach(id => cache[op.coll]?.delete(id));
@@ -84,20 +86,23 @@ export async function flush() {
   if (flushing || !outbox.length) return;
   flushing = true;
   try {
-    while (outbox.length) {
-      try { await send(outbox[0]); }
+    // edits queued under another account wait for that account; they never go out as this one
+    let i = 0;
+    while (i < outbox.length) {
+      if (outbox[i].me && outbox[i].me !== state.me) { i++; continue; }
+      try { await send(outbox[i]); }
       catch (e) { if (isNet(e)) break; fail("Не сохранилось", e); }
-      outbox.shift(); saveOut();
+      outbox.splice(i, 1); saveOut();
     }
-    if (!outbox.length && state.offline) setState({ offline: false });
+    if (!outbox.some(o => !o.me || o.me === state.me) && state.offline) setState({ offline: false });
   } finally { flushing = false; }
 }
 // runs a write now, or queues it when there's no network (or earlier writes still wait, to keep their order)
 async function write(op, undo, msg = "Не сохранилось") {
-  if (outbox.length) { outbox.push(op); saveOut(); flush(); return true; }
+  if (outbox.length) { outbox.push({ ...op, me: state.me }); saveOut(); flush(); return true; }
   try { await send(op); return true; }
   catch (e) {
-    if (isNet(e)) { outbox.push(op); saveOut(); onOffline(); return true; }
+    if (isNet(e)) { outbox.push({ ...op, me: state.me }); saveOut(); onOffline(); return true; }
     undo(); fail(msg, e); return false;
   }
 }
@@ -108,6 +113,17 @@ export const setNoticeHandler = f => { onNotice = f; };
 if (typeof window !== "undefined") {
   window.addEventListener("online", () => flush());
   setInterval(() => outbox.length && navigator.onLine && flush(), 30e3);
+}
+
+// someone else's «Личное» is theirs alone, even if it was once shared: its boards, columns and tasks never show here
+const hidden = new Set();
+const foreign = (coll, x) => !!x && (
+  (coll === "projects" && x.personal && x._owner !== state.me) ||
+  (coll === "boards" && hidden.has(x.project)) || (coll === "cats" && hidden.has(x.board)) || (coll === "tasks" && hidden.has(x.cat)));
+function dropForeignPersonal() {
+  hidden.clear();
+  for (const c of ["projects", "boards", "cats", "tasks"])
+    for (const x of [...cache[c].values()]) if (foreign(c, x)) { hidden.add(x.id); cache[c].delete(x.id); }
 }
 
 let channel = null;
@@ -121,7 +137,7 @@ export async function start(user) {
       const r = p.eventType === "DELETE" ? p.old : p.new;
       if (!cache[r.coll]) return;
       if (p.eventType === "DELETE") cache[r.coll].delete(r.id);
-      else cache[r.coll].set(r.id, val(r));
+      else { cache[r.coll].set(r.id, val(r)); if (foreign(r.coll, cache[r.coll].get(r.id))) cache[r.coll].delete(r.id); }
       emit(r.coll);
     })
     // someone shared or removed access: what is visible changed, refetch it all

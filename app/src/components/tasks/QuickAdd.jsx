@@ -29,7 +29,7 @@ export async function addTask(raw, { tag, work, day, due, time } = {}) {
   if (!cat) { await ensurePersonal(); cat = targetCat(tagId); }
   if (!cat) return null;
   const top = Math.min(1, ...getDb().tasks.filter(x => x.cat === cat).map(x => x.order ?? 1));
-  const id = await add("tasks", { text, cat, order: top - 1, done: false, ...(work ? { focus: nextFocus() } : {}), ...(day ? { due: today() } : {}), ...(due ? { due } : {}), ...(time ? { time } : {}) });
+  const id = await add("tasks", { text, cat, order: top - 1, done: false, ...(work ? { focus: nextFocus(), focusBy: getDb().me } : {}), ...(day ? { due: today() } : {}), ...(due ? { due } : {}), ...(time ? { time } : {}) });
   if (id) flash(id);
   return { id, text, tag: tags.find(t => t.id === tagId) || null };
 }
