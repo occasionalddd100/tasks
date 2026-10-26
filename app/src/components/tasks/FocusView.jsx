@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CrosshairIcon, FlameIcon, HashIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronRightIcon, CheckIcon, ArchiveIcon } from "lucide-react";
+import { CrosshairIcon, FlameIcon, HashIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import * as Pop from "@radix-ui/react-popover";
 import { useDb, updateMany } from "@/lib/db";
@@ -12,7 +12,7 @@ import Bucket from "@/components/tasks/Bucket";
 import { tagsOf, tagOfTask } from "@/lib/tags";
 import { draftsOf } from "@/lib/personal";
 import { cn } from "@/lib/utils";
-import { stale, byOrder, today, dueLabel, dayDiff, plural } from "@/lib/tasks";
+import { stale, byOrder, today, dueLabel, dayDiff, plural, addDays } from "@/lib/tasks";
 import { Button } from "@/components/ui/button";
 import { VIEW } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
@@ -171,10 +171,63 @@ function TagChip({ on, color, n, onClick, children }) {
 
 // "В работе": drag to reorder, or onto the pail to put aside; subtasks under their task
 function WorkList({ list }) {
+  const now = today(), tomorrow = addDays(1);
+  const groups = WORK_GROUPS.map(g => ({ ...g, tasks: list.filter(t => groupOf(t, now, tomorrow) === g.k) })).filter(g => g.tasks.length);
   return (
     <SortableContext items={list.map(t => t.id)} strategy={verticalListSortingStrategy}>
-      <ul className="-mx-1">{list.map(t => <WorkItem key={t.id} t={t} />)}</ul>
+      <div className="flex flex-col gap-2">
+        {groups.map(g => (
+          <Group key={g.k} id={"work:" + g.k} title={g.l} icon={g.icon} color={g.c} n={g.tasks.length}>
+            <ul>{g.tasks.map(t => <WorkItem key={t.id} t={t} />)}</ul>
+          </Group>
+        ))}
+      </div>
     </SortableContext>
+  );
+}
+
+// «В работе» split by when: each task lands in the first group that fits
+const WORK_GROUPS = [
+  { k: "late", l: "Просрочено", c: "#ef4444", icon: AlarmClockIcon },
+  { k: "urgent", l: "Приоритет", c: "#f97316", icon: FlameIcon },
+  { k: "today", l: "Сегодня", c: "#f59e0b", icon: SunIcon },
+  { k: "tomorrow", l: "Завтра", c: "#0ea5e9", icon: SunriseIcon },
+  { k: "planned", l: "Запланированные", c: "#8b5cf6", icon: CalendarClockIcon },
+  { k: "free", l: "Без срока", c: "#64748b", icon: InboxIcon },
+  { k: "done", l: "Сделано", c: "#22c55e", icon: CheckIcon },
+];
+function groupOf(t, now, tomorrow) {
+  if (t.done) return "done";
+  if (t.due && t.due < now) return "late";
+  if (t.prio === "urgent") return "urgent";
+  if (t.due === now || t.prio === "today") return "today";
+  if (t.due === tomorrow) return "tomorrow";
+  if (t.due) return "planned";
+  return "free";
+}
+
+// one foldable block, the same look everywhere: coloured edge and tint, title, count, chevron (remembered per block)
+const FOLD = "folded";
+const loadFold = () => { try { return new Set(JSON.parse(localStorage.getItem(FOLD) || "[]")); } catch { return new Set(); } };
+function Group({ id, title, icon: Icon, color, n, children }) {
+  const [open, setOpenRaw] = useState(() => !loadFold().has(id));
+  const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); v ? f.delete(id) : f.add(id); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
+  return (
+    <section className="overflow-hidden rounded-2xl border" style={{ borderColor: `color-mix(in oklab, var(--border) 55%, ${color})`, background: `color-mix(in oklab, transparent 96%, ${color})` }}>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-left">
+        <Icon className="size-4" style={{ color }} />
+        <h3 className="text-[15px] font-semibold">{title}</h3>
+        <span className="rounded-full px-2 py-px text-xs font-semibold tabular-nums" style={{ color, background: `color-mix(in oklab, transparent 85%, ${color})` }}>{n}</span>
+        <ChevronRightIcon className={cn("ml-auto size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden px-1 pb-1">
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
   );
 }
 
@@ -292,26 +345,12 @@ export function levelOf(t) {
   return null;
 }
 
-// overdue tasks in one block on top, folded or not (remembered)
+// overdue tasks outside work: one block on top, in the same look as the groups of «В работе»
 function Overdue({ tasks }) {
-  const [open, setOpenRaw] = useState(() => { try { return localStorage.getItem("overdueOpen") !== "0"; } catch { return true; } });
-  const setOpen = v => { setOpenRaw(v); try { localStorage.setItem("overdueOpen", v ? "1" : "0"); } catch {} };
   return (
-    <section className="rounded-2xl border border-red-500/25 bg-red-500/[0.04]">
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2.5 text-left">
-        <AlarmClockIcon className="size-4 text-red-500" />
-        <h2 className="text-base font-semibold">Просрочено</h2>
-        <span className="rounded-full bg-red-500/15 px-2 py-px text-xs font-semibold text-red-600 tabular-nums dark:text-red-400">{tasks.length}</span>
-        <ChevronRightIcon className={cn("ml-auto size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.ul initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden px-1 pb-1.5">
-            {tasks.map(t => <li key={t.id}><TaskRow t={t} /></li>)}
-          </motion.ul>
-        )}
-      </AnimatePresence>
-    </section>
+    <Group id="overdue" title="Просрочено, не в работе" icon={AlarmClockIcon} color="#ef4444" n={tasks.length}>
+      <ul>{tasks.map(t => <li key={t.id}><TaskRow t={t} /></li>)}</ul>
+    </Group>
   );
 }
 
