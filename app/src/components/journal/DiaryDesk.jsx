@@ -206,6 +206,8 @@ function DaySection({ b, on, refFn }) {
   const { date, list, doc, note } = b, t = dayTitle(date), mood = moodOf(doc?.mood), isToday = date === today();
   const marks = MARKS.filter(m => doc?.marks?.includes(m.k));
   const done = list.filter(e => e.kind !== "thought").length;
+  // done things without a time have no place on the line: they sit below it as a grid of tiles
+  const grid = list.filter(e => !e.at && e.kind !== "thought"), line = list.filter(e => e.at || e.kind === "thought");
   const tint = mood ? { backgroundImage: `linear-gradient(90deg, ${mood.color}1c, transparent 60%)`, boxShadow: `inset 3px 0 0 ${mood.color}` } : undefined;
   return (
     <section ref={refFn} data-date={date} style={tint}
@@ -220,10 +222,10 @@ function DaySection({ b, on, refFn }) {
         {marks.map(m => <m.icon key={m.k} className="size-3.5 self-center" style={{ color: m.color, fill: m.color }} aria-label={m.short} />)}
         {done > 0 && <span className="ml-auto self-center text-xs text-muted-foreground tabular-nums"><b className="font-semibold text-good">✓ {done}</b> {plural(done, ["дело", "дела", "дел"])}</span>}
       </header>
-      {list.length > 0 ? (
+      {line.length > 0 && (
         <ol className="flex flex-col">
           <AnimatePresence initial={false}>
-            {list.map(e => {
+            {line.map(e => {
               const part = partOf(e.at), thought = e.kind === "thought";
               return (
                 <motion.li key={e.key} layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
@@ -252,7 +254,23 @@ function DaySection({ b, on, refFn }) {
             })}
           </AnimatePresence>
         </ol>
-      ) : <p className="ml-[3.9rem] pl-4 text-sm text-muted-foreground/70">{isToday ? "Пока пусто. Напиши строчку сверху." : "Без записей."}</p>}
+      )}
+      {grid.length > 0 && (
+        <ul className={cn("ml-[3.9rem] grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-1.5", line.length > 0 && "mt-2")}>
+          {grid.map((e, k) => (
+            <motion.li key={e.key} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: Math.min(k * 0.02, 0.3) }}
+              className={cn("group relative flex min-w-0 items-start gap-2 rounded-lg border px-2.5 py-1.5", e.kind === "habit" ? "border-violet-500/25 bg-violet-500/[0.06]" : "border-good/25 bg-good/[0.07]")}>
+              <span aria-hidden className={cn("mt-[3px] grid size-3.5 shrink-0 place-items-center rounded-[5px] text-white", e.kind === "habit" ? "bg-violet-500" : "bg-good")}><CheckIcon className="size-2.5" strokeWidth={3.5} /></span>
+              <span className="min-w-0 flex-1">
+                {e.open ? <button type="button" onClick={e.open} className="line-clamp-2 text-left text-[13px] leading-snug hover:underline">{e.text}</button> : <span className="line-clamp-2 text-[13px] leading-snug">{e.text}</span>}
+                {(e.where || e.kind === "habit") && <span className="block truncate text-[11px] text-muted-foreground">{e.where || "привычка"}</span>}
+              </span>
+              {e.del && <button type="button" onClick={e.del} aria-label="Удалить запись" className="absolute top-1 right-1 grid size-5 place-items-center rounded bg-card text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"><XIcon className="size-3" /></button>}
+            </motion.li>
+          ))}
+        </ul>
+      )}
+      {!list.length && <p className="ml-[3.9rem] pl-4 text-sm text-muted-foreground/70">{isToday ? "Пока пусто. Напиши строчку сверху." : "Без записей."}</p>}
       <DaySummary date={date} doc={doc} note={note} className="mt-2 ml-[3.9rem] w-[calc(100%-3.9rem)]" quiet={!isToday} />
     </section>
   );
