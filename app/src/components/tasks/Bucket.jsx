@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 // A pail floating in the corner of «Задачи». Drag work onto it to put it aside (or use «Отложить» on a task);
 // the lid lifts while something is dragged, the pail fills up with what's inside. Tap it to see and take things back.
-export default function Bucket() {
+export default function Bucket({ docked }) {
   const db = useDb();
   const list = bucketList(db);
   const { active } = useDndContext();
@@ -26,6 +26,7 @@ export default function Bucket() {
     prev.current = list.length;
   }, [list.length]);
   const dragging = !!active;
+  if (docked) return <Docked list={list} db={db} setNodeRef={setNodeRef} isOver={isOver} dragging={dragging} shake={shake} />;
   const fill = list.length ? 0.25 + 0.75 * Math.min(list.length, 8) / 8 : 0;
 
   return createPortal(
@@ -64,23 +65,7 @@ export default function Bucket() {
             </div>
             {list.length === 0
               ? <p className="px-4 py-5 text-sm text-muted-foreground">Пусто. Перетащи сюда задачу из «В работе», и она подождёт тут.</p>
-              : <ul className="overflow-y-auto p-1.5">
-                  <AnimatePresence initial={false}>
-                    {list.map((t, k) => (
-                      <motion.li key={t.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { delay: k * 0.03 } }} exit={{ opacity: 0, x: 40 }}
-                        className="group flex items-center gap-1 rounded-lg px-2 py-1.5 hover:bg-accent">
-                        <button type="button" onClick={() => { setOpen(false); openTask(t.id); }} className="min-w-0 flex-1 text-left">
-                          <span className="line-clamp-2 text-sm leading-snug">{t.text}</span>
-                          <span className="block truncate text-[11px] text-muted-foreground">{placeOf(db, t)}</span>
-                        </button>
-                        <button type="button" onClick={() => toFocus(t)} title="Вернуть в работу" aria-label={"Вернуть в работу: " + t.text}
-                          className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-primary hover:text-primary-foreground"><CornerUpLeftIcon className="size-4" /></button>
-                        <button type="button" onClick={() => fromBucket(t)} title="Достать из ведёрка (останется в своём теге)" aria-label={"Убрать из ведёрка: " + t.text}
-                          className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground opacity-60 hover:bg-background hover:text-foreground hover:opacity-100"><XIcon className="size-4" /></button>
-                      </motion.li>
-                    ))}
-                  </AnimatePresence>
-                </ul>}
+              : <BucketItems list={list} db={db} onOpen={() => setOpen(false)} />}
           </motion.div>
         </>}
       </AnimatePresence>
@@ -106,5 +91,48 @@ function Pail({ fill, lid, over }) {
         <rect x="19" y="7" width="6" height="2.5" rx="1" className="fill-foreground" />
       </motion.g>
     </svg>
+  );
+}
+
+function BucketItems({ list, db, onOpen, dense }) {
+  return (
+    <ul className={cn("overflow-y-auto", dense ? "p-1" : "p-1.5")}>
+      <AnimatePresence initial={false}>
+        {list.map((t, k) => (
+          <motion.li key={t.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { delay: k * 0.03 } }} exit={{ opacity: 0, x: 40 }}
+            className={cn("group flex items-center gap-1 rounded-lg hover:bg-accent", dense ? "px-2 py-1" : "px-2 py-1.5")}>
+            <button type="button" onClick={() => { onOpen?.(); openTask(t.id); }} className="min-w-0 flex-1 text-left">
+              <span className={cn("leading-snug", dense ? "line-clamp-1 text-[13px]" : "line-clamp-2 text-sm")}>{t.text}</span>
+              {!dense && <span className="block truncate text-[11px] text-muted-foreground">{placeOf(db, t)}</span>}
+            </button>
+            <button type="button" onClick={() => toFocus(t)} title="Вернуть в работу" aria-label={"Вернуть в работу: " + t.text}
+              className={cn("grid shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-primary hover:text-primary-foreground", dense ? "size-7" : "size-8")}><CornerUpLeftIcon className="size-4" /></button>
+            <button type="button" onClick={() => fromBucket(t)} title="Достать из ведёрка (останется в своём теге)" aria-label={"Убрать из ведёрка: " + t.text}
+              className={cn("grid shrink-0 place-items-center rounded-md text-muted-foreground opacity-60 hover:bg-background hover:text-foreground hover:opacity-100", dense ? "size-7" : "size-8")}><XIcon className="size-4" /></button>
+          </motion.li>
+        ))}
+      </AnimatePresence>
+    </ul>
+  );
+}
+
+// computer: the pail sits at the top of the side column, always in sight, with what's inside listed under it
+function Docked({ list, db, setNodeRef, isOver, dragging, shake }) {
+  const fill = list.length ? 0.25 + 0.75 * Math.min(list.length, 8) / 8 : 0;
+  return (
+    <motion.section ref={setNodeRef} animate={shake}
+      className={cn("rounded-2xl border bg-card/80 transition-colors", isOver ? "border-primary bg-primary/[0.07] ring-2 ring-primary/40" : dragging && "border-dashed border-primary/60")}>
+      <div className="flex items-center gap-2.5 px-3 py-2">
+        <motion.span animate={{ scale: isOver ? 1.2 : 1, y: dragging ? -2 : 0 }} transition={{ type: "spring", bounce: 0.45, duration: 0.4 }} className="grid size-9 place-items-center">
+          <Pail fill={fill} lid={dragging} over={isOver} />
+        </motion.span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[15px] leading-tight font-semibold">Ведёрко</h3>
+          <p className="text-xs text-muted-foreground">{dragging ? (isOver ? "Отпусти, чтобы отложить" : "Тащи сюда, чтобы отложить") : list.length ? "отложено: " + list.length : "Перетащи сюда задачу из «В работе»"}</p>
+        </div>
+        {list.length > 0 && <motion.span key={list.length} initial={{ scale: 0.4 }} animate={{ scale: 1 }} className="grid h-6 min-w-6 place-items-center rounded-full bg-primary px-1.5 text-xs font-bold text-primary-foreground tabular-nums">{list.length}</motion.span>}
+      </div>
+      {list.length > 0 && <div className="max-h-56 overflow-y-auto border-t"><BucketItems list={list} db={db} dense /></div>}
+    </motion.section>
   );
 }

@@ -46,6 +46,7 @@ export default function FocusView() {
   }, 60);
   useTasksTap(() => setFan(f => !f));
   const list = focusList(db);
+  const desk = useMedia("(min-width: 1024px)");
   const done = list.filter(t => t.done).length;
   const drafts = draftsOf(db);
 
@@ -108,7 +109,7 @@ export default function FocusView() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={collide} onDragStart={e => setDragId(e.active.id)} onDragCancel={() => setDragId(null)} onDragEnd={onDragEnd}>
-    <div className={cn(VIEW, "max-w-5xl")}>
+    <div className={cn(VIEW, desk ? "max-w-[1400px] gap-3" : "max-w-5xl")}>
       <header className="flex items-center gap-2">
         <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Задачи</h1>
         <TodayDone />
@@ -122,6 +123,35 @@ export default function FocusView() {
         <button type="button" onClick={() => openTagEditor()} aria-label="Править теги" className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-dashed px-3 text-sm text-muted-foreground hover:text-foreground"><PencilIcon className="size-3.5" />Теги</button>
       </div>
 
+      {desk ? (
+        // computer: work on the left; on the right the pail (always in sight), overdue and every tag as a dense list
+        <div className="grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] items-start gap-5">
+          <div className="flex min-w-0 flex-col gap-4">
+            {(!shownTag || shownTag === WORK) && <section className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <h2 className="flex items-center gap-2 text-base font-semibold"><CrosshairIcon className="size-4 text-primary" />В работе</h2>
+          {list.length > 0 && <span className="rounded-full bg-foreground/[.06] px-2 py-px text-xs font-medium text-muted-foreground tabular-nums">{list.length - done}</span>}
+          {done > 0 && <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={clearDone}>Убрать сделанные</Button>}
+        </div>
+        {list.length === 0
+          ? <p className="py-3 text-sm text-muted-foreground">Пусто. Смахни задачу влево или нажми ＋ на карточке ниже, и она окажется тут.</p>
+          : <WorkList list={list} />}
+      </section>}
+
+            {shownTag && shownTag !== WORK && <TagList tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />}
+            {!shownTag && db.habits.length > 0 && <Habits habits={db.habits} />}
+          </div>
+          <aside className="sticky top-4 flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-2.5 overflow-y-auto pb-2 [scrollbar-width:thin]">
+            <Bucket docked />
+            {!shownTag && overdue.length > 0 && <Overdue tasks={overdue} />}
+            {!shownTag && [...groups].filter(([, l]) => l.length).map(([id, l]) => {
+              const tag = tags.find(t => t.id === id);
+              return <TagGroup key={id} id={id} name={tagName(id)} tag={tag} tasks={l} onOpen={() => setFilter(id)} />;
+            })}
+            {!shownTag && !rest.length && <p className="px-1 text-sm text-muted-foreground">Других открытых задач нет.</p>}
+          </aside>
+        </div>
+      ) : <>
       {(!shownTag || shownTag === WORK) && <section className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <h2 className="flex items-center gap-2 text-base font-semibold"><CrosshairIcon className="size-4 text-primary" />В работе</h2>
@@ -145,10 +175,11 @@ export default function FocusView() {
       </section>}
 
       {!shownTag && db.habits.length > 0 && <Habits habits={db.habits} />}
+      </>}
 
       <Fan open={fan} setOpen={setFan} items={fanItems} anchor="navRight"
         onPick={t => { if (t.id === "\u0000edit") { openTagEditor(); return; } setFilter(t.id === "\u0000all" ? null : t.id); jump(); }} />
-      <Bucket />
+      {!desk && <Bucket />}
       {/* the task you hold follows the finger as a small card; dropped on the pail it just vanishes into it */}
       <DragOverlay dropAnimation={null}>
         {dragged && <div className="max-w-72 cursor-grabbing rounded-xl border bg-card px-3 py-2 text-sm font-medium shadow-2xl" style={{ rotate: "-2deg" }}>{dragged.text}</div>}
@@ -402,5 +433,42 @@ function TodayDone() {
         </Pop.Content>
       </Pop.Portal>
     </Pop.Root>
+  );
+}
+
+function useMedia(q) {
+  const [on, setOn] = useState(() => matchMedia(q).matches);
+  useEffect(() => { const m = matchMedia(q), f = () => setOn(m.matches); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, [q]);
+  return on;
+}
+
+// computer: a tag as a foldable dense list; each line shows how pressing it is, ＋ puts it in work
+function TagGroup({ id, name, tag, tasks, onOpen }) {
+  const color = tag?.color || "#64748b";
+  const icon = id === NONE ? InboxIcon : HashIcon;
+  return (
+    <Group id={"tag:" + id} title={tag?.emoji ? tag.emoji + " " + name : name} icon={icon} color={color} n={tasks.length}>
+      <ul>
+        {tasks.slice(0, 40).map(t => <DenseRow key={t.id} t={t} />)}
+        {tasks.length > 40 && <li><button type="button" onClick={onOpen} className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground">ещё {tasks.length - 40} →</button></li>}
+      </ul>
+    </Group>
+  );
+}
+
+function DenseRow({ t }) {
+  const db = useDb();
+  const lv = levelOf(t), kids = db.tasks.filter(k => k.parent === t.id && !stale(k));
+  return (
+    <li className="group relative flex h-8 items-center gap-2 rounded-md pr-1 pl-2.5 hover:bg-accent/70"
+      onContextMenu={e => { e.preventDefault(); openWheel(t, e.clientX, e.clientY, true); }}>
+      <span aria-hidden className="absolute inset-y-1.5 left-0.5 w-[3px] rounded-full" style={{ background: lv?.c || "transparent" }} />
+      <button type="button" onClick={() => openTask(t.id)} className="min-w-0 flex-1 truncate text-left text-[13.5px]">{t.text}</button>
+      {kids.length > 0 && <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
+      {lv ? <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium" style={{ color: lv.c }}>{lv.icon && <lv.icon className="size-3" />}{lv.l}</span>
+        : t.due && <span className="shrink-0 text-[11px] text-muted-foreground">{dueLabel(t.due)}</span>}
+      <button type="button" onClick={() => toFocus(t)} aria-label={"В работу: " + t.text} title="В работу"
+        className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-primary hover:text-primary-foreground focus:opacity-100"><PlusIcon className="size-3.5" /></button>
+    </li>
   );
 }
