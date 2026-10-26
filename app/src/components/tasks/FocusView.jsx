@@ -141,7 +141,7 @@ export default function FocusView() {
             {shownTag && shownTag !== WORK && <TagList tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />}
             {!shownTag && db.habits.length > 0 && <Habits habits={db.habits} />}
           </div>
-          <aside className="sticky top-4 flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-2.5 overflow-y-auto pb-2 [scrollbar-width:thin]">
+          <aside className="sticky top-4 flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-2 overflow-y-auto pb-2 [scrollbar-width:thin] [&>*]:shrink-0">
             <Bucket docked />
             {!shownTag && overdue.length > 0 && <Overdue tasks={overdue} />}
             {!shownTag && [...groups].filter(([, l]) => l.length).map(([id, l]) => {
@@ -244,16 +244,16 @@ function Group({ id, title, icon: Icon, color, n, children }) {
   const [open, setOpenRaw] = useState(() => !loadFold().has(id));
   const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); v ? f.delete(id) : f.add(id); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
   return (
-    <section className="overflow-hidden rounded-2xl border" style={{ borderColor: `color-mix(in oklab, var(--border) 55%, ${color})`, background: `color-mix(in oklab, transparent 96%, ${color})` }}>
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-left">
-        <Icon className="size-4" style={{ color }} />
-        <h3 className="text-[15px] font-semibold">{title}</h3>
-        <span className="rounded-full px-2 py-px text-xs font-semibold tabular-nums" style={{ color, background: `color-mix(in oklab, transparent 85%, ${color})` }}>{n}</span>
-        <ChevronRightIcon className={cn("ml-auto size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
+    <section className="shrink-0 overflow-hidden rounded-xl border border-border/70 bg-card/50">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="group/h flex h-10 w-full items-center gap-2.5 px-3 text-left transition-colors hover:bg-accent/40">
+        <span className="grid size-6 place-items-center rounded-md" style={{ background: `color-mix(in oklab, transparent 84%, ${color})` }}><Icon className="size-3.5" style={{ color }} /></span>
+        <h3 className="min-w-0 truncate text-sm font-semibold">{title}</h3>
+        <span className="text-xs text-muted-foreground tabular-nums">{n}</span>
+        <ChevronRightIcon className={cn("ml-auto size-3.5 text-muted-foreground/70 transition-transform group-hover/h:text-foreground", open && "rotate-90")} />
       </button>
       <AnimatePresence initial={false}>
         {open && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden px-1 pb-1">
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden border-t border-border/50 px-1 py-1">
             {children}
           </motion.div>
         )}
@@ -269,10 +269,10 @@ function WorkItem({ t }) {
   const name = tag?.name || (cat?.drafts ? "" : db.projects.find(p => p.id === board?.project)?.name);
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: t.id });
   return (
-    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition, ...(tag ? { background: `color-mix(in oklab, transparent 92%, ${tag.color})` } : {}) }}
-      className={cn("relative mb-1 rounded-lg", isDragging && "z-10 opacity-30")}>
+    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition,  }}
+      className={cn("relative rounded-lg", isDragging && "z-10 opacity-30")}>
       {/* a soft tint and a thin bar in the tag's colour, so work from different tags reads apart */}
-      {tag && <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full" style={{ background: tag.color }} />}
+      {tag && <span className="absolute inset-y-2.5 left-0.5 w-[3px] rounded-full opacity-80" style={{ background: tag.color }} />}
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
         <div className="group/w relative">
           <TaskRow t={t} noFocusMark sub={name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
@@ -447,7 +447,7 @@ function TagGroup({ id, name, tag, tasks, onOpen }) {
   const color = tag?.color || "#64748b";
   const icon = id === NONE ? InboxIcon : HashIcon;
   return (
-    <Group id={"tag:" + id} title={tag?.emoji ? tag.emoji + " " + name : name} icon={icon} color={color} n={tasks.length}>
+    <Group id={"tag:" + id} title={name} icon={tag?.emoji ? () => <span className="text-[13px] leading-none">{tag.emoji}</span> : icon} color={color} n={tasks.length}>
       <ul>
         {tasks.slice(0, 40).map(t => <DenseRow key={t.id} t={t} />)}
         {tasks.length > 40 && <li><button type="button" onClick={onOpen} className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground">ещё {tasks.length - 40} →</button></li>}

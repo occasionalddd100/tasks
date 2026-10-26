@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftIcon, ArrowRightIcon, ChevronRightIcon, ListChecksIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Repeat2Icon, Trash2Icon, UsersIcon, XIcon } from "lucide-react";
+import * as Pop from "@radix-ui/react-popover";
+import { ArrowLeftIcon, ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon, ListChecksIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Repeat2Icon, Trash2Icon, UsersIcon, XIcon } from "lucide-react";
 import { useDb, add, update, updateMany, remove, isMine } from "@/lib/db";
 import { folderPath, newTab, deleteTab } from "@/lib/notes";
 import { FileMenu } from "@/components/notes/NotesTree";
@@ -187,16 +188,92 @@ function HabitRow({ h, waiting, onMark }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => { if (armed) { const t = setTimeout(() => setArmed(false), 3000); return () => clearTimeout(t); } }, [armed]);
   return (
-    <li className={cn("group flex min-h-9 items-center gap-2.5 rounded-md px-1 hover:bg-accent/50", waiting && "opacity-55")}>
+    <li className={cn("group flex min-h-9 items-center gap-2.5 rounded-md px-1 hover:bg-accent/50", waiting && "[&>span:first-of-type]:opacity-55")}>
       <Checkbox checked={!!waiting} onCheckedChange={v => onMark(h, !!v)} aria-label={h.text} />
-      <span className={cn("flex-1 text-[15px]", waiting && "line-through")}>{h.text}</span>
-      <span className="text-xs text-muted-foreground">{EVERY[h.every] || `каждые ${h.every} дн.`}</span>
+      <span className={cn("min-w-0 flex-1 truncate text-[15px]", waiting && "line-through")}>{h.text}</span>
+      <HabitStrip h={h} />
+      <span className="shrink-0 text-xs text-muted-foreground max-sm:hidden">{EVERY[h.every] || `каждые ${h.every} дн.`}</span>
       <button type="button" aria-label="Удалить повторяющуюся"
         onClick={() => armed ? remove("habits", h.id) : setArmed(true)}
         className={cn("rounded px-1.5 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 max-md:opacity-60", armed && "text-destructive opacity-100")}>
         {armed ? "удалить?" : <XIcon className="size-3.5" />}
       </button>
     </li>
+  );
+}
+
+// the last weeks of a recurring task at a glance: done days filled, missed daily ones faintly red, today ringed.
+// Tap a day to set or clear it; tap the month to see a whole month.
+const isoD = d => d.toLocaleDateString("sv-SE");
+const shift = (iso, n) => { const d = new Date(iso + "T12:00"); d.setDate(d.getDate() + n); return isoD(d); };
+function toggleDay(h, date) {
+  const hist = new Set(h.history || []);
+  hist.has(date) ? hist.delete(date) : hist.add(date);
+  const list = [...hist].sort();
+  update("habits", h.id, { history: list.slice(-400), lastDone: list.at(-1) || "" });
+}
+function dayCell(h, date, now, done) {
+  if (date > now) return { cls: "opacity-25 bg-muted", label: "впереди" };
+  if (done) return { cls: "bg-violet-500", label: "сделано" };
+  if (date === now) return { cls: "bg-muted", label: "сегодня" };
+  // before the first mark the habit didn't exist yet: nothing was missed
+  const start = h.created?.slice(0, 10) || [...(h.history || [])].sort()[0] || now;
+  return (h.every || 1) === 1 && date >= start ? { cls: "bg-red-500/25", label: "пропущено" } : { cls: "bg-muted", label: "не было" };
+}
+function HabitStrip({ h }) {
+  const [open, setOpen] = useState(false);
+  const now = today(), hist = new Set(h.history || []);
+  const days = Array.from({ length: 14 }, (_, k) => shift(now, k - 13));
+  const streak = (() => { let n = 0, d = hist.has(now) ? now : shift(now, -1); while (hist.has(d)) { n++; d = shift(d, -1); } return n; })();
+  return (
+    <Pop.Root open={open} onOpenChange={setOpen}>
+      <Pop.Trigger asChild>
+        <button type="button" aria-label={"Календарь: " + h.text} className="flex shrink-0 items-center gap-[3px] rounded-md p-1 hover:bg-accent">
+          {days.map((d, k) => {
+            const c = dayCell(h, d, now, hist.has(d));
+            return <i key={d} title={d.slice(8) + "." + d.slice(5, 7) + " · " + c.label}
+              className={cn("block size-[9px] rounded-[3px]", k < 7 && "max-sm:hidden", c.cls, d === now && "ring-[1.5px] ring-foreground ring-offset-1 ring-offset-card")} />;
+          })}
+          {streak >= 2 && <span className="ml-1 text-[11px] font-semibold text-violet-500 tabular-nums">{streak}🔥</span>}
+        </button>
+      </Pop.Trigger>
+      <Pop.Portal><Pop.Content align="end" sideOffset={6} className="z-50 rounded-xl border bg-popover p-3 text-popover-foreground shadow-xl data-[state=open]:animate-[menu-in_140ms_ease-out]">
+        <HabitMonth h={h} />
+      </Pop.Content></Pop.Portal>
+    </Pop.Root>
+  );
+}
+const MONTH_NAMES = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+function HabitMonth({ h }) {
+  const [off, setOff] = useState(0);
+  const now = today(), hist = new Set(h.history || []);
+  const t = new Date(), first = new Date(t.getFullYear(), t.getMonth() + off, 1);
+  const n = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate(), pad = (first.getDay() + 6) % 7;
+  const cells = [...Array(pad).fill(null), ...Array.from({ length: n }, (_, k) => isoD(new Date(first.getFullYear(), first.getMonth(), k + 1)))];
+  const doneN = cells.filter(d => d && hist.has(d)).length;
+  return (
+    <div className="w-60">
+      <div className="mb-2 flex items-center gap-1">
+        <span className="flex-1 truncate text-sm font-semibold">{MONTH_NAMES[first.getMonth()]}<span className="ml-1.5 font-normal text-muted-foreground">{doneN} из {cells.filter(d => d && d <= now).length}</span></span>
+        <button type="button" onClick={() => setOff(o => o - 1)} className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent" aria-label="Прошлый месяц"><ChevronLeftIcon className="size-4" /></button>
+        <button type="button" onClick={() => setOff(o => Math.min(0, o + 1))} disabled={off >= 0} className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent disabled:opacity-30" aria-label="Следующий месяц"><ChevronRightIcon className="size-4" /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map(w => <span key={w} className="pb-0.5 text-center text-[10px] text-muted-foreground">{w}</span>)}
+        {cells.map((d, k) => {
+          if (!d) return <span key={"p" + k} />;
+          const done = hist.has(d), c = dayCell(h, d, now, done);
+          return (
+            <button key={d} type="button" disabled={d > now} onClick={() => toggleDay(h, d)} title={c.label}
+              className={cn("grid aspect-square place-items-center rounded-md text-[11px] font-medium tabular-nums transition-transform hover:scale-110 disabled:pointer-events-none", c.cls,
+                done ? "text-white" : "text-muted-foreground", d === now && "ring-2 ring-foreground ring-offset-1 ring-offset-popover")}>
+              {+d.slice(8)}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[11px] text-muted-foreground">Нажми на день, чтобы отметить или снять.</p>
+    </div>
   );
 }
 
