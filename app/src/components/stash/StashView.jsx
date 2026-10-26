@@ -15,7 +15,7 @@ import { canUseFolders, addFolder, access, allow, fileUrl, useFolders } from "@/
 const FolderPortal = lazy(() => import("@/components/stash/FolderPortal"));
 import { isMine } from "@/lib/db";
 import { toast } from "sonner";
-import { useDb, update, updateMany, remove } from "@/lib/db";
+import { useDb, getDb, update, updateMany, remove } from "@/lib/db";
 import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh } from "@/lib/stash";
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,7 @@ export default function StashView({ id, fresh, go }) {
   const setTab = t => { setTabRaw(t); try { localStorage.setItem("stashTab:" + id, t); } catch {} };
   const [query, setQuery] = useState("");
   const [tags, setTags] = useState([]);
+  const [tagEdit, setTagEdit] = useState(null); // null closed, "" list, "<tag>" renaming that one
   const [unseen, setUnseen] = useState(false);
   const [open, setOpen] = useState(null);
   const [dragTab, setDragTab] = useState(null);
@@ -117,7 +118,7 @@ export default function StashView({ id, fresh, go }) {
       {sharing && <ShareDialog open onOpenChange={o => !o && setSharing(false)} coll="stashes" target={id} name={stash.name} isOwner={isMine(stash)} />}
       <BoardsFan open={fan} setOpen={setFan} tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
         onAdd={addTab} onMore={() => setBoards(true)} anchor={isPhone ? "navRight" : dockAnchor || "dock"} />
-      <TagsFan open={tagsOpen} setOpen={setTagsOpen} tagCounts={tagCounts} tags={tags} setTags={setTags} unseen={unseen} setUnseen={setUnseen} anchor={isPhone ? "navLeft" : dockAnchor || "dock"} />
+      <TagsFan open={tagsOpen} setOpen={setTagsOpen} onEdit={() => setTagEdit("")} tagCounts={tagCounts} tags={tags} setTags={setTags} unseen={unseen} setUnseen={setUnseen} anchor={isPhone ? "navLeft" : dockAnchor || "dock"} />
       <Dock board={cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски"} fan={fan} setFan={setFan} tagsOpen={tagsOpen} setTagsOpen={setTagsOpen} nTags={tags.length + (unseen ? 1 : 0)} setAnchor={setDockAnchor} />
       <UpButton className="fixed right-4 z-30 md:hidden bottom-[calc(5rem+env(safe-area-inset-bottom))]" />
       <BoardsSheet open={boards} setOpen={setBoards} tabs={tabs} cur={cur} setTab={t => { setTab(t); setBoards(false); }} counts={t => all.filter(c => c.tab === t).length} total={all.length} onAdd={addTab} onRename={renameTab} />
@@ -138,8 +139,11 @@ export default function StashView({ id, fresh, go }) {
         <div className="contents max-md:hidden">
         <Chip on={unseen} onClick={() => setUnseen(v => !v)}><EyeOffIcon className="size-3.5" />Не смотрел</Chip>
         {tagCounts.map(([t, n]) => (
-          <Chip key={t} on={tags.includes(t)} onClick={() => setTags(s => s.includes(t) ? s.filter(x => x !== t) : [...s, t])}>#{t}<span className="opacity-60">{n}</span></Chip>
+          <ActionsContext key={t} items={tagActions(t, all, setTagEdit, setTags)}>
+            <Chip on={tags.includes(t)} onClick={() => setTags(s => s.includes(t) ? s.filter(x => x !== t) : [...s, t])}>#{t}<span className="opacity-60">{n}</span></Chip>
+          </ActionsContext>
         ))}
+        {tagCounts.length > 0 && <button type="button" onClick={() => setTagEdit("")} aria-label="Править теги" title="Править теги" className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"><PencilIcon className="size-3.5" /></button>}
         {(tags.length > 0 || unseen || q) && <button type="button" onClick={() => { setTags([]); setUnseen(false); setQuery(""); }} className="text-xs text-muted-foreground hover:text-foreground">сбросить</button>}
         </div>
       </div>
@@ -168,13 +172,14 @@ export default function StashView({ id, fresh, go }) {
       )}
 
       {shown.length > limit && <div ref={more} className="h-10" />}
+      <TagsDialog edit={tagEdit} setEdit={setTagEdit} clips={all} setTags={setTags} />
       <ClipDialog id={open} setOpen={setOpen} tabs={tabs} allTags={tagCounts.map(([t]) => t)} moveTo={moveTo} />
     </div>
   );
 }
 
-const Chip = ({ on, onClick, children }) => (
-  <button type="button" onClick={onClick}
+const Chip = ({ on, onClick, children, ...rest }) => (
+  <button type="button" onClick={onClick} {...rest}
     className={cn("inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-colors", on ? "border-foreground bg-foreground text-background" : "bg-card text-muted-foreground hover:text-foreground")}>
     {children}
   </button>
@@ -445,8 +450,10 @@ function ClipTags({ c, allTags }) {
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1.5">
         {shown.map(t => (
-          <button key={t} type="button" onClick={() => toggle(t)} aria-pressed={tags.includes(t)}
+          <ActionsContext key={t} items={tagActions(t, getDb().clips.filter(x => x.stash === c.stash), tagEditor)}>
+          <button type="button" onClick={() => toggle(t)} aria-pressed={tags.includes(t)}
             className={cn("inline-flex h-8 items-center rounded-full border px-3 text-[13px] font-medium transition-colors", tags.includes(t) ? "border-foreground bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}>#{t}</button>
+          </ActionsContext>
         ))}
       </div>
       <form className="flex gap-1.5" onSubmit={e => { e.preventDefault(); add(v); }}>
@@ -456,6 +463,69 @@ function ClipTags({ c, allTags }) {
         <button type="submit" disabled={!tagOf(v)} aria-label="Добавить тег" className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground disabled:opacity-30"><CheckIcon className="size-4" /></button>
       </form>
     </div>
+  );
+}
+
+// renaming or dropping a tag goes through every card of the stash; renaming onto an existing tag merges them
+const tagEditor = t => window.dispatchEvent(new CustomEvent("stash-tag-edit", { detail: t }));
+async function renameTag(clips, from, raw) {
+  const to = tagOf(raw); if (!to || to === from) return;
+  const list = clips.filter(c => c.tags?.includes(from)).map(c => [c.id, { tags: [...new Set(c.tags.map(x => (x === from ? to : x)))] }]);
+  if (list.length) await updateMany("clips", list);
+}
+async function dropTag(clips, t) {
+  const list = clips.filter(c => c.tags?.includes(t));
+  if (!list.length || !(await confirmAction({ title: `Удалить тег #${t}?`, description: `Он уберётся с карточек (${list.length}), сами карточки останутся.`, action: "Удалить" }))) return false;
+  await updateMany("clips", list.map(c => [c.id, { tags: c.tags.filter(x => x !== t) }]));
+  return true;
+}
+function tagActions(t, clips, setEdit, setTags) {
+  return [
+    { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setEdit(t)) },
+    { label: "Удалить тег", icon: Trash2Icon, variant: "destructive", onSelect: async () => { if (await dropTag(clips, t)) setTags?.(s => s.filter(x => x !== t)); } },
+  ];
+}
+
+// all tags of the stash in one list: rename (pencil) or delete; opened from the fan, the pencil chip or a tag's menu
+function TagsDialog({ edit, setEdit, clips, setTags }) {
+  useEffect(() => { const on = e => setEdit(e.detail); window.addEventListener("stash-tag-edit", on); return () => window.removeEventListener("stash-tag-edit", on); }, []);
+  const open = edit !== null;
+  useBackClose(open, () => setEdit(null));
+  const counts = useMemo(() => {
+    const m = new Map();
+    for (const c of clips) for (const t of c.tags || []) m.set(t, (m.get(t) || 0) + 1);
+    return [...m].sort((a, b) => a[0].localeCompare(b[0], "ru"));
+  }, [clips]);
+  const rename = async (from, v) => {
+    const to = tagOf(v); setEdit("");
+    if (!to || to === from) return;
+    await renameTag(clips, from, to);
+    setTags(s => [...new Set(s.map(x => (x === from ? to : x)))]);
+  };
+  return (
+    <Dialog open={open} onOpenChange={o => !o && setEdit(null)}>
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="max-h-[85dvh] gap-1 overflow-y-auto p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <DialogTitle className="px-1 pb-2 text-base">Теги</DialogTitle>
+        {!counts.length && <p className="px-1 text-sm text-muted-foreground">Тегов пока нет.</p>}
+        {counts.map(([t, n]) => edit === t ? (
+          <form key={t} className="flex h-11 items-center gap-2" onSubmit={e => { e.preventDefault(); rename(t, new FormData(e.currentTarget).get("name") || ""); }}>
+            <input name="name" autoFocus defaultValue={t} onFocus={e => e.target.select()} aria-label="Название тега" enterKeyHint="done"
+              onKeyDown={e => e.key === "Escape" && (e.stopPropagation(), setEdit(""))}
+              className="h-11 min-w-0 flex-1 rounded-xl border bg-background px-3 text-[15px] outline-none focus:ring-2 focus:ring-ring/40" />
+            <button type="submit" aria-label="Сохранить" className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><CheckIcon className="size-4" /></button>
+          </form>
+        ) : (
+          <div key={t} className="group flex h-11 items-center rounded-xl hover:bg-accent">
+            <button type="button" onClick={() => setEdit(t)} className="flex h-full min-w-0 flex-1 items-center gap-3 px-3 text-left text-[15px]">
+              <TagIcon className="size-4 opacity-60" /><span className="flex-1 truncate">#{t}</span><span className="text-sm opacity-60">{n}</span>
+            </button>
+            <button type="button" onClick={() => setEdit(t)} aria-label={"Переименовать " + t} className="grid size-11 shrink-0 place-items-center opacity-60 hover:opacity-100"><PencilIcon className="size-4" /></button>
+            <button type="button" onClick={async () => { if (await dropTag(clips, t)) setTags(s => s.filter(x => x !== t)); }} aria-label={"Удалить " + t} className="grid size-11 shrink-0 place-items-center text-destructive opacity-60 hover:opacity-100"><Trash2Icon className="size-4" /></button>
+          </div>
+        ))}
+        {counts.length > 1 && <p className="px-1 pt-2 text-xs text-muted-foreground">Если переименовать тег в уже существующий, они сольются.</p>}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -711,14 +781,16 @@ function BoardsFan({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, onM
 }
 
 // tags stay open while you tick several
-function TagsFan({ open, setOpen, tagCounts, tags, setTags, unseen, setUnseen, anchor }) {
+function TagsFan({ open, setOpen, onEdit, tagCounts, tags, setTags, unseen, setUnseen, anchor }) {
   const any = tags.length > 0 || unseen;
   const items = [
     { id: "\u0000unseen", name: "Не смотрел", on: unseen, glyph: <EyeOffIcon className="size-5" /> },
     ...tagCounts.slice(0, FAN_MAX).map(([t, n]) => ({ id: t, name: "#" + t, n, on: tags.includes(t), glyph: <TagIcon className="size-5" /> })),
     any && { id: "\u0000reset", name: "Сбросить", dashed: true, glyph: <XIcon className="size-5" /> },
+    tagCounts.length > 0 && { id: "\u0000edit", name: "Править теги", dashed: true, glyph: <PencilIcon className="size-5" /> },
   ].filter(Boolean);
   const pick = t => {
+    if (t.id === "\u0000edit") { onEdit(); return false; }
     if (t.id === "\u0000reset") { setTags([]); setUnseen(false); return false; }
     if (t.id === "\u0000unseen") setUnseen(v => !v);
     else setTags(s => s.includes(t.id) ? s.filter(x => x !== t.id) : [...s, t.id]);
