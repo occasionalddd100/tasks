@@ -11,6 +11,7 @@ import { ConfirmHost } from "@/components/Confirm";
 import { IconPickerHost } from "@/components/IconPicker";
 import MobileNav from "@/components/MobileNav";
 import { SettingsHost, openSettings } from "@/components/Settings";
+import ShareInbox from "@/components/stash/ShareInbox";
 import { useAppearance } from "@/lib/appearance";
 import Avatar from "@/components/Avatar";
 import ProfileDialog from "@/components/ProfileDialog";
@@ -145,6 +146,7 @@ export default function Shell() {
       <TaskSheetHost />
       <ConfirmHost />
       <SettingsHost />
+      <ShareInbox go={go} />
       <IconPickerHost />
     </div>
     </MotionConfig>
