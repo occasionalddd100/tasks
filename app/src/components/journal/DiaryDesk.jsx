@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon, SparklesIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon, SparklesIcon, XIcon, PencilLineIcon } from "lucide-react";
 import { useDb, getDb, put } from "@/lib/db";
 import { today, plural } from "@/lib/tasks";
 import { addDone, removeDone, exText, exAt } from "@/lib/done";
 import { openTask } from "@/components/tasks/TaskSheet";
 import { cn } from "@/lib/utils";
-import { MOODS, MARKS, MonthGrid, Thumb, moodOf } from "@/components/journal/JournalView";
+import { MOODS, MARKS, MonthGrid, moodOf } from "@/components/journal/JournalView";
 
 // desktop diary: one feed of days you scroll with the wheel (thoughts and what got done, in time order),
 // a single line to write into the day in view, a mood slider, and a small calendar on the right
@@ -64,7 +64,7 @@ export default function DiaryDesk({ info, onPick, burst }) {
   const blocks = useMemo(() => {
     const out = [];
     for (const d of days) {
-      const e = entries(d), empty = d !== now && !e.list.length && !e.doc?.mood && !e.doc?.photos?.length && !e.note;
+      const e = entries(d), empty = d !== now && !e.list.length && !e.doc?.mood && !e.doc?.summary && !e.note;
       const last = out.at(-1);
       if (empty && last?.empty) last.days.push(d); else out.push(empty ? { empty: true, days: [d] } : { date: d, ...e });
     }
@@ -108,7 +108,7 @@ export default function DiaryDesk({ info, onPick, burst }) {
         <div className="flex flex-col">
           {blocks.map(b => b.empty
             ? <EmptyRun key={b.days[0]} days={b.days} onPick={onPick} />
-            : <DaySection key={b.date} b={b} on={b.date === active} refFn={el => secs.current.set(b.date, el)} onPick={onPick} />)}
+            : <DaySection key={b.date} b={{ ...b, onPick }} on={b.date === active} refFn={el => secs.current.set(b.date, el)} />)}
           <div ref={more} className="h-[60vh]" />
         </div>
       </div>
@@ -196,68 +196,106 @@ function MoodSlider({ date, mood, burst }) {
   );
 }
 
-const DOT = { thought: "bg-[var(--ink)]", done: "bg-good", task: "bg-good", habit: "bg-violet-500" };
+// time of day: night, morning, day, evening
+export const PARTS = [
+  { k: "утро", c: "#f59e0b" }, { k: "день", c: "#0ea5e9" }, { k: "вечер", c: "#a855f7" }, { k: "ночь", c: "#6366f1" },
+];
+const partOf = at => { if (!at) return null; const h = new Date(at).getHours(); return PARTS[h < 6 || h >= 23 ? 3 : h < 12 ? 0 : h < 18 ? 1 : 2]; };
 
-function DaySection({ b, on, refFn, onPick }) {
-  const { date, list, doc, note } = b, t = dayTitle(date), mood = moodOf(doc?.mood);
-  const marks = MARKS.filter(m => doc?.marks?.includes(m.k)), photos = doc?.photos || [];
+function DaySection({ b, on, refFn }) {
+  const { date, list, doc, note } = b, t = dayTitle(date), mood = moodOf(doc?.mood), isToday = date === today();
+  const marks = MARKS.filter(m => doc?.marks?.includes(m.k));
   const done = list.filter(e => e.kind !== "thought").length;
+  const tint = mood ? { backgroundImage: `linear-gradient(90deg, ${mood.color}1c, transparent 60%)`, boxShadow: `inset 3px 0 0 ${mood.color}` } : undefined;
   return (
-    <section ref={refFn} data-date={date} className="scroll-mt-32 pt-5 pb-3">
+    <section ref={refFn} data-date={date} style={tint}
+      className={cn("group/day my-1.5 scroll-mt-32 rounded-2xl px-4 pt-3 pb-3 transition-colors", isToday && "border bg-card shadow-sm")}>
       <header className="mb-2 flex items-baseline gap-2.5">
-        <button type="button" onClick={() => onPick(date)} className="group flex items-baseline gap-2 text-left" title="Открыть день целиком">
-          <h2 className={cn("text-lg font-semibold tracking-tight transition-colors", !on && "text-foreground/80")}>{t.main}</h2>
+        <button type="button" onClick={() => b.onPick(date)} className="group flex items-baseline gap-2 text-left" title="Открыть день целиком">
+          <h2 className={cn("text-lg font-semibold tracking-tight transition-colors", !on && !isToday && "text-foreground/80")}>{t.main}</h2>
           <span className="text-sm text-muted-foreground group-hover:text-foreground">{t.sub}</span>
         </button>
+        {isToday && <span className="self-center rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">сейчас</span>}
         {mood && <span className="inline-flex items-center gap-1 self-center rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: mood.color + "22", color: mood.color }}><mood.icon className="size-3.5" />{mood.label}</span>}
         {marks.map(m => <m.icon key={m.k} className="size-3.5 self-center" style={{ color: m.color, fill: m.color }} aria-label={m.short} />)}
         {done > 0 && <span className="ml-auto self-center text-xs text-muted-foreground tabular-nums"><b className="font-semibold text-good">✓ {done}</b> {plural(done, ["дело", "дела", "дел"])}</span>}
       </header>
-      {photos.length > 0 && (
-        <button type="button" onClick={() => onPick(date)} className="mb-2 ml-[3.65rem] flex gap-1.5">
-          {photos.slice(0, 5).map(p => <Thumb key={p.path} path={p.path} className="size-14 rounded-lg object-cover" />)}
-          {photos.length > 5 && <span className="grid size-14 place-items-center rounded-lg bg-muted text-xs text-muted-foreground">+{photos.length - 5}</span>}
-        </button>
-      )}
       {list.length > 0 ? (
         <ol className="flex flex-col">
           <AnimatePresence initial={false}>
-            {list.map(e => (
-              <motion.li key={e.key} layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
-                className="group grid grid-cols-[2.9rem_1fr_auto] gap-x-2">
-                <span className="pt-[3px] text-right text-xs text-muted-foreground tabular-nums">{hm(e.at)}</span>
-                <div className="relative border-l pb-2 pl-4">
-                  {e.kind === "thought"
-                    ? <span aria-hidden className={cn("absolute top-[9px] -left-[4.5px] size-2 rounded-full ring-4 ring-background", DOT[e.kind])} />
-                    : <span aria-hidden className={cn("absolute top-[5px] -left-[7.5px] grid size-3.5 place-items-center rounded-full text-white ring-4 ring-background", DOT[e.kind])}><CheckIcon className="size-2.5" strokeWidth={3.5} /></span>}
-                  {e.kind === "thought"
-                    ? <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{e.text}</p>
-                    : <p className="text-[14px] leading-relaxed text-foreground/85">
-                        {e.open ? <button type="button" onClick={e.open} className="text-left hover:underline">{e.text}</button> : e.text}
-                        {e.where && <span className="ml-2 text-xs text-muted-foreground">{e.where}</span>}
-                        {e.kind === "habit" && <span className="ml-2 text-xs text-muted-foreground">привычка</span>}
-                      </p>}
-                </div>
-                {e.del ? (
-                  <button type="button" onClick={e.del} aria-label="Удалить запись"
-                    className="grid size-6 place-items-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100">
-                    <XIcon className="size-3.5" />
-                  </button>
-                ) : <span />}
-              </motion.li>
-            ))}
+            {list.map(e => {
+              const part = partOf(e.at), thought = e.kind === "thought";
+              return (
+                <motion.li key={e.key} layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
+                  className="group grid grid-cols-[2.9rem_1fr_auto] gap-x-3">
+                  <span className="pt-[4px] text-right text-xs font-medium tabular-nums" style={{ color: part?.c }} title={part?.k}>{hm(e.at)}</span>
+                  <div className="relative border-l-2 pb-1.5 pl-4" style={{ borderColor: part ? part.c + "70" : "color-mix(in oklch, var(--foreground) 18%, transparent)" }}>
+                    {thought
+                      ? <span aria-hidden className="absolute top-[9px] -left-[6px] size-2.5 rounded-full ring-4 ring-background" style={{ background: part?.c || "var(--ink)" }} />
+                      : <span aria-hidden className={cn("absolute top-[7px] -left-[8px] grid size-3.5 place-items-center rounded-[5px] text-white ring-4 ring-background", e.kind === "habit" ? "bg-violet-500" : "bg-good")}><CheckIcon className="size-2.5" strokeWidth={3.5} /></span>}
+                    {thought
+                      ? <p className="py-0.5 text-[15px] leading-relaxed whitespace-pre-wrap">{e.text}</p>
+                      : <p className="-ml-1.5 inline-flex max-w-full items-baseline gap-2 rounded-md bg-good/[0.08] px-1.5 py-0.5 text-[13.5px] leading-relaxed text-foreground/80">
+                          {e.open ? <button type="button" onClick={e.open} className="min-w-0 text-left hover:underline">{e.text}</button> : <span className="min-w-0">{e.text}</span>}
+                          {e.where && <span className="shrink-0 text-[11px] text-muted-foreground">{e.where}</span>}
+                          {e.kind === "habit" && <span className="shrink-0 text-[11px] text-muted-foreground">привычка</span>}
+                        </p>}
+                  </div>
+                  {e.del ? (
+                    <button type="button" onClick={e.del} aria-label="Удалить запись"
+                      className="grid size-6 place-items-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100">
+                      <XIcon className="size-3.5" />
+                    </button>
+                  ) : <span />}
+                </motion.li>
+              );
+            })}
           </AnimatePresence>
         </ol>
-      ) : <p className="ml-[3.65rem] pl-4 text-sm text-muted-foreground/70">{date === today() ? "Пока пусто. Напиши строчку сверху." : "Без записей."}</p>}
-      {note && <p className="mt-1 ml-[3.65rem] rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">{note}</p>}
+      ) : <p className="ml-[3.9rem] pl-4 text-sm text-muted-foreground/70">{isToday ? "Пока пусто. Напиши строчку сверху." : "Без записей."}</p>}
+      <DaySummary date={date} doc={doc} note={note} className="mt-2 ml-[3.9rem] w-[calc(100%-3.9rem)]" quiet={!isToday} />
     </section>
+  );
+}
+
+// the day in a couple of lines: a verdict, a lesson ("⚠️ Фейл: …"). Old journal notes show here until rewritten.
+export function DaySummary({ date, doc, note = "", className, quiet }) {
+  const value = doc?.summary ?? "";
+  const shown = value || note;
+  const [edit, setEdit] = useState(false);
+  const [text, setText] = useState("");
+  const ta = useRef(null);
+  useEffect(() => { const el = ta.current; if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }, [text, edit]);
+  const start = () => { setText(shown); setEdit(true); setTimeout(() => { const el = ta.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }); };
+  const save = () => { setEdit(false); const v = text.trim(); if (v !== value) put("days", dayId(date), { date, summary: v }); };
+  if (edit) return (
+    <div className={className}>
+      <textarea ref={ta} value={text} rows={2} onChange={e => setText(e.target.value)} onBlur={save}
+        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); save(); } if (e.key === "Escape") setEdit(false); }}
+        placeholder="Итог дня: как прошёл, что понял. Например: ⚠️ Фейл: … Вывод: …" aria-label="Итог дня"
+        className="w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm leading-relaxed outline-none focus:ring-2 focus:ring-ring/40" />
+    </div>
+  );
+  if (shown) return (
+    <button type="button" onClick={start} title="Изменить итог дня"
+      className={cn("group/sum relative block w-full rounded-lg border-l-2 border-foreground/25 bg-muted/70 px-3 py-2 text-left text-sm leading-relaxed whitespace-pre-wrap hover:bg-muted", className)}>
+      <span className="mb-0.5 block text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Итог дня</span>
+      {shown}
+      <PencilLineIcon className="absolute top-2 right-2 size-3.5 text-muted-foreground opacity-0 group-hover/sum:opacity-100" />
+    </button>
+  );
+  return (
+    <button type="button" onClick={start}
+      className={cn("flex items-center gap-1.5 text-xs text-muted-foreground transition-opacity hover:text-foreground", quiet && "opacity-0 group-hover/day:opacity-100 focus:opacity-100", className)}>
+      <PencilLineIcon className="size-3.5" />итог дня
+    </button>
   );
 }
 
 function EmptyRun({ days, onPick }) {
   const n = days.length;
   return (
-    <button type="button" onClick={() => onPick(days[0])} className="my-1 ml-[3.65rem] flex items-center gap-2 py-1 text-left text-xs text-muted-foreground/70 hover:text-foreground">
+    <button type="button" onClick={() => onPick(days[0])} className="my-1 ml-[3.9rem] flex items-center gap-2 py-1 text-left text-xs text-muted-foreground/70 hover:text-foreground">
       <span className="h-px w-6 bg-border" />
       {n === 1 ? dayTitle(days[0]).main + " · без записей" : n + " " + plural(n, ["день", "дня", "дней"]) + " без записей"}
     </button>
@@ -282,6 +320,9 @@ function MiniCalendar({ info, sel, onPick }) {
       <MonthGrid y={d.getFullYear()} m={d.getMonth()} big bare info={info} sel={sel} onPick={onPick} hover={() => {}} leave={() => {}} />
       <div className="mt-2.5 flex flex-wrap justify-center gap-x-2.5 gap-y-1 text-[10.5px] text-muted-foreground">
         {MOODS.map(m => <span key={m.v} className="flex items-center gap-1"><i className="size-2 rounded-[3px]" style={{ background: m.color }} />{m.label}</span>)}
+      </div>
+      <div className="mt-1.5 flex justify-center gap-x-2.5 border-t pt-1.5 text-[10.5px] text-muted-foreground">
+        {PARTS.map(p => <span key={p.k} className="flex items-center gap-1"><i className="h-2 w-0.5 rounded-full" style={{ background: p.c }} />{p.k}</span>)}
       </div>
     </section>
   );

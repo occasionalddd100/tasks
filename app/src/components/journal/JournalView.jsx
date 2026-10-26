@@ -8,12 +8,11 @@ import {
 import { toast } from "sonner";
 import { useDb, getDb, put, update } from "@/lib/db";
 import { today, addDays, dayDiff, fmtDate, plural, MONTHS } from "@/lib/tasks";
-import { usePhotoUrl, uploadPhoto, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 import { Badge, Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import DayTimeline from "@/components/journal/DayTimeline";
-import DiaryDesk from "@/components/journal/DiaryDesk";
+import DiaryDesk, { DaySummary } from "@/components/journal/DiaryDesk";
 import { PillTab, PillTabs } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
 import DraftsCard from "@/components/tasks/Drafts";
@@ -67,7 +66,7 @@ export default function JournalView({ mode = "timeline" }) {
     items: [...(items.get(date)?.items || []), ...(mine.get(date)?.extra || []).map(x => ({ text: exText(x), from: "вручную" }))],
     note: items.get(date)?.note || "", doc: mine.get(date),
   });
-  const active = date => { const i = info(date); return i.items.length > 0 || !!i.doc?.mood || !!dayText(i.doc) || !!i.doc?.photos?.length; };
+  const active = date => { const i = info(date); return i.items.length > 0 || !!i.doc?.mood || !!dayText(i.doc) ; };
 
   const streak = useMemo(() => {
     let n = 0, d = new Date();
@@ -83,7 +82,6 @@ export default function JournalView({ mode = "timeline" }) {
   // the lower part (diary, days, totals) is one block with its own tabs; the top is the day itself
   const [tab, setTabRaw] = useState(() => { try { const t = localStorage.getItem("journalTab"); return TABS.some(x => x.k === t) ? t : "diary"; } catch { return "day"; } });
   const setTab = t => { setTabRaw(t); try { localStorage.setItem("journalTab", t); } catch {} };
-  const memories = useMemories(info, mine);
   // on a computer "Дневник" and "Дни" are one screen: the day feed with a calendar on the side
   const desk = useMedia("(min-width: 1024px)");
   const shownTab = desk && tab === "days" ? "diary" : tab;
@@ -101,7 +99,6 @@ export default function JournalView({ mode = "timeline" }) {
       <header className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Дневник</h1>
-          <span className="ml-auto"><MemoriesButton cards={memories} onPick={pick} /></span>
         </div>
         {!desk && <div className="flex flex-wrap gap-2">
           <Badge>сегодня: <b>{todayDone}</b> {plural(todayDone, ["дело", "дела", "дел"])}</Badge>
@@ -298,21 +295,13 @@ function Legend() {
 
 // big hover card: cover photo, mood, memo, what got done
 function Tip({ date, x, y, h, i }) {
-  const mood = moodOf(i.doc?.mood), marks = MARKS.filter(m => i.doc?.marks?.includes(m.k)), photo = i.doc?.photos?.[0];
+  const mood = moodOf(i.doc?.mood), marks = MARKS.filter(m => i.doc?.marks?.includes(m.k));
   const W = 288, below = y < 340;
   const left = Math.max(8, Math.min(innerWidth - W - 8, x - W / 2));
   return createPortal(
     <motion.div initial={{ opacity: 0, scale: 0.92, y: below ? -6 : 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ type: "spring", bounce: 0.25, duration: 0.3 }}
       className="pointer-events-none fixed z-50 overflow-hidden rounded-2xl border bg-popover text-popover-foreground shadow-2xl"
       style={{ left, width: W, ...(below ? { top: y + h + 8 } : { bottom: innerHeight - y + 8 }), transformOrigin: below ? "top center" : "bottom center" }}>
-      {photo && (
-        <div className="relative h-40 overflow-hidden bg-muted">
-          <motion.div initial={{ scale: 1.15 }} animate={{ scale: 1 }} transition={{ duration: 0.6, ease: "easeOut" }} className="size-full">
-            <Thumb path={photo.path} className="size-full object-cover" />
-          </motion.div>
-          {i.doc.photos.length > 1 && <span className="absolute right-2 bottom-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">+{i.doc.photos.length - 1} фото</span>}
-        </div>
-      )}
       {mood && <div className="h-1" style={{ background: mood.color }} />}
       <div className="flex flex-col gap-1.5 p-3">
         <div className="flex items-center gap-2">
@@ -393,11 +382,11 @@ function DayEditor({ date, info, burst }) {
           <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-muted-foreground"><SparklesIcon className="size-3.5" />{isToday ? "Мысли за сегодня" : "Мысли и записи"}</p>
           <Thoughts date={date} doc={doc} />
         </div>
-        <Photos date={date} photos={doc?.photos || []} save={save} />
+        <DaySummary date={date} doc={doc} note={note} />
 
         <ExtraDone date={date} extra={doc?.extra || []} save={save} />
         <DayTasks date={date} />
-        <DoneList items={items.filter(it => it.from !== "вручную" && it.from !== "из задач")} note={note} future={future} title="Привычки и прочее" hideEmpty />
+        <DoneList items={items.filter(it => it.from !== "вручную" && it.from !== "из задач")} future={future} title="Привычки и прочее" hideEmpty />
       </div>
   );
 }
@@ -641,25 +630,13 @@ function DayLine({ date, doc }) {
 }
 
 function DayRead({ date, i, onEdit }) {
-  const mood = moodOf(i.doc?.mood), marks = MARKS.filter(m => i.doc?.marks?.includes(m.k)), photos = i.doc?.photos || [];
-  const [lb, setLb] = useState(null);
-  const empty = !mood && !marks.length && !dayText(i.doc) && !photos.length;
+  const mood = moodOf(i.doc?.mood), marks = MARKS.filter(m => i.doc?.marks?.includes(m.k));
+  const empty = !mood && !marks.length && !dayText(i.doc) && !i.doc?.summary && !i.note;
   return (
     <div className="flex flex-col gap-5">
     <DayLine date={date} doc={i.doc} />
     <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start">
     <div className="flex min-w-0 flex-col gap-4">
-      {photos.length > 0 && (
-        <div className={cn("grid gap-2", photos.length === 1 ? "grid-cols-1" : "grid-cols-3")}>
-          {photos.slice(0, 4).map((p, k) => (
-            <motion.button key={p.path} type="button" onClick={() => setLb(k)} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: k * 0.05 }}
-              className={cn("group relative overflow-hidden rounded-xl bg-muted", photos.length === 1 ? "aspect-[16/10]" : k === 0 ? "col-span-3 aspect-[16/9]" : "aspect-square")}>
-              <Thumb path={p.path} className="size-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              {k === 3 && photos.length > 4 && <span className="absolute inset-0 grid place-items-center bg-black/50 text-lg font-semibold text-white">+{photos.length - 4}</span>}
-            </motion.button>
-          ))}
-        </div>
-      )}
       {(mood || marks.length > 0) && (
         <div className="flex flex-wrap items-center gap-2">
           {mood && <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold" style={{ background: mood.color + "22", color: mood.color }}><mood.icon className="size-4" />{mood.label}</span>}
@@ -667,6 +644,7 @@ function DayRead({ date, i, onEdit }) {
         </div>
       )}
       {dayText(i.doc) && <Thoughts date={date} doc={i.doc} readOnly />}
+      <DaySummary date={date} doc={i.doc} note={i.note} />
       {empty && (
         <button type="button" onClick={onEdit} className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground">
           <SparklesIcon className="size-5" />{date === today() ? "Написать о сегодня" : "Этот день пока без записи. Добавить?"}
@@ -675,10 +653,9 @@ function DayRead({ date, i, onEdit }) {
     </div>
     <div className="flex min-w-0 flex-col gap-4">
       <DayTasks date={date} />
-      <DoneList items={i.items.filter(it => it.from !== "из задач")} note={i.note} future={date > today()} title="Ещё сделано" hideEmpty />
+      <DoneList items={i.items.filter(it => it.from !== "из задач")} future={date > today()} title="Ещё сделано" hideEmpty />
     </div>
     </div>
-      <Lightbox photos={photos} index={lb} setIndex={setLb} />
     </div>
   );
 }
@@ -702,126 +679,8 @@ function Memo({ date, value, save }) {
   );
 }
 
-function Photos({ date, photos, save }) {
-  const input = useRef(null);
-  const [busy, setBusy] = useState(0);
-  const [open, setOpen] = useState(null);
-  const [over, setOver] = useState(false);
 
-  const addFiles = async files => {
-    const list = [...files].filter(f => f.type.startsWith("image/"));
-    if (!list.length) return;
-    setBusy(list.length);
-    for (const f of list) {
-      try {
-        if (f.size > 25e6) throw new Error("файл больше 25 МБ");
-        const p = await uploadPhoto(f, date);
-        const cur = getDb().days.find(d => d.id === dayId(date))?.photos || [];
-        await save({ photos: [...cur, p] });
-      } catch (e) { toast.error("Фото не загрузилось: " + (e.message || e)); }
-      setBusy(b => b - 1);
-    }
-  };
-  // Ctrl+V anywhere while the day is open puts a copied picture into the day's photos
-  const addRef = useRef(addFiles); addRef.current = addFiles;
-  useEffect(() => {
-    const on = e => { const f = [...(e.clipboardData?.files || [])].filter(x => x.type.startsWith("image/")); if (f.length) { e.preventDefault(); addRef.current(f); } };
-    window.addEventListener("paste", on);
-    return () => window.removeEventListener("paste", on);
-  }, []);
-  // button for phones: read a picture from the clipboard
-  const pasteClip = async () => {
-    try {
-      const out = [];
-      for (const it of await navigator.clipboard.read()) {
-        const type = it.types.find(t => t.startsWith("image/"));
-        if (type) { const b = await it.getType(type); out.push(new File([b], "clip." + type.split("/")[1], { type })); }
-      }
-      out.length ? addFiles(out) : toast("В буфере нет картинки");
-    } catch { toast("Не получилось прочитать буфер. На компьютере просто нажми Ctrl+V"); }
-  };
-  const del = async p => {
-    setOpen(null);
-    const cur = getDb().days.find(d => d.id === dayId(date))?.photos || [];
-    await save({ photos: cur.filter(x => x.path !== p.path) });
-    deletePhoto(p.path);
-  };
 
-  return (
-    <div onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
-      onDrop={e => { e.preventDefault(); setOver(false); addFiles(e.dataTransfer.files); }}>
-      <p className="mb-2 flex items-baseline gap-2 text-sm font-medium text-muted-foreground">Фото дня<span className="text-xs font-normal opacity-70 max-md:hidden">перетащи или вставь Ctrl+V</span></p>
-      <div className={cn("grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-2 rounded-xl transition-shadow sm:grid-cols-[repeat(auto-fill,7rem)]", over && "ring-2 ring-ring/50 ring-offset-4 ring-offset-card")}>
-        <AnimatePresence initial={false}>
-          {photos.map((p, k) => (
-            <motion.button key={p.path} type="button" layout initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.85 }}
-              onClick={() => setOpen(k)} className="group relative aspect-square overflow-hidden rounded-xl bg-muted">
-              <Thumb path={p.path} className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
-            </motion.button>
-          ))}
-          {Array.from({ length: busy }, (_, k) => (
-            <motion.div key={"b" + k} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid aspect-square animate-pulse place-items-center rounded-xl bg-muted">
-              <Loader2Icon className="size-5 animate-spin text-muted-foreground" />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        <button type="button" onClick={() => input.current?.click()}
-          className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-accent/40 hover:text-foreground">
-          <ImagePlusIcon className="size-5" />добавить
-        </button>
-        {"clipboard" in navigator && "read" in navigator.clipboard && (
-          <button type="button" onClick={pasteClip}
-            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-accent/40 hover:text-foreground">
-            <ClipboardPasteIcon className="size-5" />вставить
-          </button>
-        )}
-      </div>
-      <input ref={input} type="file" accept="image/*" multiple hidden onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
-      <Lightbox photos={photos} index={open} setIndex={setOpen} onDelete={del} />
-    </div>
-  );
-}
-
-export function Thumb({ path, className, style }) {
-  const url = usePhotoUrl(path);
-  const [loaded, setLoaded] = useState(false);
-  return url
-    ? <img src={url} alt="" loading="lazy" style={style} onLoad={() => setLoaded(true)} className={cn(className, "transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")} />
-    : <div className={cn(className, "animate-pulse bg-muted")} />;
-}
-
-function Lightbox({ photos, index, setIndex, onDelete }) {
-  const p = index != null ? photos[index] : null;
-  const url = usePhotoUrl(p?.path);
-  const [armed, setArmed] = useState(false);
-  useEffect(() => setArmed(false), [index]);
-  const step = n => setIndex(i => (i + n + photos.length) % photos.length);
-  return (
-    <Dialog open={!!p} onOpenChange={o => !o && setIndex(null)}>
-      <DialogContent className="grid-cols-[minmax(0,1fr)] max-w-[min(64rem,calc(100%-1rem))] gap-3 border-none bg-black/90 p-3 text-white sm:max-w-[min(64rem,calc(100%-2rem))]"
-        onKeyDown={e => { if (e.key === "ArrowRight") step(1); if (e.key === "ArrowLeft") step(-1); }}>
-        <DialogTitle className="sr-only">Фото дня</DialogTitle>
-        <div className="relative grid min-h-60 place-items-center">
-          <AnimatePresence mode="wait">
-            {url && <motion.img key={p?.path} src={url} alt="" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-              className="max-h-[78vh] max-w-full w-auto rounded-lg object-contain" />}
-          </AnimatePresence>
-          {photos.length > 1 && <>
-            <button type="button" onClick={() => step(-1)} className="absolute left-1 grid size-10 place-items-center rounded-full bg-black/40 hover:bg-black/60" aria-label="Предыдущее"><ChevronLeftIcon /></button>
-            <button type="button" onClick={() => step(1)} className="absolute right-1 grid size-10 place-items-center rounded-full bg-black/40 hover:bg-black/60" aria-label="Следующее"><ChevronRightIcon /></button>
-          </>}
-        </div>
-        <div className="flex items-center justify-between text-sm text-white/70">
-          <span>{index + 1} / {photos.length}</span>
-          {onDelete && <button type="button" onClick={() => armed ? onDelete(p) : setArmed(true)}
-            className={cn("inline-flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-white/10", armed && "text-red-400")}>
-            <Trash2Icon className="size-4" />{armed ? "точно удалить?" : "удалить"}
-          </button>}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /* ───────────── numbers ───────────── */
 
@@ -841,7 +700,6 @@ function Stats({ info, items, mine, streak }) {
       moods, avg, rated: rated.length, week, prev, dist,
       hearts: events.filter(d => d.marks?.includes("heart")).length,
       stars: events.filter(d => d.marks?.includes("star")).length,
-      photos: events.reduce((a, d) => a + (d.photos?.length || 0), 0),
     };
   }, [items, mine]);
   const avgMood = moodOf(Math.round(s.avg));
@@ -872,7 +730,6 @@ function Stats({ info, items, mine, streak }) {
       <div className="col-span-2 flex items-center justify-around gap-2 rounded-2xl border bg-card p-3 shadow-xs">
         <Count icon={HeartIcon} color="#ec4899" n={s.hearts} label={plural(s.hearts, ["важное событие", "важных события", "важных событий"])} />
         <Count icon={StarIcon} color="#eab308" n={s.stars} label={plural(s.stars, ["достижение", "достижения", "достижений"])} />
-        <Count icon={ImagePlusIcon} color="#38bdf8" n={s.photos} label="фото за год" />
       </div>
     </section>
   );
@@ -933,118 +790,16 @@ function Spark({ values }) {
 
 /* ───────────── overview ───────────── */
 
-const hasEntry = i => !!(i.doc?.mood || dayText(i.doc) || i.doc?.photos?.length || i.doc?.marks?.length);
 
 // written out plainly (not Tailwind's filter variables) so the blur also works in the phone app's WebView
-const SOFT = { filter: "blur(12px) brightness(0.55) saturate(1.2)", WebkitFilter: "blur(12px) brightness(0.55) saturate(1.2)" };
 const GLASS = { backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" };
 
-function Cover({ photo, mood, sharp, className, children }) {
-  return (
-    <div className={cn("relative overflow-hidden", className)} style={!photo ? { background: mood ? `linear-gradient(135deg, ${mood.color}55, ${mood.color}11)` : undefined } : undefined}>
-      {photo && <Thumb path={photo.path} className={cn("absolute inset-0 size-full object-cover transition-transform duration-700",
-        sharp ? "group-hover:scale-105" : "scale-110 group-hover:scale-[1.16]")} style={sharp ? undefined : SOFT} />}
-      {photo && <div className={cn("absolute inset-0 bg-gradient-to-t", sharp ? "from-black/70 via-transparent to-black/45" : "from-black/75 via-black/35 to-black/20")} />}
-      {children}
-    </div>
-  );
-}
 
-// "on this day", but smart: same date a week/month/quarter/year ago, then the brightest recent days
-function useMemories(info, mine) {
-  return useMemo(() => {
-    const out = [], seen = new Set();
-    const back = (k, unit) => { const d = new Date(); unit === "d" ? d.setDate(d.getDate() - k) : d.setMonth(d.getMonth() - k); return iso(d); };
-    for (const [d, label] of [[back(7, "d"), "Неделю назад"], [back(1, "m"), "Месяц назад"], [back(3, "m"), "3 месяца назад"], [back(6, "m"), "Полгода назад"], [back(12, "m"), "Год назад"]]) {
-      const i = info(d); if (hasEntry(i)) { out.push({ d, label, i }); seen.add(d); }
-    }
-    const score = x => (x.photos?.length ? 3 : 0) + (x.marks?.includes("heart") ? 3 : 0) + (x.marks?.includes("star") ? 2 : 0) + (x.mood === 5 ? 2 : x.mood === 4 ? 1 : 0) + (dayText(x) ? 1 : 0);
-    const from = addDays(-90), now = today();
-    const best = [...mine.values()].filter(x => x.date >= from && x.date < now && !seen.has(x.date) && score(x) >= 3).sort((a, b) => score(b) - score(a) || b.date.localeCompare(a.date)).slice(0, 8);
-    for (const x of best) out.push({ d: x.date, label: x.marks?.includes("heart") ? "Важный день" : x.marks?.includes("star") ? "Достижение" : x.photos?.length ? "Яркий момент" : "Хороший день", i: info(x.date) });
-    return out;
-  }, [mine]);
-}
 
-const SEEN = "seenMemories";
-const loadSeen = () => { try { return new Set(JSON.parse(localStorage.getItem(SEEN) || "[]")); } catch { return new Set(); } };
 
-// header button: glows while there are memories not opened yet
-function MemoriesButton({ cards, onPick }) {
-  const [open, setOpen] = useState(false);
-  const [seen, setSeen] = useState(loadSeen);
-  const fresh = cards.filter(c => !seen.has(c.d + c.label)).length;
-  const show = () => {
-    setOpen(true);
-    const n = new Set([...seen, ...cards.map(c => c.d + c.label)]);
-    setSeen(n); try { localStorage.setItem(SEEN, JSON.stringify([...n].slice(-200))); } catch {}
-  };
-  return (
-    <>
-      <motion.button type="button" onClick={show} whileTap={{ scale: 0.95 }}
-        className={cn("relative inline-flex h-9 items-center gap-2 overflow-hidden rounded-full border px-3.5 text-sm font-medium transition-colors",
-          fresh ? "border-amber-400/60 bg-amber-400/10 text-foreground" : "bg-card text-muted-foreground hover:text-foreground")}>
-        {fresh > 0 && <motion.span aria-hidden className="absolute inset-0 rounded-full" style={{ background: "radial-gradient(circle at 30% 50%, #fbbf2455, transparent 70%)" }}
-          animate={{ opacity: [0.3, 1, 0.3], scale: [1, 1.08, 1] }} transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }} />}
-        <motion.span className="relative" animate={fresh ? { rotate: [0, -12, 12, 0], scale: [1, 1.2, 1] } : {}} transition={{ duration: 1.2, repeat: fresh ? Infinity : 0, repeatDelay: 1.5 }}>
-          <SparklesIcon className={cn("size-4", fresh ? "text-amber-500" : "")} />
-        </motion.span>
-        <span className="relative">Воспоминания</span>
-        {fresh > 0 && <span className="relative grid h-5 min-w-5 place-items-center rounded-full bg-amber-500 px-1.5 text-[11px] font-bold text-white tabular-nums">{fresh}</span>}
-      </motion.button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-4xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl">
-          <DialogTitle className="flex items-center gap-2"><SparklesIcon className="size-5 text-amber-500" />Воспоминания</DialogTitle>
-          {!cards.length && <p className="text-sm text-muted-foreground">Пока пусто. Сюда попадают тот же день неделю, месяц, полгода и год назад, если в нём есть запись, и самые яркие дни за 3 месяца: с сердцем, звездой, фото или отличным настроением.</p>}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {cards.map(({ d, label, i }, k) => {
-              const mood = moodOf(i.doc?.mood), photo = i.doc?.photos?.[0], text = dayText(i.doc);
-              return (
-                <motion.button key={d} type="button" onClick={() => { setOpen(false); onPick(d); }} initial={{ opacity: 0, y: 16, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.05 + k * 0.05 }}
-                  whileHover={{ y: -4 }} className="group overflow-hidden rounded-2xl border bg-card text-left shadow-sm">
-                  <Cover photo={photo} mood={mood} className="h-44">
-                    <div className={cn("relative flex h-full flex-col gap-1 p-3.5", photo && "text-white")}>
-                      <span style={GLASS} className={cn("self-start rounded-full px-2.5 py-0.5 text-[11px] font-semibold", photo ? "bg-white/20" : "bg-background/70")}>{label}</span>
-                      <div className="mt-auto flex items-center gap-1.5">
-                        <span className="text-sm font-semibold">{fmtDate(d)}</span>
-                        {mood && <mood.icon className="ml-auto size-4 shrink-0" style={{ color: photo ? "#fff" : mood.color }} />}
-                      </div>
-                      {text && <p className={cn("line-clamp-2 text-[13px] leading-snug", photo ? "text-white/85" : "text-muted-foreground")}>{text}</p>}
-                    </div>
-                  </Cover>
-                </motion.button>
-              );
-            })}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
 
 /* ───────────── today & thoughts ───────────── */
 
-// today's tasks front and centre: done and still open, with the day's mood next to it
-function TodayPanel({ i, onOpen }) {
-  const mood = moodOf(i.doc?.mood), photo = i.doc?.photos?.[0];
-  return (
-    <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <div className="flex items-center gap-3 border-b px-4 py-3">
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Сегодня</div>
-          <div className="truncate text-lg font-bold tracking-tight">{fmtDate(today()).replace("Сегодня · ", "")}</div>
-        </div>
-        {photo && <button type="button" onClick={() => onOpen(false)} className="size-10 shrink-0 overflow-hidden rounded-lg border"><Thumb path={photo.path} className="size-full object-cover" /></button>}
-        <button type="button" onClick={() => onOpen(!mood)} title={mood ? "Открыть день" : "Отметить настроение"}
-          className="grid size-10 shrink-0 place-items-center rounded-xl border transition-transform hover:scale-105" style={mood ? { background: mood.color, borderColor: mood.color } : undefined}>
-          {mood ? <mood.icon className="size-6 text-white" /> : <SmileIcon className="size-5 text-muted-foreground" />}
-        </button>
-        <button type="button" onClick={() => onOpen(false)} className="h-10 shrink-0 rounded-xl border px-3 text-sm font-medium hover:bg-accent">Открыть<span className="max-sm:hidden"> день</span></button>
-      </div>
-      <div className="p-4"><DayTasks date={today()} /></div>
-    </motion.section>
-  );
-}
 
 // diary: short entries through the day, each with its time; the old single note shows first
 function Thoughts({ date, doc, readOnly }) {
