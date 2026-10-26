@@ -14,8 +14,14 @@ export const focusOpen = db => focusList(db).filter(t => !t.done).length;
 
 export function toFocus(t) {
   const max = Math.max(0, ...getDb().tasks.filter(inFocus).map(x => x.focus));
-  update("tasks", t.id, { focus: max + 1, focusBy: getDb().me });
+  update("tasks", t.id, { focus: max + 1, focusBy: getDb().me, parked: null, parkedBy: "" });
 }
+
+// Ведёрко: work put aside for later. `parked` is when it went in; like `focus`, it is mine only.
+export const inBucket = t => typeof t?.parked === "number" && !t.done && (t.parkedBy || t._owner) === getDb().me;
+export const bucketList = db => db.tasks.filter(inBucket).sort((a, b) => b.parked - a.parked);
+export const toBucket = t => update("tasks", t.id, { focus: null, focusBy: "", parked: Date.now(), parkedBy: getDb().me });
+export const fromBucket = t => update("tasks", t.id, { parked: null, parkedBy: "" });
 export const fromFocus = t => update("tasks", t.id, { focus: null, focusBy: "" });
 export const nextFocus = () => Math.max(0, ...getDb().tasks.filter(inFocus).map(x => x.focus)) + 1;
 

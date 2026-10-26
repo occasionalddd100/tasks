@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CrosshairIcon, FlameIcon, HashIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon } from "lucide-react";
-import { motion } from "motion/react";
+import { CrosshairIcon, FlameIcon, HashIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronRightIcon, CheckIcon, ArchiveIcon } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import * as Pop from "@radix-ui/react-popover";
 import { useDb, updateMany } from "@/lib/db";
-import { focusList, clearDone, inFocus, toFocus } from "@/lib/focus";
+import { focusList, clearDone, inFocus, toFocus, inBucket, toBucket } from "@/lib/focus";
+import { exText, exAt } from "@/lib/done";
+import Bucket from "@/components/tasks/Bucket";
 import { tagsOf, tagOfTask } from "@/lib/tags";
 import { draftsOf } from "@/lib/personal";
 import { cn } from "@/lib/utils";
-import { stale, byOrder, today, dueLabel } from "@/lib/tasks";
+import { stale, byOrder, today, dueLabel, dayDiff, plural } from "@/lib/tasks";
 import { Button } from "@/components/ui/button";
 import { VIEW } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
@@ -19,7 +22,7 @@ import { openTask } from "@/components/tasks/TaskSheet";
 import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
 import { Fan } from "@/components/Fan";
 import { useTasksTap } from "@/components/MobileNav";
-import { Habits } from "@/components/tasks/ProjectViews";
+import { Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { openTagEditor } from "@/components/tasks/TagEditor";
 
 // The home screen. On top: add a task (with a tag it lands on that board). Then "В работе": what I'm on now,
@@ -51,16 +54,20 @@ export default function FocusView() {
     const me = db.me, now = today();
     const rank = t => (t.due && t.due < now ? 0 : t.due === now ? 1 : t.prio === "urgent" ? 2 : t.due ? 3 : 4);
     const mine = new Set([drafts?.id, ...tags.map(t => t.id)]);
-    return db.tasks.filter(t => mine.has(t.cat) && !t.done && !t.hidden && !t.parent && !inFocus(t) && t.text?.trim() && (!t.assignee || t.assignee === me))
+    return db.tasks.filter(t => mine.has(t.cat) && !t.done && !t.hidden && !t.parent && !inFocus(t) && !inBucket(t) && t.text?.trim() && (!t.assignee || t.assignee === me))
       .sort((a, b) => rank(a) - rank(b) || (a.due || "9").localeCompare(b.due || "9") || byOrder(a, b));
   }, [db.tasks, db.me, drafts?.id, tags.map(t => t.id).join()]);
+  const now = today();
+  const overdue = useMemo(() => rest.filter(t => t.due && t.due < now), [rest, now]);
   const groups = useMemo(() => {
     const by = new Map([[NONE, []], ...tags.map(t => [t.id, []])]);
+    // in «Все» the overdue ones have their own block on top, so they don't repeat in the rows
     for (const t of rest) {
+      if (!filter && t.due && t.due < now) continue;
       by.get(t.cat === drafts?.id ? NONE : t.cat)?.push(t);
     }
     return by;
-  }, [rest, tags.map(t => t.id).join(), drafts?.id]);
+  }, [rest, tags.map(t => t.id).join(), drafts?.id, !filter, now]);
   const shownTag = filter && (filter === NONE || filter === WORK || tags.some(t => t.id === filter)) ? filter : null;
   // a task just added from ＋ must be seen: drop a filter that would hide it
   const freshId = useFresh(), fresh = db.tasks.find(t => t.id === freshId);
@@ -81,10 +88,30 @@ export default function FocusView() {
       glyph: t.emoji ? <span className="text-xl leading-none">{t.emoji}</span> : <span className="text-base font-semibold" style={t.color ? { color: t.color } : undefined}>{(t.name.trim()[0] || "#").toUpperCase()}</span> })),
   ].filter(Boolean).slice(0, 9).concat({ id: "\u0000edit", name: "Править теги", glyph: <PencilIcon className="size-5" /> });
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  // the pail wins whenever the pointer is over it; otherwise the usual nearest slot in the list
+  const collide = args => { const hit = pointerWithin(args).find(c => c.id === "bucket"); return hit ? [hit] : closestCenter({ ...args, droppableContainers: args.droppableContainers.filter(c => c.id !== "bucket") }); };
+  const [dragId, setDragId] = useState(null);
+  const dragged = dragId && list.find(t => t.id === dragId);
+  const onDragEnd = ({ active, over }) => {
+    setDragId(null);
+    if (!over || active.id === over.id) return;
+    if (over.id === "bucket") { const t = list.find(x => x.id === active.id); if (t) toBucket(t); return; }
+    const ids = list.map(t => t.id);
+    const next = arrayMove(ids, ids.indexOf(active.id), ids.indexOf(over.id));
+    updateMany("tasks", next.map((id, i) => [id, i + 1]).filter(([id, f]) => list.find(t => t.id === id)?.focus !== f).map(([id, focus]) => [id, { focus }]));
+  };
+
   return (
+    <DndContext sensors={sensors} collisionDetection={collide} onDragStart={e => setDragId(e.active.id)} onDragCancel={() => setDragId(null)} onDragEnd={onDragEnd}>
     <div className={cn(VIEW, "max-w-5xl")}>
       <header className="flex items-center gap-2">
         <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Задачи</h1>
+        <TodayDone />
       </header>
 
       <div ref={chipsRef} className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
@@ -106,6 +133,8 @@ export default function FocusView() {
           : <WorkList list={list} />}
       </section>}
 
+      {!shownTag && overdue.length > 0 && <Overdue tasks={overdue} />}
+
       {shownTag !== WORK && <section className="flex flex-col gap-3">
         {shownTag
           ? <TagList tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
@@ -119,7 +148,13 @@ export default function FocusView() {
 
       <Fan open={fan} setOpen={setFan} items={fanItems} anchor="navRight"
         onPick={t => { if (t.id === "\u0000edit") { openTagEditor(); return; } setFilter(t.id === "\u0000all" ? null : t.id); jump(); }} />
+      <Bucket />
+      {/* the task you hold follows the finger as a small card; dropped on the pail it just vanishes into it */}
+      <DragOverlay dropAnimation={null}>
+        {dragged && <div className="max-w-72 cursor-grabbing rounded-xl border bg-card px-3 py-2 text-sm font-medium shadow-2xl" style={{ rotate: "-2deg" }}>{dragged.text}</div>}
+      </DragOverlay>
     </div>
+    </DndContext>
   );
 }
 
@@ -134,25 +169,12 @@ function TagChip({ on, color, n, onClick, children }) {
   );
 }
 
-// "В работе": drag to reorder, subtasks under their task
+// "В работе": drag to reorder, or onto the pail to put aside; subtasks under their task
 function WorkList({ list }) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-  const onDragEnd = ({ active, over }) => {
-    if (!over || active.id === over.id) return;
-    const ids = list.map(t => t.id);
-    const next = arrayMove(ids, ids.indexOf(active.id), ids.indexOf(over.id));
-    updateMany("tasks", next.map((id, i) => [id, i + 1]).filter(([id, f]) => list.find(t => t.id === id)?.focus !== f).map(([id, focus]) => [id, { focus }]));
-  };
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <SortableContext items={list.map(t => t.id)} strategy={verticalListSortingStrategy}>
-        <ul className="-mx-1">{list.map(t => <WorkItem key={t.id} t={t} />)}</ul>
-      </SortableContext>
-    </DndContext>
+    <SortableContext items={list.map(t => t.id)} strategy={verticalListSortingStrategy}>
+      <ul className="-mx-1">{list.map(t => <WorkItem key={t.id} t={t} />)}</ul>
+    </SortableContext>
   );
 }
 
@@ -168,7 +190,12 @@ function WorkItem({ t }) {
       {/* a soft tint and a thin bar in the tag's colour, so work from different tags reads apart */}
       {tag && <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full" style={{ background: tag.color }} />}
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
-        <TaskRow t={t} noFocusMark sub={name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
+        <div className="group/w relative">
+          <TaskRow t={t} noFocusMark sub={name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
+          {!t.done && <button type="button" onClick={() => toBucket(t)} title="Отложить в ведёрко" aria-label={"Отложить: " + t.text}
+            className="absolute top-1/2 right-11 grid size-7 -translate-y-1/2 place-items-center rounded-md bg-background/80 text-muted-foreground opacity-0 transition-opacity group-hover/w:opacity-100 hover:text-foreground max-md:hidden">
+            <ArchiveIcon className="size-4" /></button>}
+        </div>
         {kids.length > 0 && <ul className="mb-1 ml-9 border-l pl-2" aria-label={"Подзадачи: " + t.text}>{kids.map(k => <li key={k.id}><TaskRow t={k} noFocusMark /></li>)}</ul>}
       </motion.div>
     </li>
@@ -212,15 +239,17 @@ function Card({ t, color }) {
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k));
   const late = t.due && t.due < today();
   const hold = useHold(t);
+  const lv = levelOf(t);
   return (
     <div ref={ref} {...hold.handlers} onClick={() => !hold.held.current && openTask(t.id)} onContextMenu={e => { e.preventDefault(); if (!hold.held.current) openWheel(t, e.clientX, e.clientY, true); }}
       style={color ? { background: `color-mix(in oklab, var(--card) 84%, ${color})`, borderColor: `color-mix(in oklab, var(--border) 50%, ${color})` } : undefined}
       className={cn("relative flex h-32 w-44 shrink-0 snap-start cursor-pointer flex-col rounded-2xl border bg-card p-3 shadow-xs transition-[transform,box-shadow] select-none [-webkit-touch-callout:none] active:scale-[.98] md:w-52",
         fresh && "ring-2 ring-primary ring-offset-2 ring-offset-background")}>
-      <p className="line-clamp-4 text-[14px] leading-snug font-medium">{t.text}</p>
+      {lv && <span aria-hidden className="absolute inset-x-3 top-0 h-[3px] rounded-b-full" style={{ background: lv.c }} />}
+      {lv && <span className="mb-1 inline-flex items-center gap-1 self-start text-[11px] font-semibold" style={{ color: lv.c }}>{lv.icon && <lv.icon className="size-3" />}{lv.l}</span>}
+      <p className={cn("text-[14px] leading-snug font-medium", lv ? "line-clamp-3" : "line-clamp-4")}>{t.text}</p>
       <div className="mt-auto flex items-center gap-1.5 pt-2 text-xs text-muted-foreground">
-        {t.due && <span className={cn("rounded-md bg-muted px-1.5 py-0.5 whitespace-nowrap", late && "text-destructive")}>{dueLabel(t.due)}{t.time ? " " + t.time : ""}</span>}
-        {t.prio === "urgent" && <FlameIcon className="size-3.5 text-red-500" />}
+        {t.due && !(lv && lv.l !== "срочно") && <span className={cn("rounded-md bg-muted px-1.5 py-0.5 whitespace-nowrap", late && "text-destructive")}>{dueLabel(t.due)}{t.time ? " " + t.time : ""}</span>}
         {kids.length > 0 && <span className="tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
         <button type="button" onClick={e => { e.stopPropagation(); toFocus(t); }} aria-label={"В работу: " + t.text}
           className="ml-auto grid size-8 place-items-center rounded-full bg-foreground/[.06] text-foreground hover:bg-primary hover:text-primary-foreground">
@@ -250,4 +279,89 @@ function useHold(t) {
     onPointerCancel: () => { clearTimeout(timer.current); if (held.current) { endWheel(); stopScroll(start.current?.el, false); held.current = false; } start.current = null; },
   };
   return { handlers, held };
+}
+
+// how pressing a task is, at a glance: overdue and urgent in red, today in amber, the next few days in blue
+const RED = "#ef4444", AMBER = "#f59e0b", BLUE = "#0ea5e9";
+export function levelOf(t) {
+  const now = today(), k = t.due ? dayDiff(now, t.due) : null;
+  if (t.due && t.due < now) return { c: RED, l: "просрочено на " + -k + " " + plural(-k, ["день", "дня", "дней"]), icon: AlarmClockIcon };
+  if (t.prio === "urgent") return { c: RED, l: "срочно", icon: FlameIcon };
+  if (t.due === now || t.prio === "today") return { c: AMBER, l: "сегодня" + (t.time ? " в " + t.time : "") };
+  if (k != null && k <= 3) return { c: BLUE, l: dueLabel(t.due) };
+  return null;
+}
+
+// overdue tasks in one block on top, folded or not (remembered)
+function Overdue({ tasks }) {
+  const [open, setOpenRaw] = useState(() => { try { return localStorage.getItem("overdueOpen") !== "0"; } catch { return true; } });
+  const setOpen = v => { setOpenRaw(v); try { localStorage.setItem("overdueOpen", v ? "1" : "0"); } catch {} };
+  return (
+    <section className="rounded-2xl border border-red-500/25 bg-red-500/[0.04]">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2.5 text-left">
+        <AlarmClockIcon className="size-4 text-red-500" />
+        <h2 className="text-base font-semibold">Просрочено</h2>
+        <span className="rounded-full bg-red-500/15 px-2 py-px text-xs font-semibold text-red-600 tabular-nums dark:text-red-400">{tasks.length}</span>
+        <ChevronRightIcon className={cn("ml-auto size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.ul initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden px-1 pb-1.5">
+            {tasks.map(t => <li key={t.id}><TaskRow t={t} /></li>)}
+          </motion.ul>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
+
+// "✓ N сегодня": hover (or tap) shows everything done today, in time order
+function TodayDone() {
+  const db = useDb();
+  const journal = useJournal(db);
+  const [open, setOpen] = useState(false);
+  const timer = useRef(0);
+  const now = today();
+  const items = useMemo(() => {
+    const out = [], hm = at => (at ? new Date(at).toTimeString().slice(0, 5) : "");
+    const byText = new Map(db.tasks.filter(t => t.done && t.doneOn === now).map(t => [t.text, t]));
+    for (const it of journal.get(now)?.items || []) {
+      const t = it.from === "из задач" ? byText.get(it.text) : null;
+      out.push({ text: it.text, at: t?.doneAt || "", time: hm(t?.doneAt), id: t?.id, habit: it.from === "повторяющаяся" });
+    }
+    const day = db.days.find(d => d.id === db.me + ":" + now);
+    for (const x of day?.extra || []) out.push({ text: exText(x), at: exAt(x) || "", time: hm(exAt(x)) });
+    return out.sort((a, b) => (a.at || "~").localeCompare(b.at || "~"));
+  }, [journal, db.days, db.tasks, now]);
+  const hover = v => { clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(v), v ? 80 : 180); };
+  return (
+    <Pop.Root open={open} onOpenChange={setOpen}>
+      <Pop.Trigger asChild>
+        <button type="button" onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)}
+          className={cn("inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors", items.length ? "border-good/40 bg-good/10 text-good" : "text-muted-foreground")}>
+          <CheckIcon className="size-4" strokeWidth={2.6} /><span className="tabular-nums">{items.length}</span><span className="max-sm:hidden">сегодня</span>
+        </button>
+      </Pop.Trigger>
+      <Pop.Portal>
+        <Pop.Content align="end" sideOffset={6} onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)} onOpenAutoFocus={e => e.preventDefault()}
+          className="z-50 w-80 max-w-[calc(100vw-2rem)] origin-(--radix-popover-content-transform-origin) rounded-2xl border bg-popover p-1.5 text-popover-foreground shadow-xl data-[state=open]:animate-[menu-in_140ms_ease-out]">
+          <p className="px-2.5 pt-1.5 pb-1 text-xs font-semibold text-muted-foreground">Сделано сегодня{items.length > 0 && ": " + items.length}</p>
+          {items.length === 0
+            ? <p className="px-2.5 pb-2 text-sm text-muted-foreground">Пока ничего. Первая галочка будет тут.</p>
+            : <ul className="max-h-80 overflow-y-auto">
+                {items.map((x, k) => (
+                  <li key={k}>
+                    <button type="button" disabled={!x.id} onClick={() => { setOpen(false); openTask(x.id); }}
+                      className="flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm enabled:hover:bg-accent">
+                      <span className="w-10 shrink-0 pt-px text-xs text-muted-foreground tabular-nums">{x.time}</span>
+                      <CheckIcon className={cn("mt-0.5 size-3.5 shrink-0", x.habit ? "text-violet-500" : "text-good")} strokeWidth={3} />
+                      <span className="min-w-0 flex-1 leading-snug">{x.text}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>}
+        </Pop.Content>
+      </Pop.Portal>
+    </Pop.Root>
+  );
 }
