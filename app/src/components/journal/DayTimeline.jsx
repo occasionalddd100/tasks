@@ -90,7 +90,7 @@ export default function DayTimeline() {
   const next = events.find(e => !e.t.done && e.when >= now);
   const missed = events.filter(e => !e.t.done && e.when < now);
   const logged = events.filter(e => e.t.log && iso(new Date(e.when)) === today()).length;
-  const toggle = t => update("tasks", t.id, t.done ? { done: false, doneOn: "", doneBy: "", hidden: false } : { done: true, doneOn: today(), doneBy: db.me });
+  const toggle = t => update("tasks", t.id, t.done ? { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false } : { done: true, doneOn: today(), doneAt: new Date().toISOString(), doneBy: db.me });
 
   return (
     <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="m-flat overflow-hidden rounded-2xl border bg-card shadow-sm">

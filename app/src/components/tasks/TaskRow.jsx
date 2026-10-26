@@ -103,7 +103,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
   const phone = usePhone(), inCard = useContext(Stacked), stack = phone || inCard;
   const dateRef = useRef(null), timeRef = useRef(null);
 
-  const toggle = v => update("tasks", t.id, v ? { done: true, doneOn: today(), doneBy: getDb().me } : { done: false, doneOn: "", doneBy: "", hidden: false });
+  const toggle = v => update("tasks", t.id, v ? { done: true, doneOn: today(), doneAt: new Date().toISOString(), doneBy: getDb().me } : { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false });
   const canHide = t.done && !stale(t) && !overlay;
   const urgent = t.prio === "urgent" && !t.done;
   const late = t.due && !t.done && (t.due < today() || (t.due === today() && t.time && t.time < new Date().toTimeString().slice(0, 5)));

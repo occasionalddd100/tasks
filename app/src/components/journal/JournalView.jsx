@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Badge, Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import DayTimeline from "@/components/journal/DayTimeline";
+import DiaryDesk from "@/components/journal/DiaryDesk";
 import { PillTab, PillTabs } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
 import DraftsCard from "@/components/tasks/Drafts";
@@ -29,7 +30,7 @@ export const MOODS = [
   { v: 2, label: "Тяжёлый", icon: FrownIcon, color: "#f59e0b" },
   { v: 1, label: "Ужасный", icon: AngryIcon, color: "#be123c" },
 ];
-const moodOf = v => MOODS.find(m => m.v === v);
+export const moodOf = v => MOODS.find(m => m.v === v);
 // marks change the cell's shape; the first one set wins
 export const MARKS = [
   { k: "heart", label: "Важное хорошее событие", short: "Событие", icon: HeartIcon, color: "#ec4899" },
@@ -83,6 +84,9 @@ export default function JournalView({ mode = "timeline" }) {
   const [tab, setTabRaw] = useState(() => { try { const t = localStorage.getItem("journalTab"); return TABS.some(x => x.k === t) ? t : "diary"; } catch { return "day"; } });
   const setTab = t => { setTabRaw(t); try { localStorage.setItem("journalTab", t); } catch {} };
   const memories = useMemories(info, mine);
+  // on a computer "Дневник" and "Дни" are one screen: the day feed with a calendar on the side
+  const desk = useMedia("(min-width: 1024px)");
+  const shownTab = desk && tab === "days" ? "diary" : tab;
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
   return (
@@ -99,21 +103,27 @@ export default function JournalView({ mode = "timeline" }) {
           <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Дневник</h1>
           <span className="ml-auto"><MemoriesButton cards={memories} onPick={pick} /></span>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {!desk && <div className="flex flex-wrap gap-2">
           <Badge>сегодня: <b>{todayDone}</b> {plural(todayDone, ["дело", "дела", "дел"])}</Badge>
           {streak >= 2 && <Badge><FlameIcon className="size-3.5 text-orange-500" />подряд: <b>{streak}</b> {plural(streak, ["день", "дня", "дней"])}</Badge>}
           <button type="button" onClick={() => pick(today(), true)} className="ml-auto text-sm font-medium text-muted-foreground hover:text-foreground">Открыть сегодня →</button>
-        </div>
+        </div>}
       </header>
-      <PillTabs>{TABS.map(({ k, label, icon: Icon }) => <PillTab key={k} on={tab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>
-      {tab === "diary" && <ThoughtsCard i={info(today())} />}
-      {tab === "days" && <Heatmap info={info} sel={open?.date} onPick={pick} />}
-      {tab === "stats" && <Stats info={info} items={items} mine={mine} streak={streak} />}
+      <PillTabs>{TABS.filter(x => !desk || x.k !== "days").map(({ k, label, icon: Icon }) => <PillTab key={k} on={shownTab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>
+      {shownTab === "diary" && (desk ? <DiaryDesk info={info} onPick={pick} burst={bursts.fire} /> : <ThoughtsCard i={info(today())} />)}
+      {shownTab === "days" && <Heatmap info={info} sel={open?.date} onPick={pick} />}
+      {shownTab === "stats" && <Stats info={info} items={items} mine={mine} streak={streak} />}
       </>}
       <DayDialog open={open} setOpen={setOpen} info={info} burst={bursts.fire} />
       {bursts.layer}
     </div>
   );
+}
+
+function useMedia(q) {
+  const [on, setOn] = useState(() => matchMedia(q).matches);
+  useEffect(() => { const m = matchMedia(q), f = () => setOn(m.matches); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, [q]);
+  return on;
 }
 
 const TABS = [
@@ -188,15 +198,15 @@ function Heatmap({ info, sel, onPick: pick }) {
 }
 
 // one month as a calendar: weeks in rows, Monday first
-function MonthGrid({ y, m, big, info, sel, onPick, hover, leave }) {
+export function MonthGrid({ y, m, big, bare, info, sel, onPick, hover, leave }) {
   const now = today();
   const first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), pad = (first.getDay() + 6) % 7;
   const cells = [...Array(pad).fill(null), ...Array.from({ length: days }, (_, k) => iso(new Date(y, m, k + 1)))];
   return (
     <div className="min-w-0">
-      <div className={cn("mb-1.5 font-semibold capitalize", big ? "text-center text-[15px]" : "text-[13px] max-sm:text-xs")}>
+      {!bare && <div className={cn("mb-1.5 font-semibold capitalize", big ? "text-center text-[15px]" : "text-[13px] max-sm:text-xs")}>
         {MONTHS_NOM[m]}{y !== new Date().getFullYear() && " " + y}
-      </div>
+      </div>}
       <div className={cn("grid grid-cols-7", big ? "gap-1.5" : "gap-1 max-sm:gap-[3px]")}>
         {WDS.map(w => <span key={w} className={cn("text-center text-muted-foreground", big ? "pb-1 text-xs" : "text-[10px] max-sm:hidden")}>{w}</span>)}
         {cells.map((date, k) => {
@@ -478,7 +488,7 @@ function DayTasks({ date }) {
     const done = db.tasks.filter(t => t.done && t.doneOn === date && mineDone(t)).map(row);
     return { open, done };
   }, [db.tasks, db.cats, db.boards, db.projects, db.me, date]);
-  const toggle = t => update("tasks", t.id, t.done ? { done: false, doneOn: "", doneBy: "", hidden: false } : { done: true, doneOn: today(), doneBy: db.me });
+  const toggle = t => update("tasks", t.id, t.done ? { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false } : { done: true, doneOn: today(), doneAt: new Date().toISOString(), doneBy: db.me });
   const canTick = date === now;
   const doneOpen = showDone || !data.open.length;
 
@@ -772,7 +782,7 @@ function Photos({ date, photos, save }) {
   );
 }
 
-function Thumb({ path, className, style }) {
+export function Thumb({ path, className, style }) {
   const url = usePhotoUrl(path);
   const [loaded, setLoaded] = useState(false);
   return url

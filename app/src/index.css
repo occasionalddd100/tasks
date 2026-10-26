@@ -240,3 +240,14 @@
 /* keyboard up (see App.jsx): the bottom bar steps aside so the text gets the room */
 html[data-kb] nav.fixed.bottom-0 { display: none; }
 html[data-kb] main { padding-bottom: 0 !important; }
+
+/* desktop diary: mood slider, thumb takes the mood colour */
+.mood-range { appearance: none; -webkit-appearance: none; height: 16px; background: transparent; cursor: pointer; }
+.mood-range::-webkit-slider-runnable-track { height: 4px; border-radius: 9999px; background: linear-gradient(90deg, #be123c, #f59e0b, #38bdf8, #84cc16, #10b981); opacity: 0.55; }
+.mood-range::-moz-range-track { height: 4px; border-radius: 9999px; background: linear-gradient(90deg, #be123c, #f59e0b, #38bdf8, #84cc16, #10b981); opacity: 0.55; }
+.mood-range::-webkit-slider-thumb { -webkit-appearance: none; margin-top: -5px; width: 14px; height: 14px; border-radius: 9999px; background: var(--mood); border: 2px solid var(--background); box-shadow: 0 0 0 1px var(--mood), 0 1px 3px rgb(0 0 0 / 0.25); transition: transform 0.15s; }
+.mood-range::-moz-range-thumb { width: 12px; height: 12px; border-radius: 9999px; background: var(--mood); border: 2px solid var(--background); box-shadow: 0 0 0 1px var(--mood); }
+.mood-range:hover::-webkit-slider-thumb { transform: scale(1.2); }
+.mood-range.unset::-webkit-slider-thumb { background: var(--muted-foreground); box-shadow: 0 0 0 1px var(--border); opacity: 0.6; }
+.mood-range.unset::-moz-range-thumb { background: var(--muted-foreground); opacity: 0.6; }
+.mood-range:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }

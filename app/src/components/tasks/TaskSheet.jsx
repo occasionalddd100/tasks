@@ -30,7 +30,7 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
 
   const set = f => update("tasks", t.id, f);
   const focused = inFocus(t), urgent = t.prio === "urgent";
-  const done = v => set(v ? { done: true, doneOn: today(), doneBy: getDb().me } : { done: false, doneOn: "", doneBy: "", hidden: false });
+  const done = v => set(v ? { done: true, doneOn: today(), doneAt: new Date().toISOString(), doneBy: getDb().me } : { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false });
   const day = d => set(t.due === d ? { due: "", time: "" } : { due: d });
 
   // a task of «Личное» gets a tag (one of its categories); a task on a shared board can only change its column
