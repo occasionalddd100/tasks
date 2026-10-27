@@ -10,7 +10,7 @@ import ShareDialog from "@/components/ShareDialog";
 import { VIEW, ViewHeader, PillTab, PillTabs } from "@/components/ViewHeader";
 import { ItemIcon } from "@/components/IconPicker";
 import { useNavItems, scrollTop } from "@/components/MobileNav";
-import { Fan } from "@/components/Fan";
+import { Fan, fanMax } from "@/components/Fan";
 import { canUseFolders, addFolder, access, allow, fileUrl, useFolders } from "@/lib/localFolders";
 const FolderPortal = lazy(() => import("@/components/stash/FolderPortal"));
 import { isMine } from "@/lib/db";
@@ -78,7 +78,6 @@ export default function StashView({ id, fresh, go }) {
   useNavItems([
     { k: "tags", label: "Теги", icon: TagIcon, active: tagsOpen, badge: tags.length + (unseen ? 1 : 0), onClick: () => { setFan(false); setTagsOpen(v => !v); } },
     { k: "search", label: "Поиск", icon: SearchIcon, onClick: () => focus(searchRef) },
-    { k: "add", label: "Добавить", icon: PlusIcon, accent: true, onClick: () => focus(addRef) },
     { k: "boards", label: cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски", icon: Columns3Icon, active: fan, onClick: () => { setTagsOpen(false); setFan(v => !v); } },
   ]);
 
@@ -767,10 +766,10 @@ function LocalMedia({ c, compact, autoplay }) {
 
 // phone: pick a board from the bottom bar
 // boards and tags fan up out of their button in a slight arc, like a Stack in the macOS Dock
-const FAN_MAX = 9;
 const initial = s => <span className="text-base font-semibold">{s.trim()[0]?.toUpperCase() || "•"}</span>;
 function BoardsFan({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, onMore, anchor }) {
   const list = [{ id: ALL, name: "Все", n: total, glyph: <LayoutGridIcon className="size-5" /> }, ...tabs.map(t => ({ id: t.id, name: t.name, n: counts(t.id), glyph: initial(t.name) }))];
+  const FAN_MAX = fanMax(2);
   const items = [...list.slice(0, FAN_MAX).map(t => ({ ...t, on: t.id === cur })),
     list.length > FAN_MAX ? { id: "more", name: `Ещё ${list.length - FAN_MAX}…`, dashed: true, glyph: <MoreHorizontalIcon className="size-5" /> }
       : { id: "new", name: "Новая доска", dashed: true, glyph: <PlusIcon className="size-5" /> },
@@ -785,7 +784,7 @@ function TagsFan({ open, setOpen, onEdit, tagCounts, tags, setTags, unseen, setU
   const any = tags.length > 0 || unseen;
   const items = [
     { id: "\u0000unseen", name: "Не смотрел", on: unseen, glyph: <EyeOffIcon className="size-5" /> },
-    ...tagCounts.slice(0, FAN_MAX).map(([t, n]) => ({ id: t, name: "#" + t, n, on: tags.includes(t), glyph: <TagIcon className="size-5" /> })),
+    ...tagCounts.slice(0, fanMax(3)).map(([t, n]) => ({ id: t, name: "#" + t, n, on: tags.includes(t), glyph: <TagIcon className="size-5" /> })),
     any && { id: "\u0000reset", name: "Сбросить", dashed: true, glyph: <XIcon className="size-5" /> },
     tagCounts.length > 0 && { id: "\u0000edit", name: "Править теги", dashed: true, glyph: <PencilIcon className="size-5" /> },
   ].filter(Boolean);
@@ -868,7 +867,7 @@ function BoardsSheet({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, o
   useEffect(() => { if (!open) setEditing(null); }, [open]);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="gap-2 p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="max-h-[85dvh] gap-2 overflow-y-auto overscroll-contain p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <DialogTitle className="px-1 pb-1 text-base">Доски</DialogTitle>
         {[{ id: ALL, name: "Все", n: total }, ...tabs.map(t => ({ ...t, n: counts(t.id) }))].map(t => editing === t.id ? (
           <form key={t.id} className="flex h-11 items-center gap-2" onSubmit={e => { e.preventDefault(); onRename(t, new FormData(e.currentTarget).get("name") || ""); setEditing(null); }}>

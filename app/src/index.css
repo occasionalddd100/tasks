@@ -251,3 +251,6 @@ html[data-kb] main { padding-bottom: 0 !important; }
 .mood-range.unset::-webkit-slider-thumb { background: var(--muted-foreground); box-shadow: 0 0 0 1px var(--border); opacity: 0.6; }
 .mood-range.unset::-moz-range-thumb { background: var(--muted-foreground); opacity: 0.6; }
 .mood-range:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+
+/* taps and long presses on controls must not select their text (it kept happening on buttons and chips) */
+button, [role="button"], [role="tab"], nav, label, summary, .select-none-ui { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }

@@ -20,7 +20,7 @@ import { useFresh, setAmbient, addTask } from "@/components/tasks/QuickAdd";
 import { TagMark } from "@/components/tasks/TagMark";
 import { openTask } from "@/components/tasks/TaskSheet";
 import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
-import { Fan } from "@/components/Fan";
+import { Fan, fanMax } from "@/components/Fan";
 import { useTasksTap } from "@/components/MobileNav";
 import { Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { openTagEditor } from "@/components/tasks/TagEditor";
@@ -87,7 +87,7 @@ export default function FocusView() {
     groups.get(NONE)?.length && { id: NONE, name: "Без тега", n: groups.get(NONE).length, on: shownTag === NONE, glyph: <InboxIcon className="size-5" /> },
     ...tags.map(t => ({ id: t.id, name: t.name, n: groups.get(t.id)?.length || 0, on: shownTag === t.id,
       glyph: t.emoji ? <span className="text-xl leading-none">{t.emoji}</span> : <span className="text-base font-semibold" style={t.color ? { color: t.color } : undefined}>{(t.name.trim()[0] || "#").toUpperCase()}</span> })),
-  ].filter(Boolean).slice(0, 9).concat({ id: "\u0000edit", name: "Править теги", glyph: <PencilIcon className="size-5" /> });
+  ].filter(Boolean).slice(0, fanMax(1)).concat({ id: "\u0000edit", name: "Править теги", glyph: <PencilIcon className="size-5" /> });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),

@@ -4,6 +4,10 @@ import { useBackClose } from "@/lib/back";
 import { cn } from "@/lib/utils";
 
 // items fan up out of a bottom-bar button in a slight arc, like a Stack in the macOS Dock
+// how many items fit in the arc on this screen, so a fan never runs off the top on a short phone
+// (each item is ~50px; the extra slots like «Ещё…» and «Править» are counted by the caller)
+export const fanMax = (extra = 2) => Math.max(3, Math.min(9, Math.floor((window.innerHeight - 260) / 52) - extra));
+
 export const ANCHORS = {
   navRight: { right: "calc(30% - 22px)", bottom: "calc(4.5rem + env(safe-area-inset-bottom))" },
   navLeft: { left: "calc(10% - 22px)", bottom: "calc(4.5rem + env(safe-area-inset-bottom))" },
