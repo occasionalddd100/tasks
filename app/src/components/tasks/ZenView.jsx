@@ -7,6 +7,7 @@ import { today, addDays, byOrder, stale, nextOrder, plural } from "@/lib/tasks";
 import { tagsOf } from "@/lib/tags";
 import { draftsOf } from "@/lib/personal";
 import { cn } from "@/lib/utils";
+import { useZenTimer } from "@/lib/zenTimer";
 import { WORK_GROUPS, groupOf, levelOf } from "@/components/tasks/FocusView";
 
 // Фокус: a 3D space with one task in front and the rest of the queue going back into the depth.
@@ -33,7 +34,7 @@ export default function ZenView({ onClose }) {
 
   const doneToday = db.tasks.filter(t => t.done && t.doneOn === now && (t.doneBy || t._owner) === db.me && !t.parent).length;
   const [mode, setMode] = useState(() => (work.length ? "do" : "sort"));
-  const [skipped, setSkipped] = useState([]); // «потом» in this session: goes to the back of the deck
+  const [skipped, setSkipped] = useState([]); // «потом» in this visit only: next time the deck starts fresh
   const [fly, setFly] = useState(null); // how the front card leaves: up (done), right (later), down (pail)
   const queue = useMemo(() => {
     const src = (mode === "do" ? work : triage).filter(t => !skipped.includes(t.id));
@@ -58,7 +59,7 @@ export default function ZenView({ onClose }) {
     later,
   };
 
-  const timer = useTimer(cur?.id);
+  const timer = useZenTimer();
   useEffect(() => {
     const on = e => {
       if (e.target.closest?.("input,textarea")) return;
@@ -118,7 +119,7 @@ export default function ZenView({ onClose }) {
           {mode === "do" ? <>
             <Act onClick={actions.pail} icon={ArchiveIcon} hint="↓">В ведёрко</Act>
             <Act onClick={actions.later} icon={ChevronRightIcon} hint="→">Потом</Act>
-            <Act onClick={timer.toggle} icon={timer.running ? PauseIcon : TimerIcon} hint="T" on={timer.running}>{timer.running || timer.left < timer.total ? timer.label : "25 мин"}</Act>
+            <Act onClick={timer.toggle} icon={timer.running ? PauseIcon : TimerIcon} hint="T" on={timer.running}>{timer.active ? timer.label : "25 мин"}</Act>
             <Act onClick={actions.done} icon={CheckIcon} hint="Space" main>Сделал</Act>
           </> : <>
             <Act onClick={actions.today} icon={SunIcon} hint="1" main>Сегодня</Act>
@@ -200,7 +201,7 @@ function Card({ t, depth, mode, timer, onSwipe, fly }) {
             : <li><button type="button" onClick={() => setAdding(true)} className="px-2 py-1 text-sm text-white/35 hover:text-white/70">+ разбить на шаги</button></li>)}
         </ul>
       )}
-      {front && timer && (timer.running || timer.left < timer.total) && (
+      {front && timer && timer.active && (
         <div className="mt-auto pt-4">
           <div className="h-1.5 overflow-hidden rounded-full bg-white/10"><motion.div className="h-full rounded-full bg-emerald-400" animate={{ width: (1 - timer.left / timer.total) * 100 + "%" }} transition={{ duration: 0.5 }} /></div>
           <div className="mt-1.5 flex justify-between text-xs text-white/40 tabular-nums"><span>{timer.running ? "фокус" : "пауза"}</span><span>{timer.label}</span></div>
@@ -248,26 +249,4 @@ function Empty({ mode, setMode, work, triage, doneToday, onClose }) {
       <button type="button" onClick={text.go} className="mt-3 h-12 rounded-2xl bg-white px-6 font-medium text-black">{text.b}</button>
     </motion.div>
   );
-}
-
-// 25 minutes on the front card; resets when the card changes, rings (and buzzes) at the end
-function useTimer(id) {
-  const total = 25 * 60;
-  const [left, setLeft] = useState(total), [running, setRunning] = useState(false);
-  useEffect(() => { setLeft(total); setRunning(false); }, [id]);
-  useEffect(() => {
-    if (!running) return;
-    const end = Date.now() + left * 1000;
-    const t = setInterval(() => {
-      const l = Math.max(0, Math.round((end - Date.now()) / 1000)); setLeft(l);
-      if (!l) {
-        setRunning(false); navigator.vibrate?.([200, 100, 200]);
-        try { new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=").play(); } catch {}
-        if ("Notification" in window && Notification.permission === "granted") new Notification("25 минут прошли", { body: "Отметь, что сделал, или возьми ещё круг" });
-      }
-    }, 500);
-    return () => clearInterval(t);
-  }, [running]);
-  const mm = String(Math.floor(left / 60)).padStart(2, "0") + ":" + String(left % 60).padStart(2, "0");
-  return { left, total, running, label: mm, toggle: () => (left ? setRunning(r => !r) : (setLeft(total), setRunning(true))) };
 }

@@ -13,6 +13,7 @@ import MobileNav from "@/components/MobileNav";
 import { SettingsHost, openSettings } from "@/components/Settings";
 import ShareInbox from "@/components/stash/ShareInbox";
 const ZenView = lazy(() => import("@/components/tasks/ZenView"));
+import ZenFloat from "@/components/tasks/ZenFloat";
 import { useAppearance } from "@/lib/appearance";
 import Avatar from "@/components/Avatar";
 import ProfileDialog from "@/components/ProfileDialog";
@@ -150,6 +151,7 @@ export default function Shell() {
       <SettingsHost />
       <ShareInbox go={go} />
       <AnimatePresence>{view.zen && <Suspense fallback={null}><ZenView onClose={() => go({ focus: true })} /></Suspense>}</AnimatePresence>
+      {!view.zen && <ZenFloat />}
       <IconPickerHost />
     </div>
     </MotionConfig>
