@@ -138,7 +138,7 @@ export default function FocusView() {
           : <WorkList list={list} />}
       </section>}
 
-            {shownTag && shownTag !== WORK && <TagList tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />}
+            {shownTag && shownTag !== WORK && <TagList cat={shownTag === NONE ? drafts?.id : shownTag} tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />}
             {!shownTag && db.habits.length > 0 && <Habits habits={db.habits} />}
           </div>
           <aside className="sticky top-4 flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-2 overflow-y-auto pb-2 [scrollbar-width:thin] [&>*]:shrink-0">
@@ -167,7 +167,7 @@ export default function FocusView() {
 
       {shownTag !== WORK && <section className="flex flex-col gap-3">
         {shownTag
-          ? <TagList tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
+          ? <TagList cat={shownTag === NONE ? drafts?.id : shownTag} tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
           : [...groups].filter(([, l]) => l.length).map(([id, l]) => (
               <TagRow key={id} id={id} name={tagName(id)} tag={tags.find(t => t.id === id)} color={tags.find(t => t.id === id)?.color} tasks={l} onOpen={() => setFilter(id)} />
             ))}
@@ -352,7 +352,12 @@ function TagRow({ id, name, tag, color, tasks, onOpen }) {
   );
 }
 
-function TagList({ tasks, name, onClear }) {
+function TagList({ cat, tasks, name, onClear }) {
+  const db = useDb();
+  // ticked tasks stay in sight under the list (newest first), so a checked one doesn't just vanish
+  const done = useMemo(() => db.tasks.filter(t => t.cat === cat && t.done && !t.parent && (t.doneBy || t._owner) === db.me)
+    .sort((a, b) => (b.doneAt || b.doneOn || "").localeCompare(a.doneAt || a.doneOn || "")), [db.tasks, cat, db.me]);
+  const [more, setMore] = useState(false);
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -360,6 +365,16 @@ function TagList({ tasks, name, onClear }) {
         <button type="button" onClick={onClear} className="ml-auto inline-flex items-center gap-1 hover:text-foreground"><XIcon className="size-3.5" />Все теги</button>
       </div>
       <ul className="-mx-1">{tasks.map(t => <SubRow key={t.id} t={t} />)}</ul>
+      {done.length > 0 && (
+        <div className="mt-2">
+          <Group id={"done:" + cat} title="Сделано" icon={CheckIcon} color="#22c55e" n={done.length}>
+            <ul>
+              {(more ? done : done.slice(0, 30)).map(t => <li key={t.id}><TaskRow t={t} sub={t.doneOn ? "сделано " + dueLabel(t.doneOn) : ""} /></li>)}
+              {done.length > 30 && !more && <li><button type="button" onClick={() => setMore(true)} className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground">показать все {done.length}</button></li>}
+            </ul>
+          </Group>
+        </div>
+      )}
     </div>
   );
 }
