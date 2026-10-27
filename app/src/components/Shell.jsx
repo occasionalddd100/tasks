@@ -12,12 +12,13 @@ import { IconPickerHost } from "@/components/IconPicker";
 import MobileNav from "@/components/MobileNav";
 import { SettingsHost, openSettings } from "@/components/Settings";
 import ShareInbox from "@/components/stash/ShareInbox";
+const ZenView = lazy(() => import("@/components/tasks/ZenView"));
 import { useAppearance } from "@/lib/appearance";
 import Avatar from "@/components/Avatar";
 import ProfileDialog from "@/components/ProfileDialog";
 import { loadMe, useMe } from "@/lib/people";
 import { importFiles, fromDrop } from "@/lib/importMd";
-import { MotionConfig, motion } from "motion/react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import NotesTree, { IconBtn, CreateMenu, itemName } from "@/components/notes/NotesTree";
 import { ProjectView } from "@/components/tasks/ProjectViews";
 import FocusView from "@/components/tasks/FocusView";
@@ -64,6 +65,7 @@ const readHash = () => {
   if (m) return { [m[1]]: m[2] };
   if (location.hash === "#journal") return { journal: true };
   if (location.hash === "#focus") return { focus: true };
+  if (location.hash === "#zen") return { focus: true, zen: true };
   if (location.hash === "#personal") return { personal: true };
   if (location.hash === "#diary") return { diary: true };
   // home is the task list: open the app, add what's on your mind
@@ -95,7 +97,7 @@ export default function Shell() {
 
   const go = v => {
     setMenu(false);
-    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : v.focus ? "#focus" : v.personal ? "#personal" : v.diary ? "#diary" : "#journal";
+    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : v.zen ? "#zen" : v.focus ? "#focus" : v.personal ? "#personal" : v.diary ? "#diary" : "#journal";
     if (location.hash !== hash) history.pushState(null, "", hash || location.pathname + location.search);
     setView(v);
   };
@@ -147,6 +149,7 @@ export default function Shell() {
       <ConfirmHost />
       <SettingsHost />
       <ShareInbox go={go} />
+      <AnimatePresence>{view.zen && <Suspense fallback={null}><ZenView onClose={() => go({ focus: true })} /></Suspense>}</AnimatePresence>
       <IconPickerHost />
     </div>
     </MotionConfig>

@@ -112,6 +112,7 @@ export default function FocusView() {
     <div className={cn(VIEW, desk ? "max-w-[1400px] gap-3" : "max-w-5xl")}>
       <header className="flex items-center gap-2">
         <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Задачи</h1>
+        <ZenButton />
         <TodayDone />
       </header>
 
@@ -232,7 +233,7 @@ function WorkList({ list }) {
 }
 
 // «В работе» split by when: each task lands in the first group that fits
-const WORK_GROUPS = [
+export const WORK_GROUPS = [
   { k: "late", l: "Просрочено", c: "#ef4444", icon: AlarmClockIcon },
   { k: "urgent", l: "Приоритет", c: "#f97316", icon: FlameIcon, add: async v => { const r = await addTask(v, { work: true }); if (r?.id) update("tasks", r.id, { prio: "urgent" }); } },
   { k: "today", l: "Сегодня", c: "#f59e0b", icon: SunIcon, add: v => addTask(v, { work: true, due: today() }) },
@@ -241,7 +242,7 @@ const WORK_GROUPS = [
   { k: "free", l: "Без срока", c: "#64748b", icon: InboxIcon, add: v => addTask(v, { work: true }) },
   { k: "done", l: "Сделано", c: "#22c55e", icon: CheckIcon },
 ];
-function groupOf(t, now, tomorrow) {
+export function groupOf(t, now, tomorrow) {
   if (t.done) return "done";
   if (t.due && t.due < now) return "late";
   if (t.prio === "urgent") return "urgent";
@@ -572,6 +573,23 @@ function PrioBtn({ t, small }) {
       className={cn("grid shrink-0 place-items-center rounded-md hover:bg-accent", small ? "size-6 opacity-0 group-hover:opacity-100 focus:opacity-100" : "size-7",
         on ? "text-red-500" : "text-muted-foreground hover:text-red-500")}>
       <FlameIcon className={small ? "size-3.5" : "size-4"} fill={on ? "currentColor" : "none"} />
+    </button>
+  );
+}
+
+// the way into Фокус; glows until it's been opened today. «F» works too
+function ZenButton() {
+  const fresh = (() => { try { return localStorage.getItem("zenSeen") !== today(); } catch { return true; } })();
+  useEffect(() => {
+    const on = e => { if ((e.key === "f" || e.key === "а") && !e.ctrlKey && !e.metaKey && !e.target.closest?.("input,textarea,[contenteditable=true],[role=dialog]")) { e.preventDefault(); location.hash = "#zen"; } };
+    window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
+  }, []);
+  return (
+    <button type="button" onClick={() => { location.hash = "#zen"; }} title="Фокус: одна задача на весь экран (F)"
+      className="relative inline-flex h-9 items-center gap-1.5 rounded-full bg-foreground px-3.5 text-sm font-semibold text-background transition-transform hover:scale-[1.03] active:scale-95">
+      {fresh && <span className="absolute -top-0.5 -right-0.5 size-2.5 animate-ping rounded-full bg-emerald-400" />}
+      {fresh && <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-400" />}
+      <CrosshairIcon className="size-4" />Фокус
     </button>
   );
 }

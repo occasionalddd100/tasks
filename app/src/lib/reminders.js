@@ -54,7 +54,35 @@ export function plan({ tasks, cats, boards, me }, now = Date.now(), days = 7) {
       out.push({ key: "now:" + t.id + ":" + day, at: when, title: `Пора: ${short(t.text)}`, body: time, extra });
     }
   }
+  out.push(...nudges(open, tasks, me, today, now));
   return out.filter(x => x.at.getTime() > now).sort((a, b) => a.at - b.at);
+}
+
+// Фокус nudges: the tracker reminds of itself, but only when it's been forgotten.
+// 10:30 — start the day in focus; 14:00 and 18:00 — only if nothing was ticked in the 3 hours before;
+// 21:30 — only if the day has no ticks at all. Done tasks re-plan these, so a busy day stays quiet.
+export const NUDGES = { start: "10:30", mid: ["14:00", "18:00"], close: "21:30" };
+function nudges(open, tasks, me, today, now) {
+  const work = open.filter(t => inFocus(t)).sort((a, b) => a.focus - b.focus);
+  const doneAts = tasks.filter(t => t.done && t.doneAt && (t.doneBy || t._owner) === me).map(t => +new Date(t.doneAt));
+  const doneOn = day => tasks.some(t => t.done && t.doneOn === day && (t.doneBy || t._owner) === me);
+  const top = work[0], extra = { hash: "#zen" }, out = [];
+  for (let k = 0; k <= 2; k++) {
+    const day = shift(today, k);
+    out.push({ key: "zen:start:" + day, at: at(day, NUDGES.start), extra,
+      title: top ? `Фокус: ${short(top.text, 50)}` : "2 минуты на разбор задач",
+      body: work.length ? `В работе ${work.length}. Открой фокус и начни с первой.` : "Выбери 1–3 дела на сегодня, остальное подождёт." });
+    for (const time of NUDGES.mid) {
+      const when = +at(day, time);
+      if (k === 0 && doneAts.some(d => d > when - 3 * 3600e3 && d <= Math.max(when, now))) continue;
+      out.push({ key: "zen:" + time + ":" + day, at: at(day, time), extra,
+        title: top ? `Как там «${short(top.text, 40)}»?` : "Давно не было галочек",
+        body: "Одна карточка, 25 минут. Открой фокус." });
+    }
+    if (!(k === 0 && doneOn(day)))
+      out.push({ key: "zen:close:" + day, at: at(day, NUDGES.close), extra, title: "День без галочек", body: "Закрой одно маленькое дело перед сном, это 5 минут." });
+  }
+  return out;
 }
 
 // in an open tab (PWA or browser on the PC): the same plan, shown while the page is open

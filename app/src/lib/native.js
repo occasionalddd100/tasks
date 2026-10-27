@@ -48,8 +48,9 @@ export async function startNative(subscribe) {
     subscribe(later); later();
   }
   LN.addListener("localNotificationActionPerformed", e => {
-    const p = e.notification?.extra?.project;
-    if (p) location.hash = "#project=" + p;
+    const x = e.notification?.extra || {};
+    if (x.hash) location.hash = x.hash;
+    else if (x.project) location.hash = "#project=" + x.project;
   });
   checkUpdate();
 }
