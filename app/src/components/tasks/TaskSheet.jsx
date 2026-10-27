@@ -69,8 +69,8 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
                 <button type="button" onClick={() => (focused ? fromFocus(t) : toFocus(t))} className={chip(focused, "border-primary bg-primary text-primary-foreground")}>
                   <CrosshairIcon className="size-4" />{focused ? "В работе" : "В работу"}
                 </button>
-                {(urgent || !personal) && <button type="button" onClick={() => set({ prio: urgent ? "" : "urgent" })} aria-pressed={urgent} className={chip(urgent, "border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400")}>
-                  <FlameIcon className="size-4" />Срочно
+                {(urgent || !t.done) && <button type="button" onClick={() => set({ prio: urgent ? "" : "urgent" })} aria-pressed={urgent} className={chip(urgent, "border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400")}>
+                  <FlameIcon className="size-4" />Приоритет
                 </button>}
               </div>
 

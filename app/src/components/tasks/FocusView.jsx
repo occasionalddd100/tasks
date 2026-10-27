@@ -322,6 +322,7 @@ function WorkItem({ t }) {
         <div className="group/w relative">
           <TaskRow t={t} noFocusMark onAddSub={() => setSub(true)} sub={name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
           {!t.done && <div className="absolute top-1/2 right-11 flex -translate-y-1/2 gap-0.5 rounded-md bg-background/80 opacity-0 transition-opacity group-hover/w:opacity-100 focus-within:opacity-100 max-md:hidden">
+            <PrioBtn t={t} />
             <button type="button" onClick={() => setSub(true)} title="Добавить подзадачу" aria-label={"Подзадача к: " + t.text}
               className="grid size-7 place-items-center rounded-md text-muted-foreground hover:text-foreground"><CornerDownRightIcon className="size-4" /></button>
             <button type="button" onClick={() => toBucket(t)} title="Отложить в ведёрко" aria-label={"Отложить: " + t.text}
@@ -516,6 +517,7 @@ function DenseRow({ t }) {
       {kids.length > 0 && <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
       {lv ? <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium" style={{ color: lv.c }}>{lv.icon && <lv.icon className="size-3" />}{lv.l}</span>
         : t.due && <span className="shrink-0 text-[11px] text-muted-foreground">{dueLabel(t.due)}</span>}
+      <PrioBtn t={t} small />
       <button type="button" onClick={() => setSub(true)} aria-label={"Подзадача к: " + t.text} title="Добавить подзадачу"
         className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100"><CornerDownRightIcon className="size-3.5" /></button>
       <button type="button" onClick={() => toFocus(t)} aria-label={"В работу: " + t.text} title="В работу"
@@ -544,4 +546,17 @@ function SubRow({ t }) {
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);
   const [sub, setSub] = useState(false);
   return <li><TaskRow t={t} onAddSub={() => setSub(true)} /><SubTasks t={t} kids={kids} adding={sub} setAdding={setSub} /></li>;
+}
+
+// flame: put a task in «Приоритет» or take it out
+function PrioBtn({ t, small }) {
+  const on = t.prio === "urgent";
+  return (
+    <button type="button" onClick={() => update("tasks", t.id, { prio: on ? "" : "urgent" })} aria-pressed={on}
+      title={on ? "Убрать из приоритета" : "В приоритет"} aria-label={(on ? "Убрать из приоритета: " : "В приоритет: ") + t.text}
+      className={cn("grid shrink-0 place-items-center rounded-md hover:bg-accent", small ? "size-6 opacity-0 group-hover:opacity-100 focus:opacity-100" : "size-7",
+        on ? "text-red-500" : "text-muted-foreground hover:text-red-500")}>
+      <FlameIcon className={small ? "size-3.5" : "size-4"} fill={on ? "currentColor" : "none"} />
+    </button>
+  );
 }
