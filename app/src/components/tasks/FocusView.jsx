@@ -2,21 +2,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CrosshairIcon, FlameIcon, HashIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon } from "lucide-react";
+import { CrosshairIcon, FlameIcon, HashIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon, CornerDownRightIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import * as Pop from "@radix-ui/react-popover";
-import { useDb, updateMany } from "@/lib/db";
+import { useDb, updateMany, update, add } from "@/lib/db";
 import { focusList, clearDone, inFocus, toFocus, inBucket, toBucket } from "@/lib/focus";
 import { exText, exAt } from "@/lib/done";
 import Bucket from "@/components/tasks/Bucket";
 import { tagsOf, tagOfTask } from "@/lib/tags";
 import { draftsOf } from "@/lib/personal";
 import { cn } from "@/lib/utils";
-import { stale, byOrder, today, dueLabel, dayDiff, plural, addDays } from "@/lib/tasks";
+import { stale, byOrder, today, dueLabel, dayDiff, plural, addDays, nextOrder } from "@/lib/tasks";
 import { Button } from "@/components/ui/button";
 import { VIEW } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
-import { useFresh, setAmbient } from "@/components/tasks/QuickAdd";
+import { useFresh, setAmbient, addTask } from "@/components/tasks/QuickAdd";
 import { TagMark } from "@/components/tasks/TagMark";
 import { openTask } from "@/components/tasks/TaskSheet";
 import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
@@ -203,15 +203,29 @@ function TagChip({ on, color, n, onClick, children }) {
 // "В работе": drag to reorder, or onto the pail to put aside; subtasks under their task
 function WorkList({ list }) {
   const now = today(), tomorrow = addDays(1);
-  const groups = WORK_GROUPS.map(g => ({ ...g, tasks: list.filter(t => groupOf(t, now, tomorrow) === g.k) })).filter(g => g.tasks.length);
+  const [adding, setAdding] = useState(null);
+  const groups = WORK_GROUPS.map(g => ({ ...g, tasks: list.filter(t => groupOf(t, now, tomorrow) === g.k) })).filter(g => g.tasks.length || g.k === adding);
+  const empty = WORK_GROUPS.filter(g => g.add && !groups.some(x => x.k === g.k));
   return (
     <SortableContext items={list.map(t => t.id)} strategy={verticalListSortingStrategy}>
       <div className="flex flex-col gap-2">
         {groups.map(g => (
-          <Group key={g.k} id={"work:" + g.k} title={g.l} icon={g.icon} color={g.c} n={g.tasks.length}>
+          <Group key={g.k} id={"work:" + g.k} title={g.l} icon={g.icon} color={g.c} n={g.tasks.length}
+            onAdd={g.add} withDate={g.k === "planned"} adding={adding === g.k} setAdding={v => setAdding(v ? g.k : null)}>
             <ul>{g.tasks.map(t => <WorkItem key={t.id} t={t} />)}</ul>
           </Group>
         ))}
+        {/* groups with nothing in them yet: one quiet row of ＋ to start one */}
+        {empty.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {empty.map(g => (
+              <button key={g.k} type="button" onClick={() => setAdding(g.k)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full border border-dashed px-2.5 text-xs text-muted-foreground transition-colors hover:border-solid hover:text-foreground">
+                <PlusIcon className="size-3" /><g.icon className="size-3" style={{ color: g.c }} />{g.l}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </SortableContext>
   );
@@ -220,11 +234,11 @@ function WorkList({ list }) {
 // «В работе» split by when: each task lands in the first group that fits
 const WORK_GROUPS = [
   { k: "late", l: "Просрочено", c: "#ef4444", icon: AlarmClockIcon },
-  { k: "urgent", l: "Приоритет", c: "#f97316", icon: FlameIcon },
-  { k: "today", l: "Сегодня", c: "#f59e0b", icon: SunIcon },
-  { k: "tomorrow", l: "Завтра", c: "#0ea5e9", icon: SunriseIcon },
-  { k: "planned", l: "Запланированные", c: "#8b5cf6", icon: CalendarClockIcon },
-  { k: "free", l: "Без срока", c: "#64748b", icon: InboxIcon },
+  { k: "urgent", l: "Приоритет", c: "#f97316", icon: FlameIcon, add: async v => { const r = await addTask(v, { work: true }); if (r?.id) update("tasks", r.id, { prio: "urgent" }); } },
+  { k: "today", l: "Сегодня", c: "#f59e0b", icon: SunIcon, add: v => addTask(v, { work: true, due: today() }) },
+  { k: "tomorrow", l: "Завтра", c: "#0ea5e9", icon: SunriseIcon, add: v => addTask(v, { work: true, due: addDays(1) }) },
+  { k: "planned", l: "Запланированные", c: "#8b5cf6", icon: CalendarClockIcon, add: (v, date) => addTask(v, { work: true, due: date || addDays(2) }) },
+  { k: "free", l: "Без срока", c: "#64748b", icon: InboxIcon, add: v => addTask(v, { work: true }) },
   { k: "done", l: "Сделано", c: "#22c55e", icon: CheckIcon },
 ];
 function groupOf(t, now, tomorrow) {
@@ -240,25 +254,55 @@ function groupOf(t, now, tomorrow) {
 // one foldable block, the same look everywhere: coloured edge and tint, title, count, chevron (remembered per block)
 const FOLD = "folded";
 const loadFold = () => { try { return new Set(JSON.parse(localStorage.getItem(FOLD) || "[]")); } catch { return new Set(); } };
-function Group({ id, title, icon: Icon, color, n, children }) {
+function Group({ id, title, icon: Icon, color, n, children, onAdd, withDate, adding: addingProp, setAdding: setAddingProp }) {
   const [open, setOpenRaw] = useState(() => !loadFold().has(id));
   const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); v ? f.delete(id) : f.add(id); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
+  const [addingOwn, setAddingOwn] = useState(false);
+  const adding = addingProp ?? addingOwn, setAdding = setAddingProp ?? setAddingOwn;
+  const shown = open || adding;
   return (
     <section className="shrink-0 overflow-hidden rounded-xl border border-border/70 bg-card/50">
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="group/h flex h-10 w-full items-center gap-2.5 px-3 text-left transition-colors hover:bg-accent/40">
-        <span className="grid size-6 place-items-center rounded-md" style={{ background: `color-mix(in oklab, transparent 84%, ${color})` }}><Icon className="size-3.5" style={{ color }} /></span>
-        <h3 className="min-w-0 truncate text-sm font-semibold">{title}</h3>
-        <span className="text-xs text-muted-foreground tabular-nums">{n}</span>
-        <ChevronRightIcon className={cn("ml-auto size-3.5 text-muted-foreground/70 transition-transform group-hover/h:text-foreground", open && "rotate-90")} />
-      </button>
+      <div className="group/h flex h-10 items-center transition-colors hover:bg-accent/40">
+        <button type="button" onClick={() => setOpen(!shown)} aria-expanded={shown} className="flex h-full min-w-0 flex-1 items-center gap-2.5 pl-3 text-left">
+          <span className="grid size-6 shrink-0 place-items-center rounded-md" style={{ background: `color-mix(in oklab, transparent 84%, ${color})` }}><Icon className="size-3.5" style={{ color }} /></span>
+          <h3 className="min-w-0 truncate text-sm font-semibold">{title}</h3>
+          <span className="text-xs text-muted-foreground tabular-nums">{n || ""}</span>
+        </button>
+        {onAdd && <button type="button" onClick={() => { setOpen(true); setAdding(true); }} aria-label={"Добавить в «" + title + "»"} title={"Добавить в «" + title + "»"}
+          className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover/h:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100 max-md:opacity-70"><PlusIcon className="size-4" /></button>}
+        <button type="button" onClick={() => setOpen(!shown)} aria-label={shown ? "Свернуть" : "Развернуть"} className="grid h-full w-9 shrink-0 place-items-center">
+          <ChevronRightIcon className={cn("size-3.5 text-muted-foreground/70 transition-transform group-hover/h:text-foreground", shown && "rotate-90")} />
+        </button>
+      </div>
       <AnimatePresence initial={false}>
-        {open && (
+        {shown && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden border-t border-border/50 px-1 py-1">
+            {adding && <AddLine placeholder={"Новая задача в «" + title + "»"} withDate={withDate} onAdd={onAdd} onClose={() => setAdding(false)} />}
             {children}
           </motion.div>
         )}
       </AnimatePresence>
     </section>
+  );
+}
+
+// one line to type a task (or subtask) into; Enter adds and stays for the next, Esc or leaving it empty closes
+function AddLine({ placeholder, onAdd, onClose, withDate, className }) {
+  const [text, setText] = useState("");
+  const [date, setDate] = useState(() => addDays(2));
+  const box = useRef(null);
+  useEffect(() => { const t = setTimeout(() => box.current?.querySelector("input")?.focus(), 30); return () => clearTimeout(t); }, []);
+  const submit = e => { e.preventDefault(); const v = text.trim(); if (!v) return onClose(); onAdd(v, date); setText(""); };
+  return (
+    <form ref={box} onSubmit={submit} className={cn("flex items-center gap-1.5 px-1.5 py-1", className)}
+      onBlur={e => { if (!box.current?.contains(e.relatedTarget) && !text.trim()) setTimeout(onClose, 200); /* after the click that took focus lands */ }}>
+      <PlusIcon className="size-4 shrink-0 text-muted-foreground" />
+      <input autoFocus value={text} onChange={e => setText(e.target.value)} placeholder={placeholder} aria-label={placeholder} enterKeyHint="done"
+        onKeyDown={e => e.key === "Escape" && (setText(""), onClose())}
+        className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60" />
+      {withDate && <input type="date" value={date} min={addDays(2)} onChange={e => setDate(e.target.value)} aria-label="Когда"
+        className="h-7 shrink-0 rounded-md border bg-background px-1.5 text-xs text-muted-foreground outline-none" />}
+    </form>
   );
 }
 
@@ -268,6 +312,7 @@ function WorkItem({ t }) {
   const tag = tagOfTask(db, t), cat = db.cats.find(c => c.id === t.cat), board = db.boards.find(b => b.id === cat?.board);
   const name = tag?.name || (cat?.drafts ? "" : db.projects.find(p => p.id === board?.project)?.name);
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: t.id });
+  const [sub, setSub] = useState(false);
   return (
     <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition,  }}
       className={cn("relative rounded-lg", isDragging && "z-10 opacity-30")}>
@@ -275,12 +320,15 @@ function WorkItem({ t }) {
       {tag && <span className="absolute inset-y-2.5 left-0.5 w-[3px] rounded-full opacity-80" style={{ background: tag.color }} />}
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
         <div className="group/w relative">
-          <TaskRow t={t} noFocusMark sub={name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
-          {!t.done && <button type="button" onClick={() => toBucket(t)} title="Отложить в ведёрко" aria-label={"Отложить: " + t.text}
-            className="absolute top-1/2 right-11 grid size-7 -translate-y-1/2 place-items-center rounded-md bg-background/80 text-muted-foreground opacity-0 transition-opacity group-hover/w:opacity-100 hover:text-foreground max-md:hidden">
-            <ArchiveIcon className="size-4" /></button>}
+          <TaskRow t={t} noFocusMark onAddSub={() => setSub(true)} sub={name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
+          {!t.done && <div className="absolute top-1/2 right-11 flex -translate-y-1/2 gap-0.5 rounded-md bg-background/80 opacity-0 transition-opacity group-hover/w:opacity-100 focus-within:opacity-100 max-md:hidden">
+            <button type="button" onClick={() => setSub(true)} title="Добавить подзадачу" aria-label={"Подзадача к: " + t.text}
+              className="grid size-7 place-items-center rounded-md text-muted-foreground hover:text-foreground"><CornerDownRightIcon className="size-4" /></button>
+            <button type="button" onClick={() => toBucket(t)} title="Отложить в ведёрко" aria-label={"Отложить: " + t.text}
+              className="grid size-7 place-items-center rounded-md text-muted-foreground hover:text-foreground"><ArchiveIcon className="size-4" /></button>
+          </div>}
         </div>
-        {kids.length > 0 && <ul className="mb-1 ml-9 border-l pl-2" aria-label={"Подзадачи: " + t.text}>{kids.map(k => <li key={k.id}><TaskRow t={k} noFocusMark /></li>)}</ul>}
+        <SubTasks t={t} kids={kids} adding={sub} setAdding={setSub} />
       </motion.div>
     </li>
   );
@@ -310,7 +358,7 @@ function TagList({ tasks, name, onClear }) {
         <span>{tasks.length ? `${tasks.length} в «${name}»` : `В «${name}» открытых задач нет`}</span>
         <button type="button" onClick={onClear} className="ml-auto inline-flex items-center gap-1 hover:text-foreground"><XIcon className="size-3.5" />Все теги</button>
       </div>
-      <ul className="-mx-1">{tasks.map(t => <li key={t.id}><TaskRow t={t} /></li>)}</ul>
+      <ul className="-mx-1">{tasks.map(t => <SubRow key={t.id} t={t} />)}</ul>
     </div>
   );
 }
@@ -380,7 +428,7 @@ export function levelOf(t) {
 function Overdue({ tasks }) {
   return (
     <Group id="overdue" title="Просрочено, не в работе" icon={AlarmClockIcon} color="#ef4444" n={tasks.length}>
-      <ul>{tasks.map(t => <li key={t.id}><TaskRow t={t} /></li>)}</ul>
+      <ul>{tasks.map(t => <SubRow key={t.id} t={t} />)}</ul>
     </Group>
   );
 }
@@ -447,7 +495,7 @@ function TagGroup({ id, name, tag, tasks, onOpen }) {
   const color = tag?.color || "#64748b";
   const icon = id === NONE ? InboxIcon : HashIcon;
   return (
-    <Group id={"tag:" + id} title={name} icon={tag?.emoji ? () => <span className="text-[13px] leading-none">{tag.emoji}</span> : icon} color={color} n={tasks.length}>
+    <Group id={"tag:" + id} onAdd={v => addTask(v, { tag: id === NONE ? null : id })} title={name} icon={tag?.emoji ? () => <span className="text-[13px] leading-none">{tag.emoji}</span> : icon} color={color} n={tasks.length}>
       <ul>
         {tasks.slice(0, 40).map(t => <DenseRow key={t.id} t={t} />)}
         {tasks.length > 40 && <li><button type="button" onClick={onOpen} className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground">ещё {tasks.length - 40} →</button></li>}
@@ -459,7 +507,8 @@ function TagGroup({ id, name, tag, tasks, onOpen }) {
 function DenseRow({ t }) {
   const db = useDb();
   const lv = levelOf(t), kids = db.tasks.filter(k => k.parent === t.id && !stale(k));
-  return (
+  const [sub, setSub] = useState(false);
+  return (<>
     <li className="group relative flex h-8 items-center gap-2 rounded-md pr-1 pl-2.5 hover:bg-accent/70"
       onContextMenu={e => { e.preventDefault(); openWheel(t, e.clientX, e.clientY, true); }}>
       <span aria-hidden className="absolute inset-y-1.5 left-0.5 w-[3px] rounded-full" style={{ background: lv?.c || "transparent" }} />
@@ -467,8 +516,32 @@ function DenseRow({ t }) {
       {kids.length > 0 && <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
       {lv ? <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium" style={{ color: lv.c }}>{lv.icon && <lv.icon className="size-3" />}{lv.l}</span>
         : t.due && <span className="shrink-0 text-[11px] text-muted-foreground">{dueLabel(t.due)}</span>}
+      <button type="button" onClick={() => setSub(true)} aria-label={"Подзадача к: " + t.text} title="Добавить подзадачу"
+        className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100"><CornerDownRightIcon className="size-3.5" /></button>
       <button type="button" onClick={() => toFocus(t)} aria-label={"В работу: " + t.text} title="В работу"
         className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-primary hover:text-primary-foreground focus:opacity-100"><PlusIcon className="size-3.5" /></button>
     </li>
+    {sub && <li className="ml-4 border-l pl-1"><AddLine placeholder={"Подзадача к «" + t.text + "»"} className="py-0.5"
+      onAdd={v => add("tasks", { text: v, cat: t.cat, parent: t.id, order: nextOrder(db.tasks.filter(k => k.parent === t.id)), done: false })} onClose={() => setSub(false)} /></li>}
+  </>);
+}
+
+// a task's subtasks under it, and the line to add one
+function SubTasks({ t, kids, adding, setAdding }) {
+  if (!kids.length && !adding) return null;
+  return (
+    <ul className="mb-1 ml-9 border-l pl-2" aria-label={"Подзадачи: " + t.text}>
+      {kids.map(k => <li key={k.id}><TaskRow t={k} noFocusMark /></li>)}
+      {adding && <li><AddLine placeholder="Подзадача, Enter — ещё одна" className="px-0"
+        onAdd={v => add("tasks", { text: v, cat: t.cat, parent: t.id, order: nextOrder(kids), done: false })} onClose={() => setAdding(false)} /></li>}
+    </ul>
   );
+}
+
+// a task anywhere outside work, with its subtasks and «Добавить подзадачу» in its menu
+function SubRow({ t }) {
+  const db = useDb();
+  const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);
+  const [sub, setSub] = useState(false);
+  return <li><TaskRow t={t} onAddSub={() => setSub(true)} /><SubTasks t={t} kids={kids} adding={sub} setAdding={setSub} /></li>;
 }
