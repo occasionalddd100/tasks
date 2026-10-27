@@ -102,7 +102,7 @@ export default function DiaryDesk({ info, onPick, burst }) {
   };
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_17rem] items-start gap-8 xl:grid-cols-[minmax(0,1fr)_19rem]">
+    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_17rem] xl:grid-cols-[minmax(0,1fr)_19rem]">
       <div ref={feed} className="min-w-0">
         <Composer date={active} doc={info(active).doc} onToday={() => goTo(now)} burst={burst} />
         <div className="flex flex-col">
@@ -112,7 +112,7 @@ export default function DiaryDesk({ info, onPick, burst }) {
           <div ref={more} className="h-[60vh]" />
         </div>
       </div>
-      <aside className="sticky top-6 flex flex-col gap-4">
+      <aside className="sticky top-6 flex flex-col gap-4 max-lg:hidden">
         <MiniCalendar info={info} sel={active} onPick={goTo} />
         <Streak info={info} />
       </aside>
@@ -256,7 +256,7 @@ function DaySection({ b, on, refFn }) {
         </ol>
       )}
       {grid.length > 0 && (
-        <ul className={cn("ml-[3.9rem] grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-1.5", line.length > 0 && "mt-2")}>
+        <ul className={cn("ml-[3.9rem] grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-1.5", line.length > 0 && "mt-2")}>
           {grid.map((e, k) => (
             <motion.li key={e.key} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: Math.min(k * 0.02, 0.3) }}
               className={cn("group relative flex min-w-0 items-start gap-2 rounded-lg border px-2.5 py-1.5", e.kind === "habit" ? "border-violet-500/25 bg-violet-500/[0.06]" : "border-good/25 bg-good/[0.07]")}>

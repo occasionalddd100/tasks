@@ -75,7 +75,6 @@ export default function JournalView({ mode = "timeline" }) {
     return n;
   }, [items, mine]);
   const deadline = Math.ceil((new Date("2026-10-31T23:59:00+03:00") - new Date()) / 864e5);
-  const todayDone = info(today()).items.length;
   const todayMood = moodOf(mine.get(today())?.mood);
 
   const pick = (date, edit = false) => setOpen({ date, edit });
@@ -100,14 +99,9 @@ export default function JournalView({ mode = "timeline" }) {
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Дневник</h1>
         </div>
-        {!desk && <div className="flex flex-wrap gap-2">
-          <Badge>сегодня: <b>{todayDone}</b> {plural(todayDone, ["дело", "дела", "дел"])}</Badge>
-          {streak >= 2 && <Badge><FlameIcon className="size-3.5 text-orange-500" />подряд: <b>{streak}</b> {plural(streak, ["день", "дня", "дней"])}</Badge>}
-          <button type="button" onClick={() => pick(today(), true)} className="ml-auto text-sm font-medium text-muted-foreground hover:text-foreground">Открыть сегодня →</button>
-        </div>}
       </header>
       <PillTabs>{TABS.filter(x => !desk || x.k !== "days").map(({ k, label, icon: Icon }) => <PillTab key={k} on={shownTab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>
-      {shownTab === "diary" && (desk ? <DiaryDesk info={info} onPick={pick} burst={bursts.fire} /> : <ThoughtsCard i={info(today())} />)}
+      {shownTab === "diary" && <DiaryDesk info={info} onPick={pick} burst={bursts.fire} />}
       {shownTab === "days" && <Heatmap info={info} sel={open?.date} onPick={pick} />}
       {shownTab === "stats" && <Stats info={info} items={items} mine={mine} streak={streak} />}
       </>}
