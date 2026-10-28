@@ -39,7 +39,7 @@ export default function MobileNav({ onMenu, onSearch, onAdd, journal, diary, tas
       <div className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${all.length}, minmax(0, 1fr))` }}>
         {all.map(({ k, label, icon: Icon, onClick, active, badge, accent }) => accent ? (
           <div key={k} className="flex h-16 items-center justify-center">
-            <button type="button" onClick={onClick} aria-label="Новая задача"
+            <button type="button" onClick={onClick} aria-label={label}
               className="grid size-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-md transition-transform active:scale-95">
               <PlusIcon className="size-6" />
             </button>

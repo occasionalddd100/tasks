@@ -1,6 +1,9 @@
 package io.github.occasionalddd100.tasks;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.media.MediaScannerConnection;
@@ -56,6 +59,25 @@ public class MainActivity extends BridgeActivity {
             @JavascriptInterface
             public void save(String json) { new Thread(() -> saveAll(json)).start(); }
         }, "AndroidMedia");
+        // the web view may not read the clipboard itself: window.AndroidClip.read() -> {"text":…, "image": data url}
+        bridge.getWebView().addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public String read() {
+                try {
+                    ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    ClipData clip = cm == null ? null : cm.getPrimaryClip();
+                    JSONObject out = new JSONObject();
+                    if (clip == null || clip.getItemCount() == 0) return "{}";
+                    ClipData.Item it = clip.getItemAt(0);
+                    if (it.getUri() != null) {
+                        String type = getContentResolver().getType(it.getUri());
+                        if (type != null && type.startsWith("image/")) { String d = imageData(it.getUri()); if (d != null) out.put("image", d); }
+                    }
+                    if (!out.has("image")) { CharSequence t = it.coerceToText(MainActivity.this); if (t != null) out.put("text", t.toString()); }
+                    return out.toString();
+                } catch (Exception e) { return "{}"; }
+            }
+        }, "AndroidClip");
         readShare(getIntent());
     }
 

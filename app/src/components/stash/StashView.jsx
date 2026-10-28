@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, 
 import * as Pop from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  CheckIcon, DownloadIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
+  ClipboardPasteIcon, CheckIcon, DownloadIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
   SearchIcon, StickyNoteIcon, ArrowUpIcon, ChevronUpIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
   FolderPlusIcon, FolderIcon, CopyIcon, MaximizeIcon, ZoomInIcon, ZoomOutIcon, FolderOpenIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
 } from "lucide-react";
@@ -77,11 +77,13 @@ export default function StashView({ id, fresh, go }) {
   const [dockAnchor, setDockAnchor] = useState(null);
   const isPhone = typeof matchMedia !== "undefined" && matchMedia("(max-width: 767px)").matches;
   const [sharing, setSharing] = useState(false);
+  const [adding, setAdding] = useState(false);
   const searchRef = useRef(null), addRef = useRef(null);
   const focus = r => { scrollTop(); setTimeout(() => r.current?.focus(), 250); };
   useNavItems([
     { k: "tags", label: "Теги", icon: TagIcon, active: tagsOpen, badge: tags.length + (unseen ? 1 : 0), onClick: () => { setFan(false); setTagsOpen(v => !v); } },
     { k: "search", label: "Поиск", icon: SearchIcon, onClick: () => focus(searchRef) },
+    { k: "add", label: "Добавить", icon: PlusIcon, accent: true, onClick: () => { setFan(false); setTagsOpen(false); setAdding(true); } },
     { k: "boards", label: cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски", icon: Columns3Icon, active: fan, onClick: () => { setTagsOpen(false); setFan(v => !v); } },
   ]);
 
@@ -130,10 +132,13 @@ export default function StashView({ id, fresh, go }) {
         onAdd={addTab} onRename={renameTab} onDelete={deleteTab} dragTab={dragTab} setDragTab={setDragTab} onDrop={dropOnTab} dragging={() => !!dragged.current} /></div>
 
       <AddLine stash={id} tab={target} inputRef={addRef} />
+      <AddSheet open={adding} setOpen={setAdding} stash={id} tabs={tabs} tab={target} />
       {/* computer folders: a desktop-only thing */}
       <div className="contents max-md:hidden"><Sources stash={stash} tab={target} /></div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/* phone: the search stays pinned under the top bar */}
+      <div className="flex flex-wrap items-center gap-2 max-md:sticky max-md:top-12 max-md:z-10 max-md:-mx-4 max-md:border-b max-md:bg-background/80 max-md:px-4 max-md:py-2"
+        style={isPhone ? { backdropFilter: "blur(14px) saturate(1.6)", WebkitBackdropFilter: "blur(14px) saturate(1.6)" } : undefined}>
         <label className="flex h-9 min-w-40 flex-1 items-center gap-2 rounded-lg border bg-card px-3 focus-within:ring-2 focus-within:ring-ring/40 sm:max-w-xs">
           <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
           <input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по тексту и тегам" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
@@ -232,12 +237,9 @@ const TabBtn = PillTab;
 
 /* ───────────── the one line to add things ───────────── */
 
-function AddLine({ stash, tab, inputRef }) {
-  const [v, setV] = useState("");
+// adding pictures / text / links into a board: shared by the line on top and the phone's "+" sheet
+function useAdder(stash, tab) {
   const [busy, setBusy] = useState(false);
-  const [over, setOver] = useState(false);
-  const file = useRef(null);
-
   const addFiles = async files => {
     const imgs = [...files].filter(f => f.type.startsWith("image/"));
     if (!imgs.length) return;
@@ -247,14 +249,22 @@ function AddLine({ stash, tab, inputRef }) {
     setBusy(false);
   };
   const submit = async text => {
-    const s = (text ?? v).trim(); if (!s) return;
-    setV("");
+    const s = (text || "").trim(); if (!s) return;
     const links = linksIn(s);
     // words around the links: keep the whole text as a note, so nothing gets lost
     const rest = links.reduce((t, l) => t.split(l).join(" "), s).replace(/[\s,;|•·\-–—]+/g, " ").trim();
     if (!links.length || rest) return addText(stash, tab, s);
     for (const l of links.reverse()) await addLink(stash, tab, l);
   };
+  return { busy, addFiles, submit };
+}
+
+function AddLine({ stash, tab, inputRef }) {
+  const [v, setV] = useState("");
+  const [over, setOver] = useState(false);
+  const file = useRef(null);
+  const { busy, addFiles, submit: add } = useAdder(stash, tab);
+  const submit = text => { const s = text ?? v; if (text == null) setV(""); return add(s); };
 
   // dropping or pasting anywhere on the page works too
   useEffect(() => {
@@ -282,7 +292,7 @@ function AddLine({ stash, tab, inputRef }) {
   }, [stash, tab]);
 
   return (
-    <div data-addline className={cn("relative flex items-center gap-2 rounded-2xl border bg-card p-1.5 pl-4 shadow-sm transition-all focus-within:ring-2 focus-within:ring-ring/40", over && "scale-[1.01] ring-2 ring-primary/60")}>
+    <div data-addline className={cn("relative flex max-md:hidden items-center gap-2 rounded-2xl border bg-card p-1.5 pl-4 shadow-sm transition-all focus-within:ring-2 focus-within:ring-ring/40", over && "scale-[1.01] ring-2 ring-primary/60")}>
       <LinkIcon className="size-4 shrink-0 text-muted-foreground" />
       <input ref={inputRef} value={v} onChange={e => setV(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()}
         placeholder={over ? "Отпускай, добавлю картинку" : "Вставь ссылку или текст"} aria-label="Добавить в стэш"
@@ -294,6 +304,75 @@ function AddLine({ stash, tab, inputRef }) {
       </button>
       <button type="button" onClick={() => submit()} disabled={!v.trim()} aria-label="Добавить" className="grid h-10 shrink-0 place-items-center rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-30 sm:px-4"><span className="max-sm:hidden">Добавить</span><PlusIcon className="size-5 sm:hidden" /></button>
     </div>
+  );
+}
+
+// phone: the "+" in the bottom bar opens this sheet; the clipboard is one tap away
+const readClipboard = async () => {
+  // the Android app reads it natively (the web view isn't allowed to)
+  if (window.AndroidClip) { try { const r = JSON.parse(window.AndroidClip.read() || "{}"); return { text: r.text || "", images: r.image ? [r.image] : [] }; } catch {} }
+  const out = { text: "", images: [] };
+  try {
+    for (const item of await navigator.clipboard.read()) {
+      const t = item.types.find(x => x.startsWith("image/"));
+      if (t) out.images.push(URL.createObjectURL(await item.getType(t)));
+      else if (item.types.includes("text/plain")) out.text ||= await (await item.getType("text/plain")).text();
+    }
+  } catch { try { out.text = await navigator.clipboard.readText(); } catch {} }
+  return out;
+};
+const toFile = async (src, k) => { const b = await (await fetch(src)).blob(); return new File([b], "clip-" + k + "." + (b.type.split("/")[1] || "png"), { type: b.type || "image/png" }); };
+
+function AddSheet({ open, setOpen, stash, tabs, tab }) {
+  const [to, setTo] = useState(tab);
+  const [v, setV] = useState("");
+  const [clip, setClip] = useState(null);
+  const file = useRef(null);
+  const { busy, addFiles, submit } = useAdder(stash, to);
+  useEffect(() => { if (open) { setTo(tab); setV(""); setClip(null); if (window.AndroidClip) readClipboard().then(setClip); } }, [open]);
+  const done = msg => { setOpen(false); toast.success(msg + (tabs.length > 1 ? " в «" + (tabs.find(t => t.id === to)?.name || "") + "»" : "")); };
+  const fromClip = async c => {
+    c ||= await readClipboard();
+    if (c.images.length) { await addFiles(await Promise.all(c.images.map(toFile))); return done(c.images.length > 1 ? "Картинки добавлены" : "Картинка добавлена"); }
+    if (c.text.trim()) { await submit(c.text); return done("Добавил"); }
+    toast("В буфере пусто или нет доступа. Вставь в поле вручную");
+  };
+  const preview = clip && (clip.images[0] || clip.text.trim());
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} aria-describedby={undefined}
+        className="flex flex-col gap-3 p-4 sm:max-w-md max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0 max-sm:pt-2 max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))] max-sm:data-[state=open]:animate-[sheet-up_240ms_cubic-bezier(.2,0,0,1)]">
+        <div className="mx-auto h-1 w-10 rounded-full bg-border sm:hidden" />
+        <DialogTitle className="text-base">Добавить в стэш</DialogTitle>
+        {tabs.length > 1 && (
+          <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
+            {tabs.map(t => <button key={t.id} type="button" onClick={() => setTo(t.id)}
+              className={cn("h-8 shrink-0 rounded-full border px-3 text-sm", t.id === to ? "border-foreground bg-foreground text-background" : "text-muted-foreground")}>{t.name}</button>)}
+          </div>
+        )}
+        <button type="button" onClick={() => fromClip(clip)} disabled={busy}
+          className="flex min-h-14 items-center gap-3 rounded-2xl bg-primary px-4 py-2 text-left text-primary-foreground transition-transform active:scale-[0.98] disabled:opacity-60">
+          {busy ? <Loader2Icon className="size-5 shrink-0 animate-spin" /> : <ClipboardPasteIcon className="size-5 shrink-0" />}
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="font-medium">Вставить из буфера</span>
+            {preview && !clip.images[0] && <span className="truncate text-xs opacity-75">{clip.text.trim()}</span>}
+          </span>
+          {clip?.images[0] && <img src={clip.images[0]} alt="" className="size-10 shrink-0 rounded-lg object-cover" />}
+        </button>
+        <div className="flex items-end gap-2">
+          <textarea value={v} onChange={e => setV(e.target.value)} rows={1} enterKeyHint="send" placeholder="Ссылка, текст или заметка"
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && v.trim()) { e.preventDefault(); submit(v).then(() => done("Добавил")); } }}
+            className="field-sizing-content max-h-40 min-h-12 min-w-0 flex-1 resize-none rounded-2xl border bg-background px-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-ring/40" />
+          <button type="button" onClick={() => submit(v).then(() => done("Добавил"))} disabled={!v.trim()} aria-label="Добавить"
+            className="grid size-12 shrink-0 place-items-center rounded-2xl bg-foreground text-background disabled:opacity-30"><ArrowUpIcon className="size-5" /></button>
+        </div>
+        <button type="button" onClick={() => file.current?.click()} className="flex h-12 items-center gap-3 rounded-2xl border px-4 text-sm font-medium active:bg-accent">
+          <ImageIcon className="size-5 text-muted-foreground" />Фото из галереи
+        </button>
+        <input ref={file} type="file" accept="image/*" multiple className="hidden"
+          onChange={async e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) { await addFiles(f); done(f.length > 1 ? "Картинки добавлены" : "Картинка добавлена"); } }} />
+      </DialogContent>
+    </Dialog>
   );
 }
 
