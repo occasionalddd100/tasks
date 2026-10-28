@@ -704,9 +704,10 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
           <Draft key={c.id + "t"} value={c.title || ""} onSave={title => save({ title })} placeholder="Название" aria-label="Название"
             className="-mt-2 w-full bg-transparent text-xl leading-snug font-semibold outline-none placeholder:text-muted-foreground/50" />
           {c.text && c.provider !== "note" && <p className="-mt-2 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">{c.text}</p>}
-          {c.provider === "note" && (
-            <Draft as="textarea" key={c.id + "x"} value={c.text || ""} onSave={text => save({ text })} rows={4} aria-label="Текст"
-              className="w-full resize-y rounded-lg border bg-background p-3 text-[15px] leading-relaxed outline-none focus:ring-2 focus:ring-ring/40" />
+          {/* the short text a note card shows on the board; hidden when empty and the long note below is used instead */}
+          {c.provider === "note" && (c.text || !c.note) && (
+            <Draft as="textarea" key={c.id + "x"} value={c.text || ""} onSave={text => save({ text })} rows={2} aria-label="Текст на карточке" placeholder="Текст, который виден на карточке"
+              className="-mt-2 field-sizing-content min-h-12 w-full resize-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50" />
           )}
           <Draft as="textarea" key={c.id + "d"} value={c.desc || ""} onSave={desc => save({ desc })} rows={2} placeholder="Короткое описание: зачем сохранил, что посмотреть"
             className="w-full resize-none bg-transparent text-sm leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/50" aria-label="Описание" />
