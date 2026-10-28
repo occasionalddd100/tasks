@@ -249,7 +249,9 @@ function AddLine({ stash, tab, inputRef }) {
     const s = (text ?? v).trim(); if (!s) return;
     setV("");
     const links = linksIn(s);
-    if (!links.length) return addText(stash, tab, s);
+    // words around the links: keep the whole text as a note, so nothing gets lost
+    const rest = links.reduce((t, l) => t.split(l).join(" "), s).replace(/[\s,;|•·\-–—]+/g, " ").trim();
+    if (!links.length || rest) return addText(stash, tab, s);
     for (const l of links.reverse()) await addLink(stash, tab, l);
   };
 

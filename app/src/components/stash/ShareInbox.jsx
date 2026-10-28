@@ -33,8 +33,9 @@ export default function ShareInbox({ go }) {
   const stash = stashes.find(s => s.id === target.stash) || stashes[0];
   const tabs = stash?.tabs || [];
   const tab = tabs.find(t => t.id === target.tab)?.id || tabs[0]?.id || "";
-  const text = [got?.subject && !got?.text?.includes(got.subject) && !linksIn(got?.text || "").length ? got.subject : "", got?.text || ""].filter(Boolean).join("\n").trim();
-  const links = linksIn(text), images = got?.images || [];
+  const body = (got?.text || "").trim();
+  const links = linksIn(body), images = got?.images || [];
+  const rest = links.reduce((t, l) => t.split(l).join(" "), body).replace(/[\s,;|•·\-–—]+/g, " ").trim();
 
   const save = async () => {
     if (!stash || busy) return;
@@ -42,7 +43,8 @@ export default function ShareInbox({ go }) {
     try { localStorage.setItem(LAST, JSON.stringify({ stash: stash.id, tab })); } catch {}
     try {
       for (let k = 0; k < images.length; k++) await addPhoto(stash.id, tab, await uploadPhoto(await toFile(images[k], k), "stash"));
-      if (links.length) for (const l of [...links].reverse()) await addLink(stash.id, tab, l);
+      // only bare links become link cards; anything with words around the links is kept whole as a note
+      if (links.length && !rest) for (const l of [...links].reverse()) await addLink(stash.id, tab, l);
       else if (text) await addText(stash.id, tab, text);
       const id = stash.id;
       toast.success("Сохранено в «" + stash.name + "»", { action: { label: "Открыть", onClick: () => go({ stash: id }) } });
@@ -52,7 +54,9 @@ export default function ShareInbox({ go }) {
   };
 
   const pickStash = id => setTarget({ stash: id, tab: "" });
-  const Kind = images.length ? ImageIcon : links.length ? LinkIcon : StickyNoteIcon;
+  // a browser shares a page as title + bare link (a link card); a notes app shares the whole note, kept as is with its title
+  const text = links.length && !rest ? body : [got?.subject && !body.includes(got.subject) ? got.subject : "", body].filter(Boolean).join("\n").trim();
+  const Kind = images.length ? ImageIcon : links.length && !rest ? LinkIcon : StickyNoteIcon;
   return (
     <Dialog open={!!got && db.ready} onOpenChange={o => !o && !busy && setGot(null)}>
       <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="gap-3 p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
