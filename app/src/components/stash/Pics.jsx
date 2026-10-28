@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronLeftIcon, ChevronRightIcon, CopyIcon, DownloadIcon, ImagePlusIcon, Loader2Icon, XIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, CopyIcon, StarIcon, DownloadIcon, ImagePlusIcon, Loader2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { update, getDb } from "@/lib/db";
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
@@ -68,17 +68,17 @@ export function Carousel({ slides, className, slideClass, onTap, style, keys }) 
 }
 
 // extra pictures on a board card: a little stack of previews over the cover, with "+N"; a tap opens the viewer
-export function PicsOverlay({ c, skip = 0, small }) {
-  const pics = (c.pics || []).slice(skip);
+export function PicsOverlay({ c, hide, small }) {
+  const pics = (c.pics || []).filter(p => p.path !== hide);
   if (!pics.length) return null;
-  const off = gallery(c).length - (c.pics || []).length + skip, max = small ? 2 : 3, more = pics.length - max;
+  const all = gallery(c), at = p => Math.max(0, all.findIndex(x => x.path === p.path)), max = small ? 2 : 3, more = pics.length - max;
   return (
     <div className="absolute bottom-2 left-2 flex items-center" onClick={e => e.stopPropagation()}>
       {pics.slice(0, max).map((p, k) => (
-        <Thumb key={p.path} p={p} onClick={() => viewPics(c, off + k)}
+        <Thumb key={p.path} p={p} onClick={() => viewPics(c, at(p))}
           className={cn("size-10 shrink-0 border-2 border-white shadow-md transition-transform hover:z-10 hover:scale-110", small && "size-8", k > 0 && "-ml-3")} />
       ))}
-      {more > 0 && <button type="button" onClick={() => viewPics(c, off + max)} className="-ml-2 grid h-7 min-w-7 place-items-center rounded-full bg-black/70 px-1.5 text-xs font-semibold text-white shadow-md backdrop-blur">+{more}</button>}
+      {more > 0 && <button type="button" onClick={() => viewPics(c, at(pics[max]))} className="-ml-2 grid h-7 min-w-7 place-items-center rounded-full bg-black/70 px-1.5 text-xs font-semibold text-white shadow-md backdrop-blur">+{more}</button>}
     </div>
   );
 }
@@ -130,13 +130,17 @@ export function PicsEditor({ c }) {
   }, [c.id]);
   const all = gallery(c), off = all.length - (c.pics || []).length;
   const addFiles = files => addPics(c.id, files, setBusy);
-  const drop = p => { update("clips", c.id, { pics: (c.pics || []).filter(x => x.path !== p.path) }); deletePhoto(p.path); };
+  const drop = p => { update("clips", c.id, { pics: (c.pics || []).filter(x => x.path !== p.path), ...(c.cover === p.path ? { cover: "" } : {}) }); deletePhoto(p.path); };
+  const setCover = p => update("clips", c.id, { cover: c.cover === p.path ? "" : p.path });
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-1.5">
         {all.map((p, k) => (
           <div key={p.path} className="group relative">
             <Thumb p={p} className="aspect-square w-full" onClick={() => viewPics(c, k)} />
+            {k >= off && <button type="button" onClick={() => setCover(p)} title={c.cover === p.path ? "Убрать с обложки" : "Сделать обложкой"} aria-label={c.cover === p.path ? "Убрать с обложки" : "Сделать обложкой"}
+              className={cn("absolute bottom-1 left-1 grid size-6 place-items-center rounded-full text-white transition-opacity", c.cover === p.path ? "bg-amber-500" : "bg-black/60 opacity-0 group-hover:opacity-100 max-md:opacity-100")}><StarIcon className={cn("size-3.5", c.cover === p.path && "fill-current")} /></button>}
+            {c.cover === p.path && <span className="pointer-events-none absolute top-1 left-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-semibold text-white">обложка</span>}
             {k >= off && <button type="button" onClick={() => drop(p)} aria-label="Убрать картинку"
               className="absolute top-1 right-1 grid size-6 place-items-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 max-md:opacity-100"><XIcon className="size-3.5" /></button>}
           </div>

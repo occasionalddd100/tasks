@@ -358,6 +358,8 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
           { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: () => delClip(c) },
         ].filter(Boolean);
   const hasMedia = c.provider !== "note" && c.provider !== "link" || c.thumb;
+  // a picture added later can be chosen as the cover (c.cover = its path)
+  const cover = c.cover && c.pics?.find(p => p.path === c.cover);
   return (
     <div ref={span} className="self-start">
     <div className={cn("pb-2.5 sm:pb-4", small && "pb-2 sm:pb-3", tiny && "pb-1.5 sm:pb-2")}>
@@ -369,8 +371,8 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
       className="group relative overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-lg sm:rounded-2xl">
       {(hasMedia || c.pics?.length > 0) && (
         <div className={cn("relative", tiny && "max-h-56 overflow-hidden [&>*]:max-h-56")} onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)} onClick={onOpen}>
-          {hasMedia ? <Preview c={c} compact onOpen={onOpen} /> : <PicImg p={c.pics[0]} className="block h-auto max-h-[70vh]" />}
-          <PicsOverlay c={c} skip={hasMedia ? 0 : 1} small={small} />
+          {cover ? <PicImg p={cover} className="block h-auto max-h-[70vh]" /> : hasMedia ? <Preview c={c} compact onOpen={onOpen} /> : <PicImg p={c.pics[0]} className="block h-auto max-h-[70vh]" />}
+          <PicsOverlay c={c} hide={cover ? cover.path : hasMedia ? null : c.pics[0].path} small={small} />
         </div>
       )}
       <div className={cn("flex flex-col gap-1.5 p-2.5 sm:p-3", small && "gap-1 p-2 sm:p-2")} onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}>
