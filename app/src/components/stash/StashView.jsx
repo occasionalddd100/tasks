@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { useDb, getDb, update, updateMany, remove } from "@/lib/db";
 import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh } from "@/lib/stash";
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
+import { PaletteIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PicsEditor, PicImg, Carousel, PicsOverlay } from "@/components/stash/Pics";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -45,6 +46,8 @@ export default function StashView({ id, fresh, go }) {
   const [dragTab, setDragTab] = useState(null);
   const dragged = useRef(null);
 
+  setGridScope(id + ":" + cur);
+  tagHues = stash?.tagColors || {}; tagStash = id;
   const grid = GRID[useGrid()];
   const all = useMemo(() => db.clips.filter(c => c.stash === id), [db.clips, id]);
   const tagCounts = useMemo(() => {
@@ -309,10 +312,21 @@ const GRID = [
   { k: "s", label: "Мельче", w: 200, m: 3, gap: "gap-x-2 sm:gap-x-3" },
   { k: "xs", label: "Мелко", w: 150, m: 4, gap: "gap-x-1.5 sm:gap-x-2" },
 ];
-let gridLevel = (() => { try { const v = +localStorage.getItem("stashGrid"); return v >= 0 && v < GRID.length ? v : 1; } catch { return 1; } })();
+// card size is remembered per stash board ("stashGrid:<stash>:<board>"); a board never zoomed starts from the last size used
+const clampGrid = v => Math.max(0, Math.min(GRID.length - 1, v));
+const readGrid = k => { try { const v = localStorage.getItem(k); return v != null && v !== "" && +v >= 0 && +v < GRID.length ? +v : null; } catch { return null; } };
+let gridScope = "", gridLevel = readGrid("stashGrid") ?? 1;
 const gridSubs = new Set();
-const setGrid = v => { gridLevel = Math.max(0, Math.min(GRID.length - 1, v)); try { localStorage.setItem("stashGrid", gridLevel); } catch {} gridSubs.forEach(f => f()); };
-const useGrid = () => useSyncExternalStore(f => (gridSubs.add(f), () => gridSubs.delete(f)), () => gridLevel);
+const levelOf = scope => readGrid("stashGrid:" + scope) ?? gridLevel;
+let shown = levelOf("");
+// the open board sets the scope while rendering, so everything under it reads that board's size
+const setGridScope = scope => { if (scope !== gridScope) { gridScope = scope; shown = levelOf(scope); } };
+const setGrid = v => {
+  shown = clampGrid(v); gridLevel = shown;
+  try { localStorage.setItem("stashGrid:" + gridScope, shown); localStorage.setItem("stashGrid", shown); } catch {}
+  gridSubs.forEach(f => f());
+};
+const useGrid = () => useSyncExternalStore(f => (gridSubs.add(f), () => gridSubs.delete(f)), () => shown);
 
 function GridZoom() {
   const g = useGrid();
@@ -502,6 +516,10 @@ async function dropTag(clips, t) {
 function tagActions(t, clips, setEdit, setTags) {
   return [
     { label: "Переименовать", icon: PencilIcon, onSelect: () => setTimeout(() => setEdit(t)) },
+    { label: "Цвет", icon: PaletteIcon, sub: [
+      ...HUES.map(([name, h]) => ({ label: <span className="flex items-center gap-2"><span className="tag-dot" style={{ "--h": h }} />{name}</span>, active: tagHues[t] === h, onSelect: () => setTagHue(t, h) })),
+      { label: "Как было (авто)", onSelect: () => setTagHue(t, null) },
+    ] },
     { label: "Удалить тег", icon: Trash2Icon, variant: "destructive", onSelect: async () => { if (await dropTag(clips, t)) setTags?.(s => s.filter(x => x !== t)); } },
   ];
 }
@@ -577,8 +595,8 @@ function Preview({ c, compact, autoplay, onOpen, fit }) {
   const maxH = compact ? "max-h-[70vh]" : "max-h-[75vh]";
 
   if (c.provider === "local") return <LocalMedia c={c} compact={compact} autoplay={autoplay} fit={fit} />;
-  if (c.provider === "photo") return photoUrl ? <img src={photoUrl} alt="" className={fit ? "block size-full object-contain" : cn("block w-full object-cover", maxH)} /> : <div className={box} style={sz(ratio)} />;
-  if (c.provider === "image") return <img src={c.url} alt="" loading="lazy" className={fit ? "block size-full object-contain" : cn("block w-full object-cover", maxH)} />;
+  if (c.provider === "photo") return photoUrl ? <img src={photoUrl} alt="" className={fit ? "absolute inset-0 block size-full object-contain" : cn("block w-full object-cover", maxH)} /> : <div className={box} style={sz(ratio)} />;
+  if (c.provider === "image") return <img src={c.url} alt="" loading="lazy" className={fit ? "absolute inset-0 block size-full object-contain" : cn("block w-full object-cover", maxH)} />;
 
   // X keeps the actual video file and photos: play them right in the card
   // if X refuses the file (it sometimes blocks other sites), fall back to X's own embedded post
@@ -617,7 +635,7 @@ function Preview({ c, compact, autoplay, onOpen, fit }) {
   if (!thumb && !embed) return null;
   return (
     <button type="button" onClick={e => { e.stopPropagation(); if (onOpen) return onOpen(); if (embed) setPlay(true); else if (c.url) window.open(c.url, "_blank", "noopener"); }}
-      className={cn(box, "group/p block", fit && thumb && "size-full bg-transparent")} style={fit && thumb ? undefined : sz(thumb ? ratio : 16 / 9)} aria-label={embed ? "Смотреть" : "Открыть"}>
+      className={cn(box, "group/p block", fit && thumb && "!absolute inset-0 size-full bg-transparent")} style={fit && thumb ? undefined : sz(thumb ? ratio : 16 / 9)} aria-label={embed ? "Смотреть" : "Открыть"}>
       {thumb ? <img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className={cn("absolute inset-0 size-full transition-transform duration-500", fit ? "object-contain" : "object-cover group-hover/p:scale-105")}
         onError={() => { setBroken(true); if (c.url && c.provider !== "youtube") refresh(c.id, c.url); }} />
         : <div className="absolute inset-0 grid place-items-center" style={{ background: `linear-gradient(135deg, ${PROVIDER[c.provider]?.color}55, transparent)` }}><Brand p={c.provider} size={36} /></div>}
@@ -665,7 +683,15 @@ function Brand({ p, size = 14 }) {
 /* ───────────── card details ───────────── */
 
 // a tag's colour comes from its name, so the same tag looks the same everywhere
-const hue = t => { let h = 0; for (const ch of t) h = (h * 31 + ch.charCodeAt(0)) % 360; return { "--h": (h * 137) % 360 }; };
+// (a colour picked from the tag's menu wins; it is stored on the stash, so it is the same for everyone)
+let tagHues = {}, tagStash = "";
+const hue = t => { const own = tagHues[t]; if (own != null) return { "--h": own }; let h = 0; for (const ch of t) h = (h * 31 + ch.charCodeAt(0)) % 360; return { "--h": (h * 137) % 360 }; };
+const HUES = [["Красный", 4], ["Оранжевый", 25], ["Жёлтый", 45], ["Салатовый", 85], ["Зелёный", 145], ["Бирюзовый", 175], ["Голубой", 200], ["Синий", 225], ["Фиолетовый", 265], ["Пурпурный", 295], ["Розовый", 330]];
+const setTagHue = (t, h) => {
+  const s = getDb().stashes.find(x => x.id === tagStash); if (!s) return;
+  const next = { ...(s.tagColors || {}) }; if (h == null) delete next[t]; else next[t] = h;
+  update("stashes", s.id, { tagColors: next });
+};
 
 // typing goes into local state at once; the card is saved after a short pause and on leaving the field,
 // so the round trip to the database never fights the keyboard
@@ -695,14 +721,14 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
 
   return (
     <Dialog open={!!id} onOpenChange={o => !o && setOpen(null)}>
-      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className={cn("thin-scroll max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[env(safe-area-inset-bottom)]",
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className={cn("thin-scroll overscroll-contain outline-none focus:outline-none focus-visible:ring-0 max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[env(safe-area-inset-bottom)]",
         media && "md:h-[88dvh] md:max-w-[min(92vw,80rem)] md:grid-cols-[minmax(0,1fr)_24rem] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden")}>
         <DialogTitle className="sr-only">{c.title || "Карточка"}</DialogTitle>
         {/* computer: the picture on the left at full height, everything else in a column on the right; phone: picture capped so the rest is in reach */}
-        {media && <div className="grid h-[var(--mh)] place-items-center overflow-hidden bg-black/90 [container-type:size] max-md:rounded-t-2xl md:h-full md:rounded-l-lg"
+        {media && <div className="relative flex h-[var(--mh)] items-center justify-center overflow-hidden bg-black/90 [container-type:size] max-md:rounded-t-2xl md:h-full md:rounded-l-lg"
           style={{ "--mh": `min(48dvh, ${100 / mediaRatio}vw)` }}>
           {c.pics?.length > 0
-            ? <Carousel keys className="size-full" slideClass="grid place-items-center [container-type:size]"
+            ? <Carousel keys className="size-full" slideClass="flex items-center justify-center [container-type:size]"
                 slides={[...(own ? [<Preview key="m" c={c} autoplay={false} fit />] : []), ...c.pics.map(p => <PicImg key={p.path} p={p} fit />)]} />
             : <Preview key={c.id} c={c} autoplay={c.provider !== "x"} fit />}
         </div>}
@@ -820,9 +846,9 @@ function LocalMedia({ c, compact, autoplay, fit }) {
   useFolders();
   const [r, setR] = useState(null);
   useEffect(() => { let on = true; fileUrl(c).then(x => on && setR(x)); return () => { on = false; }; });
-  const maxH = fit ? "size-full object-contain" : compact ? "max-h-[70vh]" : "max-h-[75vh]";
+  const maxH = fit ? "absolute inset-0 size-full object-contain" : compact ? "max-h-[70vh]" : "max-h-[75vh]";
   if (r?.url) return c.video
-    ? <div onClick={e => e.stopPropagation()} className={cn(fit && "size-full")}><video src={r.url} controls playsInline autoPlay={!!autoplay} preload="metadata" className={cn("block w-full bg-black", maxH)} /></div>
+    ? <div onClick={e => e.stopPropagation()} className={cn(fit && "absolute inset-0 grid place-items-center")}><video src={r.url} controls playsInline autoPlay={!!autoplay} preload="metadata" className={cn("block w-full bg-black", maxH)} /></div>
     : <img src={r.url} alt={c.name} className={cn("block w-full object-cover", maxH)} />;
   return (
     <div className="grid aspect-[4/3] place-items-center gap-2 bg-muted p-4 text-center text-xs text-muted-foreground">

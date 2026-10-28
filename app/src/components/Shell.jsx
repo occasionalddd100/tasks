@@ -21,7 +21,9 @@ import ProfileDialog from "@/components/ProfileDialog";
 import { loadMe, useMe } from "@/lib/people";
 import { importFiles, fromDrop } from "@/lib/importMd";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
-import NotesTree, { IconBtn, CreateMenu, itemName } from "@/components/notes/NotesTree";
+import NotesTree, { IconBtn, CreateMenu, itemName, usePins, togglePin } from "@/components/notes/NotesTree";
+import { ItemIcon } from "@/components/IconPicker";
+import { PinOffIcon } from "lucide-react";
 import { ProjectView } from "@/components/tasks/ProjectViews";
 import FocusView from "@/components/tasks/FocusView";
 import { focusOpen } from "@/lib/focus";
@@ -197,6 +199,21 @@ function Sidebar({ view, go, email, search }) {
             {n > 0 && <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-xs tabular-nums text-foreground/80">{n}</span>}
           </button>
         ))}
+        {/* pinned boards, stashes and notes sit right here with the main sections */}
+        {usePins(db).map(k => {
+          const [coll, pid] = k.split(":"), kind = { notes: "note", projects: "project", stashes: "stash" }[coll];
+          const x = kind && db[coll]?.find(d => d.id === pid); if (!x) return null;
+          const on = view[kind] === pid;
+          const Fallback = kind === "note" ? FileTextIcon : kind === "stash" ? LayoutGridIcon : ListChecksIcon;
+          return (
+            <ActionsContext key={k} items={[{ label: "Открепить", icon: PinOffIcon, onSelect: () => togglePin(k) }]}>
+              <button type="button" onClick={() => go({ [kind]: pid })}
+                className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", on && "bg-accent")}>
+                <ItemIcon x={x} fallback={Fallback} className={!x.color && !x.icon?.startsWith("e:") ? "text-foreground" : undefined} /><span className="truncate">{itemName({ ...x, kind })}</span>
+              </button>
+            </ActionsContext>
+          );
+        })}
         <button type="button" onClick={() => openQuickAdd()} title="Новая задача (клавиша N)"
           className="mt-1 flex h-9 w-full items-center gap-2 rounded-md border border-dashed px-2 text-sm font-medium text-muted-foreground hover:border-primary/50 hover:bg-accent hover:text-foreground">
           <PlusIcon className="size-4" />Новая задача<kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-[11px]">N</kbd>

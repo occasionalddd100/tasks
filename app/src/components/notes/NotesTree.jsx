@@ -200,7 +200,7 @@ export default function NotesTree({ view, go, query }) {
     const [coll, id] = k.split(":");
     const x = db[coll]?.find(d => d.id === id);
     return x && { coll, x };
-  }).filter(Boolean);
+  }).filter(Boolean).filter(p => p.coll === "folders"); // pinned files live in the sidebar's top block
   return (
     <>
       {pinned.length > 0 && (
