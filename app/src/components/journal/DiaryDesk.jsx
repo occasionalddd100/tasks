@@ -139,8 +139,8 @@ function Composer({ date, doc, onToday, burst }) {
     setText("");
   };
   return (
-    <div className="sticky top-0 z-10 -mx-2 mb-2 bg-background/85 px-2 pt-1 pb-3" style={{ backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)" }}>
-      <div className="rounded-2xl border bg-card shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring/40">
+    <div className="sticky top-0 z-10 -mx-2 mb-2 bg-background/85 px-2 pt-1 pb-3 max-sm:top-12 max-sm:-mx-4 max-sm:mb-0 max-sm:px-0 max-sm:pt-0 max-sm:pb-0" style={{ backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)" }}>
+      <div className="rounded-2xl border bg-card shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring/40 max-sm:rounded-none max-sm:border-x-0 max-sm:shadow-none max-sm:focus-within:ring-0">
         <div className="flex items-end gap-1.5 p-1.5 pl-2">
           <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" role="tablist" aria-label="Что записать">
             {[["thought", SparklesIcon, "Мысль"], ["done", CheckIcon, "Сделал"]].map(([k, Icon, l]) => (
@@ -213,7 +213,8 @@ function DaySection({ b, on, refFn }) {
   const tint = mood ? { backgroundImage: `linear-gradient(90deg, ${mood.color}1c, transparent 60%)`, boxShadow: `inset 3px 0 0 ${mood.color}` } : undefined;
   return (
     <section ref={refFn} data-date={date} style={tint}
-      className={cn("group/day my-1.5 scroll-mt-32 rounded-2xl px-4 pt-3 pb-3 transition-colors", isToday && "border bg-card shadow-sm")}>
+      className={cn("group/day my-1.5 scroll-mt-32 rounded-2xl px-4 pt-3 pb-3 transition-colors max-sm:-mx-4 max-sm:my-0 max-sm:rounded-none max-sm:border-b max-sm:px-3 max-sm:py-2.5",
+        isToday && "bg-card sm:border sm:shadow-sm")}>
       <header className="mb-2 flex items-baseline gap-2.5">
         <button type="button" onClick={() => b.onPick(date)} className="group flex items-baseline gap-2 text-left" title="Открыть день целиком">
           <h2 className={cn("text-lg font-semibold tracking-tight transition-colors", !on && !isToday && "text-foreground/80")}>{t.main}</h2>
@@ -231,7 +232,7 @@ function DaySection({ b, on, refFn }) {
               const part = partOf(e.at), thought = e.kind === "thought";
               return (
                 <motion.li key={e.key} layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
-                  className="group grid grid-cols-[2.9rem_1fr_auto] gap-x-3">
+                  className="group grid grid-cols-[2.9rem_1fr_auto] gap-x-3 max-sm:grid-cols-[2.4rem_1fr_auto] max-sm:gap-x-2">
                   <span className="pt-[4px] text-right text-xs font-medium tabular-nums" style={{ color: part?.c }} title={part?.k}>{hm(e.at)}</span>
                   <div className="relative border-l-2 pb-1.5 pl-4" style={{ borderColor: part ? part.c + "70" : "color-mix(in oklch, var(--foreground) 18%, transparent)" }}>
                     {thought
@@ -258,7 +259,7 @@ function DaySection({ b, on, refFn }) {
         </ol>
       )}
       {grid.length > 0 && (
-        <ul className={cn("ml-[3.9rem] max-sm:ml-0 grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-1.5", line.length > 0 && "mt-2")}>
+        <ul className={cn("ml-[3.9rem] max-sm:ml-0 grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-1.5 max-sm:grid-cols-1 max-sm:gap-1", line.length > 0 && "mt-2")}>
           {grid.map((e, k) => (
             <motion.li key={e.key} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: Math.min(k * 0.02, 0.3) }}
               className={cn("group relative flex min-w-0 items-start gap-2 rounded-lg border px-2.5 py-1.5", e.kind === "habit" ? "border-violet-500/25 bg-violet-500/[0.06]" : "border-good/25 bg-good/[0.07]")}>
@@ -272,7 +273,7 @@ function DaySection({ b, on, refFn }) {
           ))}
         </ul>
       )}
-      {!list.length && <p className="ml-[3.9rem] max-sm:ml-0 pl-4 text-sm text-muted-foreground/70">{isToday ? "Пока пусто. Напиши строчку сверху." : "Без записей."}</p>}
+      {!list.length && <p className="ml-[3.9rem] pl-4 text-sm max-sm:ml-0 max-sm:pl-0 text-muted-foreground/70">{isToday ? "Пока пусто. Напиши строчку сверху." : "Без записей."}</p>}
       <DaySummary date={date} doc={doc} note={note} className="mt-2 ml-[3.9rem] max-sm:ml-0 w-[calc(100%-3.9rem)] max-sm:w-full" quiet={!isToday} />
     </section>
   );

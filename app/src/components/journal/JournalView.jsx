@@ -87,7 +87,7 @@ export default function JournalView({ mode = "timeline" }) {
 
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
   return (
-    <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 pt-5 pb-8 md:px-8 md:pt-8 md:pb-16">
+    <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 pt-5 pb-8 max-sm:gap-3 max-sm:pt-3 md:px-8 md:pt-8 md:pb-16">
       {/* soft glow tinted by today's mood */}
       <motion.div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[42rem] max-w-full -translate-x-1/2 rounded-full"
         style={{ filter: "blur(64px)", WebkitFilter: "blur(64px)" }} animate={{ backgroundColor: todayMood?.color || "#64748b", opacity: todayMood ? 0.18 : 0.08 }} transition={{ duration: 0.8 }} />
@@ -103,7 +103,7 @@ export default function JournalView({ mode = "timeline" }) {
       </> : <>
       <header className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Дневник</h1>
+          <h1 className="text-3xl font-bold tracking-tight max-sm:hidden md:text-4xl">Дневник</h1>
         </div>
       </header>
       <PillTabs>{TABS.filter(x => !desk || x.k !== "days").map(({ k, label, icon: Icon }) => <PillTab key={k} on={shownTab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>
