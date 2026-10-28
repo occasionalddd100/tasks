@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { freshReload } from "@/lib/reload";
-import { BookOpenIcon, HashIcon, CrosshairIcon, GanttChartIcon, ListTodoIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, HashIcon, CrosshairIcon, GanttChartIcon, ListTodoIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, RotateCwIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
@@ -132,7 +132,10 @@ export default function Shell() {
         <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b bg-background/90 px-2 md:hidden" style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
           <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}><MenuIcon /></Button>
           <span className="truncate text-sm font-medium">{title}</span>
-          {db.pending > 0 && <span className="ml-auto mr-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400" title="Сохранится, когда появится интернет">не отправлено: {db.pending}</span>}
+          {db.pending > 0 && <span className="ml-auto rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400" title="Сохранится, когда появится интернет">не отправлено: {db.pending}</span>}
+          {/* reload past any cached copy, to pick up a fresh version of the site */}
+          <Button variant="ghost" size="icon" aria-label="Обновить" title="Обновить" className={cn(!(db.pending > 0) && "ml-auto")}
+            onClick={() => { if (db.pending > 0 && !confirm("Есть неотправленные изменения, они могут потеряться. Всё равно обновить?")) return; freshReload("manual" + Date.now()); }}><RotateCwIcon /></Button>
         </div>
         {db.error && <p className="m-4 rounded-md border border-destructive/40 p-3 text-sm text-destructive">Нет связи с базой: {db.error}. Обнови страницу.</p>}
         <motion.div key={view.note || project || stash || (focus ? "focus" : diary ? "diary" : "journal")} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>

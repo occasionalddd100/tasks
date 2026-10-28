@@ -10,7 +10,7 @@ import ShareDialog from "@/components/ShareDialog";
 import { VIEW, ViewHeader, PillTab, PillTabs } from "@/components/ViewHeader";
 import { ItemIcon } from "@/components/IconPicker";
 import { useNavItems, scrollTop } from "@/components/MobileNav";
-import { Fan, fanMax } from "@/components/Fan";
+import { Fan } from "@/components/Fan";
 import { canUseFolders, addFolder, access, allow, fileUrl, useFolders } from "@/lib/localFolders";
 const FolderPortal = lazy(() => import("@/components/stash/FolderPortal"));
 import { isMine } from "@/lib/db";
@@ -877,10 +877,8 @@ function LocalMedia({ c, compact, autoplay, fit }) {
 const initial = s => <span className="text-base font-semibold">{s.trim()[0]?.toUpperCase() || "•"}</span>;
 function BoardsFan({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, onMore, anchor }) {
   const list = [{ id: ALL, name: "Все", n: total, glyph: <LayoutGridIcon className="size-5" /> }, ...tabs.map(t => ({ id: t.id, name: t.name, n: counts(t.id), glyph: initial(t.name) }))];
-  const FAN_MAX = fanMax(2);
-  const items = [...list.slice(0, FAN_MAX).map(t => ({ ...t, on: t.id === cur })),
-    list.length > FAN_MAX ? { id: "more", name: `Ещё ${list.length - FAN_MAX}…`, dashed: true, glyph: <MoreHorizontalIcon className="size-5" /> }
-      : { id: "new", name: "Новая доска", dashed: true, glyph: <PlusIcon className="size-5" /> },
+  const items = [...list.map(t => ({ ...t, on: t.id === cur })),
+    { id: "new", name: "Новая доска", dashed: true, glyph: <PlusIcon className="size-5" /> },
     // renaming lives in the full list of boards
     { id: "edit", name: "Править доски", dashed: true, glyph: <PencilIcon className="size-5" /> }];
   const pick = t => { if (t.id === "more" || t.id === "edit") onMore(); else if (t.id === "new") onAdd(); else { setTab(t.id); scrollTop(); } };
@@ -892,7 +890,7 @@ function TagsFan({ open, setOpen, onEdit, tagCounts, tags, setTags, unseen, setU
   const any = tags.length > 0 || unseen;
   const items = [
     { id: "\u0000unseen", name: "Не смотрел", on: unseen, glyph: <EyeOffIcon className="size-5" /> },
-    ...tagCounts.slice(0, fanMax(3)).map(([t, n]) => ({ id: t, name: "#" + t, n, on: tags.includes(t), glyph: <TagIcon className="size-5" /> })),
+    ...tagCounts.map(([t, n]) => ({ id: t, name: "#" + t, n, on: tags.includes(t), glyph: <TagIcon className="size-5" /> })),
     any && { id: "\u0000reset", name: "Сбросить", dashed: true, glyph: <XIcon className="size-5" /> },
     tagCounts.length > 0 && { id: "\u0000edit", name: "Править теги", dashed: true, glyph: <PencilIcon className="size-5" /> },
   ].filter(Boolean);
