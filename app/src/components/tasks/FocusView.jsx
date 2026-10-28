@@ -117,12 +117,27 @@ export default function FocusView() {
         <TodayDone />
       </header>
 
-      <div ref={chipsRef} className="-mx-4 grid auto-cols-max grid-flow-col grid-rows-2 items-center justify-start gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:flex md:flex-wrap md:px-0">
-        <TagChip on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>
-        <TagChip on={shownTag === WORK} n={list.length - done} onClick={() => setFilter(shownTag === WORK ? null : WORK)}><CrosshairIcon className="size-3.5" />В работе</TagChip>
-        {groups.get(NONE)?.length > 0 && <TagChip on={shownTag === NONE} onClick={() => setFilter(shownTag === NONE ? null : NONE)} n={groups.get(NONE).length}><InboxIcon className="size-3.5" />Без тега</TagChip>}
-        {tags.map(t => <TagChip key={t.id} on={shownTag === t.id} n={groups.get(t.id)?.length} onClick={() => setFilter(shownTag === t.id ? null : t.id)}><TagMark t={t} />{t.name}</TagChip>)}
-      </div>
+      {(() => {
+        // phone: two rows that scroll sideways together, each row flowing on its own (no grid columns);
+        // the chips are split in order where the first row reaches about half the total width
+        const chips = [
+          [3, <TagChip key="all" on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>],
+          [9, <TagChip key="work" on={shownTag === WORK} n={list.length - done} onClick={() => setFilter(shownTag === WORK ? null : WORK)}><CrosshairIcon className="size-3.5" />В работе</TagChip>],
+          groups.get(NONE)?.length > 0 && [10, <TagChip key="none" on={shownTag === NONE} onClick={() => setFilter(shownTag === NONE ? null : NONE)} n={groups.get(NONE).length}><InboxIcon className="size-3.5" />Без тега</TagChip>],
+          ...tags.map(t => [t.name.length + 5, <TagChip key={t.id} on={shownTag === t.id} n={groups.get(t.id)?.length} onClick={() => setFilter(shownTag === t.id ? null : t.id)}><TagMark t={t} />{t.name}</TagChip>]),
+        ].filter(Boolean);
+        const total = chips.reduce((n, [w]) => n + w, 0);
+        let acc = 0, cut = chips.length;
+        for (let i = 0; i < chips.length; i++) { acc += chips[i][0]; if (acc >= total / 2) { cut = i + 1; break; } }
+        return (
+          <div ref={chipsRef} className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:overflow-visible md:px-0">
+            <div className="flex w-max flex-col gap-1.5 md:w-auto md:flex-row md:flex-wrap">
+              <div className="flex gap-1.5 md:contents">{chips.slice(0, cut).map(([, el]) => el)}</div>
+              {cut < chips.length && <div className="flex gap-1.5 md:contents">{chips.slice(cut).map(([, el]) => el)}</div>}
+            </div>
+          </div>
+        );
+      })()}
 
       {desk ? (
         // computer: work on the left; on the right the pail (always in sight), overdue and every tag as a dense list
