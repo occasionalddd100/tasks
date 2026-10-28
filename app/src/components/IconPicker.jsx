@@ -70,7 +70,6 @@ function searchIcons(lib, q) {
   }
   return out;
 }
-const EMOJI = "👕👗👟🧥🎰🎲🃏♠️💰💸🪙💳🏠🍳🍕🍎🍒☕🍷🏋️🚴⚽🏊🧘💊❤️‍🩹😴💼🎓📚📖✉️📞🎵🎸🎬📺📷🎙️🎨✈️🧳🏖️🌊⛰️🌲🌿🌸🌦️🚗🚆🐱🐶🐦🐟👥❤️🎁🎉🎂💻🖥️🤖🧠💡🎯✅📝📓📁⭐🔥⚡🚀🚩🔒🔑🛡️🔧🛒📅⏰😊🎮🧩🍿🎧".match(/\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*\uFE0F?/gu);
 
 let open = null; const subs = new Set();
 const set = v => { open = v; subs.forEach(f => f()); };
@@ -128,14 +127,32 @@ function IconGrid({ cur, save }) {
           {q && !lib && <p className="col-span-8 py-3 text-center text-sm text-muted-foreground">Загружаю иконки…</p>}
           {q && lib && !found.length && <p className="col-span-8 py-3 text-center text-sm text-muted-foreground">Не нашлось. Попробуй по-английски или выбери эмодзи.</p>}
         </div>
-      </> : <>
-        <input placeholder="Вставь или набери любой эмодзи" maxLength={16}
-          onChange={e => { const m = e.target.value.match(/\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*\uFE0F?/u); if (m) { save({ icon: "e:" + m[0] }); e.target.value = ""; } }}
-          className="h-9 rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
-        <div className="grid max-h-72 grid-cols-8 gap-1 overflow-y-auto">
-          {EMOJI.map(em => <button key={em} type="button" onClick={() => save({ icon: "e:" + em })} className={cn(cell(cur.icon === "e:" + em), "text-xl")}>{em}</button>)}
-        </div>
-      </>}
+      </> : <EmojiTab cur={cur} save={save} cell={cell} />}
     </div>
   );
+}
+
+let emo = null, emoLoading = null;
+function EmojiTab({ cur, save, cell }) {
+  const [, tick] = useState(0);
+  useEffect(() => { if (!emo) (emoLoading ??= import("@/lib/emojiData").then(m => { emo = m; })).then(() => tick(x => x + 1)); }, []);
+  const [q, setQ] = useState(""), [grp, setGrp] = useState(0);
+  const typed = q.match(/\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*\uFE0F?/u)?.[0];
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const list = !emo ? [] : words.length && !typed ? emo.EMOJIS.filter(e => words.every(w => e.s.includes(w) || (emo.SYN[w] && e.s.includes(emo.SYN[w])))).slice(0, 240) : emo.EMOJIS.filter(e => e.g === grp);
+  return <>
+    <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: рулетка, одежда, кот… или вставь эмодзи" autoFocus
+      className="h-9 rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
+    {typed && <button type="button" onClick={() => save({ icon: "e:" + typed })} className="flex h-9 items-center gap-2 rounded-lg bg-accent px-3 text-sm"><span className="text-xl">{typed}</span>Поставить этот</button>}
+    {!words.length && emo && (
+      <div className="flex gap-0.5 overflow-x-auto [scrollbar-width:none]">
+        {emo.GROUPS.map(([g, icon, label]) => <button key={g} type="button" title={label} onClick={() => setGrp(g)} className={cn("grid size-9 shrink-0 place-items-center rounded-lg text-lg", grp === g ? "bg-accent" : "opacity-60 hover:opacity-100")}>{icon}</button>)}
+      </div>
+    )}
+    <div className="grid max-h-72 grid-cols-8 gap-1 overflow-y-auto">
+      {list.map(e => <button key={e.u} type="button" title={e.s.split(" ")[0]} onClick={() => save({ icon: "e:" + e.u })} className={cn(cell(cur.icon === "e:" + e.u), "text-xl")}>{e.u}</button>)}
+      {!emo && <p className="col-span-8 py-3 text-center text-sm text-muted-foreground">Загружаю эмодзи…</p>}
+      {emo && words.length > 0 && !typed && !list.length && <p className="col-span-8 py-3 text-center text-sm text-muted-foreground">Не нашлось</p>}
+    </div>
+  </>;
 }
