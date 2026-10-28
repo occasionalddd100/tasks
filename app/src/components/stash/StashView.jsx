@@ -139,7 +139,7 @@ export default function StashView({ id, fresh, go }) {
         <Chip on={unseen} onClick={() => setUnseen(v => !v)}><EyeOffIcon className="size-3.5" />Не смотрел</Chip>
         {tagCounts.map(([t, n]) => (
           <ActionsContext key={t} items={tagActions(t, all, setTagEdit, setTags)}>
-            <Chip on={tags.includes(t)} onClick={() => setTags(s => s.includes(t) ? s.filter(x => x !== t) : [...s, t])}>#{t}<span className="opacity-60">{n}</span></Chip>
+            <Chip on={tags.includes(t)} onClick={() => setTags(s => s.includes(t) ? s.filter(x => x !== t) : [...s, t])}><span className="tag-dot" style={hue(t)} />#{t}<span className="opacity-60">{n}</span></Chip>
           </ActionsContext>
         ))}
         {tagCounts.length > 0 && <button type="button" onClick={() => setTagEdit("")} aria-label="Править теги" title="Править теги" className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"><PencilIcon className="size-3.5" /></button>}
@@ -362,11 +362,11 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
         {c.loading && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2Icon className="size-3.5 animate-spin" />Достаю превью…</div>}
         {c.title && <h3 className={cn("line-clamp-3 text-[13px] leading-snug font-semibold sm:line-clamp-2 sm:text-[15px]", small && "line-clamp-1 sm:line-clamp-1 sm:text-[13px]", size === "l" && "sm:text-lg")}>{c.title}</h3>}
         {c.text && (c.provider === "note" || c.provider === "x" || !c.title) && <p className={cn("text-sm leading-snug whitespace-pre-wrap", c.provider === "note" ? "line-clamp-[12] text-[15px]" : "line-clamp-4 text-muted-foreground", small && "line-clamp-2 text-[13px]")}>{c.text}</p>}
-        {c.desc && !small && <p className="line-clamp-3 text-[13px] leading-snug text-muted-foreground">{c.desc}</p>}
+        {c.desc && <p className={cn("line-clamp-3 text-[13px] leading-snug text-muted-foreground", small && "line-clamp-2 text-xs", tiny && "line-clamp-1")}>{c.desc}</p>}
         {c.note && !small && <p className="flex items-center gap-1 text-xs text-muted-foreground"><FileTextIcon className="size-3" />есть заметка</p>}
         {c.tags?.length > 0 && !tiny && (
           <div className="flex flex-wrap gap-1 pt-0.5">
-            {c.tags.map(t => <button key={t} type="button" onClick={e => { e.stopPropagation(); onTag(t); }} className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground">#{t}</button>)}
+            {c.tags.map(t => <button key={t} type="button" onClick={e => { e.stopPropagation(); onTag(t); }} style={hue(t)} className="tag rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors">#{t}</button>)}
           </div>
         )}
       </div>
@@ -451,7 +451,7 @@ function ClipTags({ c, allTags }) {
         {shown.map(t => (
           <ActionsContext key={t} items={tagActions(t, getDb().clips.filter(x => x.stash === c.stash), tagEditor)}>
           <button type="button" onClick={() => toggle(t)} aria-pressed={tags.includes(t)}
-            className={cn("inline-flex h-8 items-center rounded-full border px-3 text-[13px] font-medium transition-colors", tags.includes(t) ? "border-foreground bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}>#{t}</button>
+            style={hue(t)} className={cn("tag inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition-colors", tags.includes(t) ? "on" : "opacity-70 hover:opacity-100")}>#{t}</button>
           </ActionsContext>
         ))}
       </div>
@@ -516,7 +516,7 @@ function TagsDialog({ edit, setEdit, clips, setTags }) {
         ) : (
           <div key={t} className="group flex h-11 items-center rounded-xl hover:bg-accent">
             <button type="button" onClick={() => setEdit(t)} className="flex h-full min-w-0 flex-1 items-center gap-3 px-3 text-left text-[15px]">
-              <TagIcon className="size-4 opacity-60" /><span className="flex-1 truncate">#{t}</span><span className="text-sm opacity-60">{n}</span>
+              <span className="tag-dot mx-1" style={hue(t)} /><span className="flex-1 truncate">#{t}</span><span className="text-sm opacity-60">{n}</span>
             </button>
             <button type="button" onClick={() => setEdit(t)} aria-label={"Переименовать " + t} className="grid size-11 shrink-0 place-items-center opacity-60 hover:opacity-100"><PencilIcon className="size-4" /></button>
             <button type="button" onClick={async () => { if (await dropTag(clips, t)) setTags(s => s.filter(x => x !== t)); }} aria-label={"Удалить " + t} className="grid size-11 shrink-0 place-items-center text-destructive opacity-60 hover:opacity-100"><Trash2Icon className="size-4" /></button>
@@ -631,6 +631,24 @@ function Brand({ p, size = 14 }) {
 
 /* ───────────── card details ───────────── */
 
+// a tag's colour comes from its name, so the same tag looks the same everywhere
+const hue = t => { let h = 0; for (const ch of t) h = (h * 31 + ch.charCodeAt(0)) % 360; return { "--h": (h * 137) % 360 }; };
+
+// typing goes into local state at once; the card is saved after a short pause and on leaving the field,
+// so the round trip to the database never fights the keyboard
+function Draft({ as: Tag = "input", value, onSave, ...rest }) {
+  const [v, setV] = useState(value);
+  const focused = useRef(false), timer = useRef(null), last = useRef(value), cur = useRef(value);
+  cur.current = v;
+  useEffect(() => { if (!focused.current && value !== last.current) { last.current = value; setV(value); } }, [value]);
+  const flush = x => { clearTimeout(timer.current); if (x !== last.current) { last.current = x; onSave(x); } };
+  useEffect(() => () => flush(cur.current), []);
+  return <Tag {...rest} value={v}
+    onFocus={() => { focused.current = true; }}
+    onBlur={() => { focused.current = false; flush(v); }}
+    onChange={e => { const x = e.target.value; setV(x); clearTimeout(timer.current); timer.current = setTimeout(() => flush(x), 600); }} />;
+}
+
 function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
   const db = useDb();
   const c = db.clips.find(x => x.id === id);
@@ -649,14 +667,14 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
             <Brand p={c.provider} /><span className="truncate">{c.author ? "@" + c.author.replace(/^@/, "") : c.host || PROVIDER[c.provider]?.name}</span>
             {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex shrink-0 items-center gap-1 hover:text-foreground">оригинал<ExternalLinkIcon className="size-3.5" /></a>}
           </div>
-          <input value={c.title || ""} onChange={e => save({ title: e.target.value })} placeholder="Название" aria-label="Название"
+          <Draft key={c.id + "t"} value={c.title || ""} onSave={title => save({ title })} placeholder="Название" aria-label="Название"
             className="-mt-2 w-full bg-transparent text-xl leading-snug font-semibold outline-none placeholder:text-muted-foreground/50" />
           {c.text && c.provider !== "note" && <p className="-mt-2 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">{c.text}</p>}
           {c.provider === "note" && (
-            <textarea value={c.text || ""} onChange={e => save({ text: e.target.value })} rows={4} aria-label="Текст"
+            <Draft as="textarea" key={c.id + "x"} value={c.text || ""} onSave={text => save({ text })} rows={4} aria-label="Текст"
               className="w-full resize-y rounded-lg border bg-background p-3 text-[15px] leading-relaxed outline-none focus:ring-2 focus:ring-ring/40" />
           )}
-          <textarea value={c.desc || ""} onChange={e => save({ desc: e.target.value })} rows={2} placeholder="Короткое описание: зачем сохранил, что посмотреть"
+          <Draft as="textarea" key={c.id + "d"} value={c.desc || ""} onSave={desc => save({ desc })} rows={2} placeholder="Короткое описание: зачем сохранил, что посмотреть"
             className="w-full resize-none bg-transparent text-sm leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/50" aria-label="Описание" />
 
           <div className="flex flex-col gap-2">

@@ -254,3 +254,11 @@ html[data-kb] main { padding-bottom: 0 !important; }
 
 /* taps and long presses on controls must not select their text (it kept happening on buttons and chips) */
 button, [role="button"], [role="tab"], nav, label, summary, .select-none-ui { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+
+/* stash tags: each tag gets its own hue (--h set from the name) */
+.tag { background: hsl(var(--h) 85% 55% / 0.14); color: hsl(var(--h) 65% 36%); }
+.tag:hover { background: hsl(var(--h) 85% 55% / 0.24); }
+.tag.on { background: hsl(var(--h) 70% 48%); color: #fff; }
+.dark .tag { background: hsl(var(--h) 70% 55% / 0.18); color: hsl(var(--h) 85% 74%); }
+.dark .tag.on { background: hsl(var(--h) 65% 45%); color: #fff; }
+.tag-dot { width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: hsl(var(--h) 70% 52%); flex-shrink: 0; }
