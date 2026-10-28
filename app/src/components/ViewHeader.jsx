@@ -2,14 +2,14 @@ import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
 
 // one look for the top of every view (project, stash, …): icon, editable title, actions on the right, then pill tabs
-export const VIEW = "mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 pt-5 pb-8 md:px-8 md:pt-8 md:pb-16";
+export const VIEW = "mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 pt-3 pb-8 max-md:gap-3 md:px-8 md:pt-8 md:pb-16";
 
 export const ViewHeader = forwardRef(function ViewHeader({ icon, children, className, ...input }, ref) {
   return (
     <header className="flex items-center gap-2">
       {icon}
       <input ref={ref} placeholder="Без названия" {...input}
-        className={cn("min-w-0 flex-1 bg-transparent text-2xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50 md:text-3xl", className)} />
+        className={cn("min-w-0 flex-1 bg-transparent text-xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50 md:text-3xl", className)} />
       {children}
     </header>
   );

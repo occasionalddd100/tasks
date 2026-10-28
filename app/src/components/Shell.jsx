@@ -217,7 +217,7 @@ function Sidebar({ view, go, email, search }) {
           );
         })}
         <button type="button" onClick={() => openQuickAdd()} title="Новая задача (клавиша N)"
-          className="mt-1 flex h-9 w-full items-center gap-2 rounded-md border border-dashed px-2 text-sm font-medium text-muted-foreground hover:border-primary/50 hover:bg-accent hover:text-foreground">
+          className="mt-1 flex h-9 w-full items-center gap-2 rounded-md border border-dashed px-2 max-md:hidden text-sm font-medium text-muted-foreground hover:border-primary/50 hover:bg-accent hover:text-foreground">
           <PlusIcon className="size-4" />Новая задача<kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-[11px]">N</kbd>
         </button>
       </div>

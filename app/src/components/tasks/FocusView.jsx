@@ -110,8 +110,11 @@ export default function FocusView() {
   return (
     <DndContext sensors={sensors} collisionDetection={collide} onDragStart={e => setDragId(e.active.id)} onDragCancel={() => setDragId(null)} onDragEnd={onDragEnd}>
     <div className={cn(VIEW, desk ? "max-w-[1400px] gap-3" : "max-w-5xl")}>
+      {/* phone: the buttons and tag chips stay pinned under the top bar (which already says «Задачи») */}
+      <div className="flex flex-col gap-3 max-md:sticky max-md:top-12 max-md:z-10 max-md:-mx-4 max-md:-mt-3 max-md:gap-2 max-md:border-b max-md:bg-background/90 max-md:px-4 max-md:py-2 max-md:backdrop-blur-md">
       <header className="flex items-center gap-2">
-        <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Задачи</h1>
+        <h1 className="flex-1 text-2xl font-bold tracking-tight max-md:hidden md:text-3xl">Задачи</h1>
+        <span className="flex-1 md:hidden" />
         <button type="button" onClick={() => openTagEditor()} title="Править теги" aria-label="Править теги" className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground max-md:px-2.5"><PencilIcon className="size-3.5" /><span className="max-md:hidden">Теги</span></button>
         <ZenButton />
         <TodayDone />
@@ -138,6 +141,7 @@ export default function FocusView() {
           </div>
         );
       })()}
+      </div>
 
       {desk ? (
         // computer: work on the left; on the right the pail (always in sight), overdue and every tag as a dense list
