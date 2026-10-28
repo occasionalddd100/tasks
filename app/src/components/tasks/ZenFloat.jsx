@@ -15,7 +15,7 @@ export default function ZenFloat() {
     <AnimatePresence>
       {t.active && (
         <motion.div drag dragMomentum={false} initial={{ opacity: 0, y: 30, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 30, scale: 0.9 }}
-          className="fixed right-28 bottom-6 z-40 flex max-w-[min(22rem,calc(100vw-2rem))] cursor-grab items-center gap-2.5 rounded-2xl bg-[#11121a]/95 py-2 pr-2 pl-2.5 text-white shadow-2xl ring-1 ring-white/10 active:cursor-grabbing max-md:right-4 max-md:bottom-[calc(9.5rem+env(safe-area-inset-bottom))]"
+          className="fixed right-28 bottom-6 z-40 flex max-w-[min(22rem,calc(100vw-2rem))] cursor-grab items-center gap-2.5 rounded-2xl bg-[#11121a]/95 py-2 pr-2 pl-2.5 text-white shadow-2xl ring-1 ring-white/10 active:cursor-grabbing max-md:right-4 max-md:bottom-[calc(9.5rem+var(--sab))]"
           style={{ backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", touchAction: "none" }}>
           <svg viewBox="0 0 36 36" className="size-10 shrink-0 -rotate-90" aria-hidden>
             <circle cx="18" cy="18" r={R} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3" />

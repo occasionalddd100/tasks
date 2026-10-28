@@ -32,7 +32,7 @@ export default function Bucket({ docked }) {
   return createPortal(
     <>
       <motion.div ref={setNodeRef} animate={shake} style={{ touchAction: "none" }}
-        className="fixed right-5 bottom-6 z-30 max-md:right-auto max-md:left-4 max-md:bottom-[calc(5rem+env(safe-area-inset-bottom))]">
+        className="fixed right-5 bottom-6 z-30 max-md:right-auto max-md:left-4 max-md:bottom-[calc(5rem+var(--sab))]">
         <motion.button type="button" onClick={() => setOpen(o => !o)} aria-label={"Ведёрко: " + list.length} title="Ведёрко: отложенные задачи"
           animate={{ scale: isOver ? 1.25 : dragging ? 1.1 : 1, y: dragging ? -4 : 0 }} transition={{ type: "spring", bounce: 0.45, duration: 0.4 }}
           className={cn("relative grid size-16 place-items-center rounded-full border bg-card/90 shadow-lg transition-colors max-md:size-13",
@@ -58,7 +58,7 @@ export default function Bucket({ docked }) {
           <motion.div className="fixed inset-0 z-30" onClick={() => setOpen(false)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
           <motion.div initial={{ opacity: 0, scale: 0.6, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.6, y: 20 }}
             transition={{ type: "spring", bounce: 0.25, duration: 0.35 }}
-            className="fixed right-5 bottom-24 z-40 flex max-h-[60vh] w-80 origin-bottom-right flex-col overflow-hidden rounded-2xl border bg-popover shadow-2xl max-md:right-auto max-md:left-4 max-md:origin-bottom-left max-md:w-[calc(100vw-2rem)] max-md:bottom-[calc(9.5rem+env(safe-area-inset-bottom))]">
+            className="fixed right-5 bottom-24 z-40 flex max-h-[60vh] w-80 origin-bottom-right flex-col overflow-hidden rounded-2xl border bg-popover shadow-2xl max-md:right-auto max-md:left-4 max-md:origin-bottom-left max-md:w-[calc(100vw-2rem)] max-md:bottom-[calc(9.5rem+var(--sab))]">
             <div className="flex items-baseline gap-2 border-b px-4 py-3">
               <h3 className="text-sm font-semibold">Ведёрко</h3>
               <span className="text-xs text-muted-foreground">отложено: {list.length}</span>

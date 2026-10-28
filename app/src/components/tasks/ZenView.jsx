@@ -86,7 +86,7 @@ export default function ZenView({ onClose }) {
       className="zen fixed inset-0 z-[60] flex flex-col overflow-hidden bg-[#07080c] text-white select-none">
       <Room />
       {/* top: mode switch, today's progress, close */}
-      <div className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] md:px-8 md:pt-6">
+      <div className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,var(--sat))] md:px-8 md:pt-6">
         <div className="flex rounded-full bg-white/[0.06] p-1 ring-1 ring-white/10">
           {[["do", "Делать", CrosshairIcon, work.length], ["sort", "Разбор", LayersIcon, triage.length]].map(([k, l, Icon, n]) => (
             <button key={k} type="button" onClick={() => setMode(k)}
@@ -115,7 +115,7 @@ export default function ZenView({ onClose }) {
 
       {/* actions */}
       {cur && (
-        <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:pb-8">
+        <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 px-4 pb-[max(1.25rem,var(--sab))] md:pb-8">
           {mode === "do" ? <>
             <Act onClick={actions.pail} icon={ArchiveIcon} hint="↓">В ведёрко</Act>
             <Act onClick={actions.later} icon={ChevronRightIcon} hint="→">Потом</Act>

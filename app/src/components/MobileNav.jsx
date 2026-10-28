@@ -35,7 +35,7 @@ export default function MobileNav({ onMenu, onSearch, onAdd, journal, diary, tas
   const all = [...list.map(x => x.onClick ? x : { ...x, onClick: builtin[x.k] }), { k: "menu", label: "Меню", icon: MenuIcon, onClick: onMenu }];
   return (
     <nav style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
-      className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/85 pb-[env(safe-area-inset-bottom)] md:hidden">
+      className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/85 pb-[var(--sab)] md:hidden">
       <div className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${all.length}, minmax(0, 1fr))` }}>
         {all.map(({ k, label, icon: Icon, onClick, active, badge, accent }) => accent ? (
           <div key={k} className="flex h-16 items-center justify-center">

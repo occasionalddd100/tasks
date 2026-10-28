@@ -1,6 +1,6 @@
-import { Component, lazy, Suspense, useEffect, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { freshReload } from "@/lib/reload";
-import { BookOpenIcon, HashIcon, CrosshairIcon, GanttChartIcon, ListTodoIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, RotateCwIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { ArrowLeftIcon, BookOpenIcon, HashIcon, CrosshairIcon, GanttChartIcon, ListTodoIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, RotateCwIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
@@ -80,6 +80,7 @@ export default function Shell() {
   const db = useDb(), look = useAppearance();
   const [view, setView] = useState(readHash);
   const [menu, setMenu] = useState(false);
+  const navDepth = useRef(0); // screens opened inside the app: the top bar's ← goes back through them
   // phone: a page with its own big title ([data-page-title]) keeps the top bar empty until that title scrolls away
   const [bigTitle, setBigTitle] = useState(false);
   useEffect(() => {
@@ -113,7 +114,8 @@ export default function Shell() {
   // everyone gets "Личное" with "Черновики" the first time the data is in
   useEffect(() => { if (db.ready && !db.error) ensurePersonal(); }, [db.ready, db.error, !!personalOf(db)]);
   useEffect(() => {
-    const on = () => setView(readHash());
+    let last = location.hash;
+    const on = () => { if (location.hash !== last && navDepth.current > 0) navDepth.current--; last = location.hash; setView(readHash()); };
     window.addEventListener("hashchange", on); window.addEventListener("popstate", on);
     return () => { window.removeEventListener("hashchange", on); window.removeEventListener("popstate", on); };
   }, []);
@@ -121,7 +123,7 @@ export default function Shell() {
   const go = v => {
     setMenu(false);
     const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : v.zen ? "#zen" : v.focus ? "#focus" : v.personal ? "#personal" : v.diary ? "#diary" : "#journal";
-    if (location.hash !== hash) history.pushState(null, "", hash || location.pathname + location.search);
+    if (location.hash !== hash) { history.pushState(null, "", hash || location.pathname + location.search); navDepth.current++; }
     setView(v);
   };
 
@@ -143,9 +145,12 @@ export default function Shell() {
       <aside className={cn("hidden shrink-0 border-r bg-sidebar md:flex md:flex-col", { narrow: "w-56", normal: "w-64", wide: "w-80" }[look.sidebar] || "w-64")}>{sidebar}</aside>
       <Sheet open={!!menu} onOpenChange={o => setMenu(o ? "menu" : false)}><SheetContent>{sidebar}</SheetContent></Sheet>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto max-md:pb-[calc(4rem+env(safe-area-inset-bottom))]">
-        <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b bg-background/90 px-2 md:hidden" style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
-          <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}><MenuIcon /></Button>
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto max-md:pb-[calc(4rem+var(--sab))]">
+        {/* phone top bar: runs up under the status bar, like a native app bar */}
+        <div className="sticky top-0 z-20 flex h-[var(--bar)] shrink-0 items-center gap-2 border-b bg-background/85 px-2 pt-[var(--sat)] md:hidden" style={{ backdropFilter: "blur(14px) saturate(1.6)", WebkitBackdropFilter: "blur(14px) saturate(1.6)" }}>
+          {shown
+            ? <Button variant="ghost" size="icon" aria-label="Назад" onClick={() => navDepth.current > 0 ? history.back() : go({ focus: true })}><ArrowLeftIcon /></Button>
+            : <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}><MenuIcon /></Button>}
           <span className={cn("truncate text-sm font-medium transition-all duration-200", bigTitle && "translate-y-1 opacity-0")}>{title}</span>
           {/* a view can put its own buttons here (tasks: tags, focus, done today) */}
           <div id="topbar-slot" className="ml-auto flex items-center gap-1.5 empty:hidden" />

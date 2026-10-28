@@ -6,6 +6,10 @@
 
 /* shadcn neutral tokens */
 :root {
+  /* safe areas: the Android app sets --app-sat / --app-sab itself (its web view may not report env()) */
+  --sat: var(--app-sat, env(safe-area-inset-top, 0px));
+  --sab: var(--app-sab, env(safe-area-inset-bottom, 0px));
+  --bar: calc(3rem + var(--sat));
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

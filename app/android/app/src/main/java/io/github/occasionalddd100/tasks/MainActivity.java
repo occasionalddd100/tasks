@@ -13,6 +13,7 @@ import android.provider.MediaStore;
 import android.webkit.MimeTypeMap;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Base64;
@@ -20,6 +21,8 @@ import android.view.View;
 import android.webkit.JavascriptInterface;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
 import java.io.ByteArrayOutputStream;
@@ -37,18 +40,47 @@ import org.json.JSONObject;
 public class MainActivity extends BridgeActivity {
     // what another app shared with us, waiting for the page to take it (window.AndroidShare.take())
     private volatile String pendingShare = null;
+    private volatile int safeTop = 0, safeBottom = 0;
+
+    private void pushInsets() {
+        String js = "document.documentElement.style.setProperty('--app-sat','" + safeTop + "px');document.documentElement.style.setProperty('--app-sab','" + safeBottom + "px')";
+        bridge.getWebView().post(() -> bridge.getWebView().evaluateJavascript(js, null));
+    }
 
     // With edge-to-edge (target SDK 35+) the window no longer shrinks for the keyboard,
     // so the keyboard covered input fields. Pad the content by the keyboard's height instead.
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // edge to edge: the page draws under the status and navigation bars and pads itself
+        // (the sizes go to the page as --app-sat / --app-sab, since older web views don't report env(safe-area-inset-*))
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= 29) { getWindow().setStatusBarContrastEnforced(false); getWindow().setNavigationBarContrastEnforced(false); }
         View root = findViewById(android.R.id.content);
         ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
             Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
-            v.setPadding(0, 0, 0, ime.bottom);
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            boolean kb = insets.isVisible(WindowInsetsCompat.Type.ime());
+            v.setPadding(0, 0, 0, kb ? ime.bottom : 0);
+            float d = getResources().getDisplayMetrics().density;
+            safeTop = Math.round(bars.top / d); safeBottom = kb ? 0 : Math.round(bars.bottom / d);
+            pushInsets();
             return insets;
         });
+        bridge.getWebView().addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public String insets() { return "{\"top\":" + safeTop + ",\"bottom\":" + safeBottom + "}"; }
+            @JavascriptInterface
+            public void dark(boolean dark) {
+                runOnUiThread(() -> {
+                    WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+                    c.setAppearanceLightStatusBars(!dark);
+                    c.setAppearanceLightNavigationBars(!dark);
+                });
+            }
+        }, "AndroidBars");
         bridge.getWebView().addJavascriptInterface(new Object() {
             @JavascriptInterface
             public String take() { String s = pendingShare; pendingShare = null; return s; }

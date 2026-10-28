@@ -135,7 +135,7 @@ export function QuickAddHost() {
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-[fade-in_150ms_ease-out]" />
         <D.Content onOpenAutoFocus={e => e.preventDefault()}
-          className="fixed inset-x-0 bottom-0 z-50 flex flex-col gap-3 rounded-t-2xl border-t bg-background px-4 pt-2 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,0,0,1)] md:inset-x-auto md:top-[14vh] md:bottom-auto md:left-1/2 md:w-[36rem] md:-translate-x-1/2 md:rounded-2xl md:border md:pb-4 md:data-[state=open]:animate-[dialog-in_180ms_ease-out]">
+          className="fixed inset-x-0 bottom-0 z-50 flex flex-col gap-3 rounded-t-2xl border-t bg-background px-4 pt-2 pb-[calc(1rem+var(--sab))] shadow-2xl data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,0,0,1)] md:inset-x-auto md:top-[14vh] md:bottom-auto md:left-1/2 md:w-[36rem] md:-translate-x-1/2 md:rounded-2xl md:border md:pb-4 md:data-[state=open]:animate-[dialog-in_180ms_ease-out]">
           <div className="mx-auto h-1 w-10 rounded-full bg-border" />
           <div className="flex items-center gap-2">
             <D.Title className="flex-1 text-base font-semibold">Новая задача</D.Title>

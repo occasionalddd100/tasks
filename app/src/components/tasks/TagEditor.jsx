@@ -23,7 +23,7 @@ export function TagEditorHost() {
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-[fade-in_150ms_ease-out]" />
         <D.Content onOpenAutoFocus={e => e.preventDefault()}
-          className="fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col rounded-t-2xl border-t bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,0,0,1)] md:inset-x-auto md:top-[8vh] md:bottom-auto md:left-1/2 md:max-h-[84vh] md:w-[32rem] md:-translate-x-1/2 md:rounded-2xl md:border md:pb-0 md:data-[state=open]:animate-[dialog-in_180ms_ease-out]">
+          className="fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col rounded-t-2xl border-t bg-background pb-[var(--sab)] shadow-2xl data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,0,0,1)] md:inset-x-auto md:top-[8vh] md:bottom-auto md:left-1/2 md:max-h-[84vh] md:w-[32rem] md:-translate-x-1/2 md:rounded-2xl md:border md:pb-0 md:data-[state=open]:animate-[dialog-in_180ms_ease-out]">
           <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border" />
           <div className="flex items-center gap-2 px-4 pt-2">
             <D.Title className="flex-1 text-lg font-semibold">Теги</D.Title>
@@ -97,7 +97,7 @@ function EmojiSheet({ open, setOpen, name, onPick }) {
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-[60] bg-black/40" />
         <D.Content onOpenAutoFocus={e => e.preventDefault()}
-          className="fixed inset-x-0 bottom-0 z-[60] flex h-[min(75dvh,34rem)] flex-col rounded-t-2xl border-t bg-popover pb-[env(safe-area-inset-bottom)] shadow-2xl data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,0,0,1)] md:inset-x-auto md:top-[12vh] md:bottom-auto md:left-1/2 md:w-[26rem] md:-translate-x-1/2 md:rounded-2xl md:border">
+          className="fixed inset-x-0 bottom-0 z-[60] flex h-[min(75dvh,34rem)] flex-col rounded-t-2xl border-t bg-popover pb-[var(--sab)] shadow-2xl data-[state=open]:animate-[sheet-up_220ms_cubic-bezier(.2,0,0,1)] md:inset-x-auto md:top-[12vh] md:bottom-auto md:left-1/2 md:w-[26rem] md:-translate-x-1/2 md:rounded-2xl md:border">
           <div className="flex items-center gap-2 px-4 pt-3 pb-1">
             <D.Title className="flex-1 truncate text-base font-semibold">Эмодзи для «{name}»</D.Title>
             <D.Close className="grid size-8 place-items-center rounded-full text-muted-foreground active:bg-accent" aria-label="Закрыть"><XIcon className="size-5" /></D.Close>

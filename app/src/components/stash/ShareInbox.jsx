@@ -59,7 +59,7 @@ export default function ShareInbox({ go }) {
   const Kind = images.length ? ImageIcon : links.length && !rest ? LinkIcon : StickyNoteIcon;
   return (
     <Dialog open={!!got && db.ready} onOpenChange={o => !o && !busy && setGot(null)}>
-      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="gap-3 p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="gap-3 p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+var(--sab))]">
         <DialogTitle className="text-base">В стэш</DialogTitle>
         <div className="flex items-start gap-3 rounded-xl border bg-muted/40 p-3">
           {images.length ? (

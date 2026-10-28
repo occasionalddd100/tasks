@@ -7,6 +7,12 @@
     "errorPath": "index.html"
   },
   "plugins": {
-    "LocalNotifications": { "smallIcon": "ic_stat_notify", "iconColor": "#171717" }
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_notify",
+      "iconColor": "#171717"
+    },
+    "SystemBars": {
+      "insetsHandling": "disable"
+    }
   }
 }

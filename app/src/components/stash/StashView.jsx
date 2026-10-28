@@ -125,7 +125,7 @@ export default function StashView({ id, fresh, go }) {
         onAdd={addTab} onMore={() => setBoards(true)} anchor={isPhone ? "navRight" : dockAnchor || "dock"} />
       <TagsFan open={tagsOpen} setOpen={setTagsOpen} onEdit={() => setTagEdit("")} tagCounts={tagCounts} tags={tags} setTags={setTags} unseen={unseen} setUnseen={setUnseen} anchor={isPhone ? "navLeft" : dockAnchor || "dock"} />
       <Dock board={cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски"} fan={fan} setFan={setFan} tagsOpen={tagsOpen} setTagsOpen={setTagsOpen} nTags={tags.length + (unseen ? 1 : 0)} setAnchor={setDockAnchor} />
-      <UpButton className="fixed right-4 z-30 md:hidden bottom-[calc(5rem+env(safe-area-inset-bottom))]" />
+      <UpButton className="fixed right-4 z-30 md:hidden bottom-[calc(5rem+var(--sab))]" />
       <BoardsSheet open={boards} setOpen={setBoards} tabs={tabs} cur={cur} setTab={t => { setTab(t); setBoards(false); }} counts={t => all.filter(c => c.tab === t).length} total={all.length} onAdd={addTab} onRename={renameTab} />
 
       <div className="max-md:hidden"><Tabs tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
@@ -137,7 +137,7 @@ export default function StashView({ id, fresh, go }) {
       <div className="contents max-md:hidden"><Sources stash={stash} tab={target} /></div>
 
       {/* phone: the search stays pinned under the top bar */}
-      <div className="flex flex-wrap items-center gap-2 max-md:sticky max-md:top-12 max-md:z-10 max-md:-mx-4 max-md:border-b max-md:bg-background/80 max-md:px-4 max-md:py-2"
+      <div className="flex flex-wrap items-center gap-2 max-md:sticky max-md:top-[var(--bar)] max-md:z-10 max-md:-mx-4 max-md:border-b max-md:bg-background/80 max-md:px-4 max-md:py-2"
         style={isPhone ? { backdropFilter: "blur(14px) saturate(1.6)", WebkitBackdropFilter: "blur(14px) saturate(1.6)" } : undefined}>
         <label className="flex h-9 min-w-40 flex-1 items-center gap-2 rounded-lg border bg-card px-3 focus-within:ring-2 focus-within:ring-ring/40 sm:max-w-xs">
           <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -341,7 +341,7 @@ function AddSheet({ open, setOpen, stash, tabs, tab }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent onOpenAutoFocus={e => e.preventDefault()} aria-describedby={undefined}
-        className="flex flex-col gap-3 p-4 sm:max-w-md max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0 max-sm:pt-2 max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))] max-sm:data-[state=open]:animate-[sheet-up_240ms_cubic-bezier(.2,0,0,1)]">
+        className="flex flex-col gap-3 p-4 sm:max-w-md max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0 max-sm:pt-2 max-sm:pb-[calc(1rem+var(--sab))] max-sm:data-[state=open]:animate-[sheet-up_240ms_cubic-bezier(.2,0,0,1)]">
         <div className="mx-auto h-1 w-10 rounded-full bg-border sm:hidden" />
         <DialogTitle className="text-base">Добавить в стэш</DialogTitle>
         {tabs.length > 1 && (
@@ -630,7 +630,7 @@ function TagsDialog({ edit, setEdit, clips, setTags }) {
   };
   return (
     <Dialog open={open} onOpenChange={o => !o && setEdit(null)}>
-      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="max-h-[85dvh] gap-1 overflow-y-auto p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="max-h-[85dvh] gap-1 overflow-y-auto p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+var(--sab))]">
         <DialogTitle className="px-1 pb-2 text-base">Теги</DialogTitle>
         {!counts.length && <p className="px-1 text-sm text-muted-foreground">Тегов пока нет.</p>}
         {counts.map(([t, n]) => edit === t ? (
@@ -809,7 +809,7 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
 
   return (
     <Dialog open={!!id} onOpenChange={o => !o && setOpen(null)}>
-      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className={cn("thin-scroll overscroll-contain outline-none focus:outline-none focus-visible:ring-0 max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[env(safe-area-inset-bottom)]",
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className={cn("thin-scroll overscroll-contain outline-none focus:outline-none focus-visible:ring-0 max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[var(--sab)]",
         media && "md:h-[88dvh] md:max-w-[min(92vw,80rem)] md:grid-cols-[minmax(0,1fr)_24rem] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden")}>
         <DialogTitle className="sr-only">{c.title || "Карточка"}</DialogTitle>
         {/* computer: the picture on the left at full height, everything else in a column on the right; phone: picture capped so the rest is in reach */}
@@ -1057,7 +1057,7 @@ function BoardsSheet({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, o
   useEffect(() => { if (!open) setEditing(null); }, [open]);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="flex max-h-[min(85dvh,85vh)] flex-col gap-2 overflow-hidden p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="flex max-h-[min(85dvh,85vh)] flex-col gap-2 overflow-hidden p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+var(--sab))]">
         <DialogTitle className="shrink-0 px-1 pb-1 text-base">Доски</DialogTitle>
         {/* the list scrolls; the title and «Новая доска» stay in place */}
         <div className="thin-scroll -mx-1 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-1 [&>*]:shrink-0">

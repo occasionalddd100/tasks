@@ -139,7 +139,7 @@ function Composer({ date, doc, onToday, burst }) {
     setText("");
   };
   return (
-    <div className="sticky top-0 z-10 -mx-2 mb-2 bg-background/85 px-2 pt-1 pb-3 max-sm:top-12 max-sm:-mx-4 max-sm:mb-0 max-sm:px-0 max-sm:pt-0 max-sm:pb-0" style={{ backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)" }}>
+    <div className="sticky top-0 z-10 -mx-2 mb-2 bg-background/85 px-2 pt-1 pb-3 max-sm:top-[var(--bar)] max-sm:-mx-4 max-sm:mb-0 max-sm:px-0 max-sm:pt-0 max-sm:pb-0" style={{ backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)" }}>
       <div className="rounded-2xl border bg-card shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring/40 max-sm:rounded-none max-sm:border-x-0 max-sm:shadow-none max-sm:focus-within:ring-0">
         <div className="flex items-end gap-1.5 p-1.5 pl-2">
           <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" role="tablist" aria-label="Что записать">

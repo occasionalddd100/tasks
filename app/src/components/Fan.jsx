@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
 export const fanMax = (extra = 2) => Math.max(3, Math.min(9, Math.floor((window.innerHeight - 260) / 52) - extra));
 
 export const ANCHORS = {
-  navRight: { right: "calc(30% - 22px)", bottom: "calc(4.5rem + env(safe-area-inset-bottom))" },
-  navLeft: { left: "calc(10% - 22px)", bottom: "calc(4.5rem + env(safe-area-inset-bottom))" },
+  navRight: { right: "calc(30% - 22px)", bottom: "calc(4.5rem + var(--sab))" },
+  navLeft: { left: "calc(10% - 22px)", bottom: "calc(4.5rem + var(--sab))" },
   dock: { right: "1.5rem", bottom: "5.5rem" },
 };
 export function Fan({ open, setOpen, items, onPick, anchor }) {
@@ -26,7 +26,7 @@ export function Fan({ open, setOpen, items, onPick, anchor }) {
             style={{ backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} />
           {/* a long list scrolls inside the fan instead of hiding behind «Ещё…» */}
-          <ul className={cn("no-scrollbar absolute flex max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] flex-col-reverse gap-2 overflow-y-auto overscroll-contain py-2", left ? "items-start pr-20" : "items-end pl-20")} style={{ ...style, maskImage: "linear-gradient(to bottom, transparent, #000 2.5rem)", WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 2.5rem)" }}>
+          <ul className={cn("no-scrollbar absolute flex max-h-[calc(100dvh-7rem-var(--sab)-var(--sat))] flex-col-reverse gap-2 overflow-y-auto overscroll-contain py-2", left ? "items-start pr-20" : "items-end pl-20")} style={{ ...style, maskImage: "linear-gradient(to bottom, transparent, #000 2.5rem)", WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 2.5rem)" }}>
             {items.map((t, i) => {
               // the further up, the more it leans and drifts sideways
               const j = Math.min(i, 6), x = (left ? 1 : -1) * j * j * 1.4, r = (left ? 1 : -1) * j * 1.3;

@@ -138,7 +138,7 @@ export default function FolderPortal({ stash, source, mem, tab, onClose }) {
         )}
 
         {sel.size > 0 && (
-          <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-2 border-t bg-background/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
+          <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-2 border-t bg-background/95 px-4 py-3 pb-[calc(0.75rem+var(--sab))] backdrop-blur">
             <span className="text-sm font-medium">Выбрано: {sel.size}</span>
             <button type="button" onClick={() => setSel(new Set(shown.map(f => f.path)))} className="text-sm text-muted-foreground hover:text-foreground">все {shown.length}</button>
             <button type="button" onClick={() => setSel(new Set())} className="text-sm text-muted-foreground hover:text-foreground">снять</button>
@@ -262,7 +262,7 @@ function Viewer({ f, tags, cloud, suggest, onTag, onSend, busy, prev, next, onCl
         {prev && <button type="button" onClick={prev} aria-label="Предыдущий" className="absolute left-2 grid size-10 place-items-center rounded-full bg-white/10 hover:bg-white/20"><ChevronLeftIcon /></button>}
         {next && <button type="button" onClick={next} aria-label="Следующий" className="absolute right-2 grid size-10 place-items-center rounded-full bg-white/10 hover:bg-white/20"><ChevronRightIcon /></button>}
       </div>
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3 pb-[calc(0.75rem+var(--sab))]">
         {tags.map(t => (
           <span key={t} className="inline-flex h-8 items-center gap-1 rounded-full bg-white/15 pr-1 pl-3 text-xs">#{t}
             <button type="button" onClick={() => onTag(t, false)} aria-label={"Убрать тег " + t} className="grid size-6 place-items-center rounded-full hover:bg-white/20"><XIcon className="size-3" /></button>

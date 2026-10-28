@@ -65,7 +65,7 @@ export function Celebrate() {
       <canvas ref={cv} className="pointer-events-none fixed inset-0 z-[70] h-full w-full" aria-hidden />
       <AnimatePresence>
         {msg && (
-          <motion.div key={msg.title} role="status" className="pointer-events-none fixed inset-x-0 z-[71] flex justify-center px-6" style={{ top: msg.big ? "34%" : "calc(env(safe-area-inset-top) + 4.5rem)" }}
+          <motion.div key={msg.title} role="status" className="pointer-events-none fixed inset-x-0 z-[71] flex justify-center px-6" style={{ top: msg.big ? "34%" : "calc(var(--sat) + 4.5rem)" }}
             initial={{ opacity: 0, scale: 0.4, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: -10 }}
             transition={{ type: "spring", stiffness: 380, damping: 18 }}>
             <div className={msg.big ? "flex flex-col items-center gap-1 rounded-3xl bg-background/85 px-8 py-6 text-center shadow-2xl backdrop-blur" : "flex items-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-background shadow-xl"}>

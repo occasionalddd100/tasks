@@ -127,7 +127,7 @@ export default function FocusView() {
     <DndContext sensors={sensors} collisionDetection={collide} onDragStart={e => setDragId(e.active.id)} onDragCancel={() => setDragId(null)} onDragEnd={onDragEnd}>
     <div className={cn(VIEW, desk ? "max-w-[1400px] gap-3" : "max-w-5xl")}>
       {/* phone: the buttons go up into the top bar, the tag chips stay pinned under it and shrink into one row on scroll */}
-      <div className={cn("flex flex-col gap-3 max-md:sticky max-md:top-12 max-md:z-10 max-md:-mx-4 max-md:-mt-3 max-md:border-b max-md:bg-background/80 max-md:px-4 max-md:transition-[padding] max-md:duration-300", small ? "max-md:py-1.5" : "max-md:py-2.5")}
+      <div className={cn("flex flex-col gap-3 max-md:sticky max-md:top-[var(--bar)] max-md:z-10 max-md:-mx-4 max-md:-mt-3 max-md:border-b max-md:bg-background/80 max-md:px-4 max-md:transition-[padding] max-md:duration-300", small ? "max-md:py-1.5" : "max-md:py-2.5")}
         style={phone ? { backdropFilter: "blur(14px) saturate(1.6)", WebkitBackdropFilter: "blur(14px) saturate(1.6)" } : undefined}>
       {phone && slot && createPortal(<div className="flex items-center gap-1.5 [&_button]:h-8 [&_button]:text-xs">{actions}</div>, slot)}
       {!phone && <header className="flex items-center gap-2">

@@ -13,7 +13,7 @@ function SheetContent({ className, children, ...props }) {
     <SheetPrimitive.Portal>
       <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-[fade-in_200ms_ease-out]" />
       <SheetPrimitive.Content
-        className={cn("fixed inset-y-0 left-0 z-50 flex h-full data-[state=open]:animate-[sheet-in_220ms_cubic-bezier(.2,0,0,1)] w-[85%] max-w-xs flex-col border-r bg-sidebar shadow-lg", className)}
+        className={cn("fixed inset-y-0 left-0 z-50 flex h-full data-[state=open]:animate-[sheet-in_220ms_cubic-bezier(.2,0,0,1)] w-[85%] max-w-xs flex-col border-r bg-sidebar pt-[var(--sat)] pb-[var(--sab)] shadow-lg", className)}
         {...props}
       >
         <SheetPrimitive.Title className="sr-only">Меню</SheetPrimitive.Title>

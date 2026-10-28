@@ -20,6 +20,7 @@ export function apply() {
   const root = document.documentElement;
   const dark = cur.theme === "dark" || (cur.theme === "system" && mq.matches);
   root.classList.toggle("dark", dark);
+  try { window.AndroidBars?.dark(dark); } catch {} // the app's status bar icons follow the theme
   const [l, d] = ACCENTS[cur.accent] || ACCENTS.sky;
   root.style.setProperty("--ink", dark ? d : l);
   root.style.fontSize = cur.scale === 100 ? "" : cur.scale + "%";
@@ -33,3 +34,9 @@ export function setAppearance(patch) {
   apply(); subs.forEach(f => f());
 }
 export const useAppearance = () => useSyncExternalStore(f => (subs.add(f), () => subs.delete(f)), () => cur);
+
+// Android app: the status / navigation bar sizes, known natively (the app also pushes them when they change)
+try {
+  const i = JSON.parse(window.AndroidBars?.insets() || "null");
+  if (i) { document.documentElement.style.setProperty("--app-sat", i.top + "px"); document.documentElement.style.setProperty("--app-sab", i.bottom + "px"); }
+} catch {}

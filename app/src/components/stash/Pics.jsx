@@ -218,7 +218,7 @@ export function PicsViewer() {
       {st && list.length > 0 && (
         <motion.div key="v" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}
           className="fixed inset-0 z-[100] flex flex-col bg-black/92" style={{ backdropFilter: "blur(6px)" }}>
-          <div className="flex items-center gap-1 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-sm text-white/80" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1 p-3 pt-[calc(0.75rem+var(--sat))] text-sm text-white/80" onClick={e => e.stopPropagation()}>
             <span className="tabular-nums">{at + 1} / {list.length}</span>
             <span className="ml-auto" />
             <Tools p={list[at]} list={list} />
@@ -238,7 +238,7 @@ export function PicsViewer() {
             {at < list.length - 1 && <button type="button" onClick={e => { e.stopPropagation(); go(1); }} aria-label="Дальше" className="absolute top-1/2 right-3 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20 max-md:hidden"><ChevronRightIcon className="size-6" /></button>}
           </div>
           {list.length > 1 && (
-            <div className="flex justify-center gap-1.5 overflow-x-auto p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center gap-1.5 overflow-x-auto p-3 pb-[calc(0.75rem+var(--sab))]" onClick={e => e.stopPropagation()}>
               {list.map((p, k) => <Thumb key={k} p={p} onClick={() => { setDir(k > at ? 1 : -1); setSt(s => ({ ...s, at: k })); }}
                 className={cn("size-12 shrink-0 transition-opacity", k === at ? "ring-2 ring-white" : "opacity-50 hover:opacity-90")} />)}
             </div>

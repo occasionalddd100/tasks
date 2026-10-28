@@ -31,5 +31,5 @@ const BLUR = { backdropFilter: "blur(14px) saturate(1.6)", WebkitBackdropFilter:
 export const PillTabs = ({ children, sticky }) => (
   <div role="tablist" style={sticky ? BLUR : undefined}
     className={cn("-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0 [scrollbar-width:none]",
-      sticky && "max-md:sticky max-md:top-12 max-md:z-10 max-md:border-b max-md:bg-background/80 max-md:py-1.5")}>{children}</div>
+      sticky && "max-md:sticky max-md:top-[var(--bar)] max-md:z-10 max-md:border-b max-md:bg-background/80 max-md:py-1.5")}>{children}</div>
 );

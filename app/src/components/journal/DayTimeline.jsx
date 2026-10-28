@@ -207,7 +207,7 @@ function VStrip({ now, start, end, events, onTick }) {
         const Icon = p.icon;
         return (
           <div key={from} className="relative flex flex-col pb-2">
-            <div className="sticky top-12 z-[1] -mx-3 flex items-center gap-2 px-3 py-1.5" style={{ background: "color-mix(in oklab, var(--card) 92%, transparent)" }}>
+            <div className="sticky top-[var(--bar)] z-[1] -mx-3 flex items-center gap-2 px-3 py-1.5" style={{ background: "color-mix(in oklab, var(--card) 92%, transparent)" }}>
               <span className="grid size-7 place-items-center rounded-lg text-white" style={{ background: p.bg }}><Icon className="size-4" /></span>
               <span className="text-sm font-semibold">{p.label}</span>
               <span className="text-xs text-muted-foreground tabular-nums">{hm(from)}{tomorrow ? " · завтра" : ""}</span>

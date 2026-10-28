@@ -21,7 +21,7 @@ export function SettingsHost() {
   const [tab, setTab] = useState("look");
   return (
     <Dialog open={isOpen} onOpenChange={o => !o && close()}>
-      <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] gap-4 overflow-hidden sm:max-w-xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+      <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] gap-4 overflow-hidden sm:max-w-xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1.5rem+var(--sab))]">
         <DialogTitle>Настройки</DialogTitle>
         <div className="flex gap-1 rounded-lg bg-muted p-1">
           {TABS.map(({ k, label, icon: Icon }) => (

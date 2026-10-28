@@ -562,7 +562,7 @@ function DayDialog({ open, setOpen, info, burst }) {
   const isToday = date === today();
   return (
     <Dialog open={!!open} onOpenChange={o => !o && setOpen(null)}>
-      <DialogContent className="max-h-[92vh] max-h-[92dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-x-hidden overflow-y-auto p-0 sm:max-w-2xl lg:max-w-5xl xl:max-w-6xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[env(safe-area-inset-bottom)]">
+      <DialogContent className="max-h-[92vh] max-h-[92dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-x-hidden overflow-y-auto p-0 sm:max-w-2xl lg:max-w-5xl xl:max-w-6xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[var(--sab)]">
         {date && <>
           <motion.div aria-hidden className="sticky top-0 z-10 h-1" animate={{ backgroundColor: mood?.color || "transparent" }} />
           <div className="flex items-center gap-1 border-b px-3 py-2.5 pr-12">
