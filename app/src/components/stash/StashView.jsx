@@ -257,6 +257,8 @@ function AddLine({ stash, tab, inputRef }) {
   useEffect(() => {
     const paste = e => {
       if (e.target.closest?.("input, textarea, [contenteditable=true], [role=dialog]") && !e.target.closest?.("[data-addline]")) return;
+      // an open card window takes pasted pictures into its own gallery
+      if (e.defaultPrevented || document.querySelector("[role=dialog]")) return;
       const files = [...(e.clipboardData?.files || [])];
       if (files.length) { e.preventDefault(); addFiles(files); }
     };
