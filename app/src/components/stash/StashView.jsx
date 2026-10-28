@@ -369,7 +369,7 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
         {c.loading && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2Icon className="size-3.5 animate-spin" />Достаю превью…</div>}
         {c.title && <h3 className={cn("line-clamp-3 text-[13px] leading-snug font-semibold sm:line-clamp-2 sm:text-[15px]", small && "line-clamp-1 sm:line-clamp-1 sm:text-[13px]", size === "l" && "sm:text-lg")}>{c.title}</h3>}
         {c.text && (c.provider === "note" || c.provider === "x" || !c.title) && <p className={cn("text-sm leading-snug whitespace-pre-wrap", c.provider === "note" ? "line-clamp-[12] text-[15px]" : "line-clamp-4 text-muted-foreground", small && "line-clamp-2 text-[13px]")}>{c.text}</p>}
-        {c.desc && <p className={cn("line-clamp-3 text-[13px] leading-snug text-muted-foreground", small && "line-clamp-2 text-xs", tiny && "line-clamp-1")}>{c.desc}</p>}
+        {c.desc && <p className={cn("line-clamp-[7] text-[13px] leading-snug whitespace-pre-line text-muted-foreground", small && "line-clamp-4 text-xs", tiny && "line-clamp-2")}>{c.desc}</p>}
         {c.note && !small && <p className="flex items-center gap-1 text-xs text-muted-foreground"><FileTextIcon className="size-3" />есть заметка</p>}
         {c.tags?.length > 0 && !tiny && (
           <div className="flex flex-wrap gap-1 pt-0.5">
@@ -695,18 +695,18 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
 
   return (
     <Dialog open={!!id} onOpenChange={o => !o && setOpen(null)}>
-      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className={cn("max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[env(safe-area-inset-bottom)]",
-        media && "md:h-[88dvh] md:max-w-[min(92vw,80rem)] md:grid-cols-[minmax(0,1fr)_24rem] md:overflow-hidden")}>
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className={cn("thin-scroll max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[env(safe-area-inset-bottom)]",
+        media && "md:h-[88dvh] md:max-w-[min(92vw,80rem)] md:grid-cols-[minmax(0,1fr)_24rem] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden")}>
         <DialogTitle className="sr-only">{c.title || "Карточка"}</DialogTitle>
         {/* computer: the picture on the left at full height, everything else in a column on the right; phone: picture capped so the rest is in reach */}
         {media && <div className="grid h-[var(--mh)] place-items-center overflow-hidden bg-black/90 [container-type:size] max-md:rounded-t-2xl md:h-full md:rounded-l-lg"
           style={{ "--mh": `min(48dvh, ${100 / mediaRatio}vw)` }}>
           {c.pics?.length > 0
-            ? <Carousel className="size-full" slideClass="grid place-items-center [container-type:size]"
+            ? <Carousel keys className="size-full" slideClass="grid place-items-center [container-type:size]"
                 slides={[...(own ? [<Preview key="m" c={c} autoplay={false} fit />] : []), ...c.pics.map(p => <PicImg key={p.path} p={p} fit />)]} />
             : <Preview key={c.id} c={c} autoplay={c.provider !== "x"} fit />}
         </div>}
-        <div className="flex flex-col gap-4 p-5 md:overflow-y-auto">
+        <div className="thin-scroll flex min-h-0 flex-col gap-4 p-5 md:overflow-y-auto">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Brand p={c.provider} /><span className="truncate">{c.author ? "@" + c.author.replace(/^@/, "") : c.host || PROVIDER[c.provider]?.name}</span>
             {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex shrink-0 items-center gap-1 hover:text-foreground">оригинал<ExternalLinkIcon className="size-3.5" /></a>}
@@ -720,7 +720,7 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
               className="-mt-2 field-sizing-content min-h-12 w-full resize-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50" />
           )}
           <Draft as="textarea" key={c.id + "d"} value={c.desc || ""} onSave={desc => save({ desc })} rows={2} placeholder="Короткое описание: зачем сохранил, что посмотреть"
-            className="w-full resize-none bg-transparent text-sm leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/50" aria-label="Описание" />
+            className="field-sizing-content min-h-12 w-full resize-none bg-transparent text-sm leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/50" aria-label="Описание" />
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><ImageIcon className="size-3.5" />Картинки</div>

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 export const gallery = c => [...(c.provider === "photo" && c.photo ? [c.photo] : []), ...(c.pics || [])];
 
 // the viewer is mounted once in the shell; anything can open it with a list of pictures ({ path } in storage, or { src })
-let openViewer = () => {};
+let openViewer = () => {}, viewerOpen = false;
 export const viewPics = (c, at = 0) => openViewer({ list: gallery(c), at });
 export const viewImages = (srcs, at = 0) => openViewer({ list: srcs.map(src => ({ src, path: src })), at });
 
@@ -29,21 +29,31 @@ function Thumb({ p, className, onClick, children }) {
 
 export function PicImg({ p, fit, className }) {
   const signed = usePhotoUrl(p.src ? null : p.path), url = p.src || signed;
-  return url ? <img src={url} alt="" loading="lazy" draggable={false} className={cn("size-full", fit ? "object-contain" : "object-cover", className)} /> : <div className={cn("size-full animate-pulse bg-muted", className)} />;
+  return url ? <img src={url} alt="" loading="lazy" draggable={false} className={cn("size-full", fit ? "absolute inset-0 object-contain" : "object-cover", className)} /> : <div className={cn("size-full animate-pulse bg-muted", fit && "absolute inset-0", className)} />;
 }
 
 // Instagram-style carousel: swipe (or arrows on a computer), dots and a counter on top
-export function Carousel({ slides, className, slideClass, onTap, style }) {
+export function Carousel({ slides, className, slideClass, onTap, style, keys }) {
   const ref = useRef(null);
   const [at, setAt] = useState(0);
   const n = slides.length;
   const to = k => { const el = ref.current; if (el) el.scrollTo({ left: k * el.clientWidth, behavior: "smooth" }); };
+  // ← → flip pictures (not while typing, and not under the full-screen viewer)
+  useEffect(() => {
+    if (!keys || n < 2) return;
+    const on = e => {
+      if (viewerOpen || e.target.closest?.("input, textarea, [contenteditable=true], select")) return;
+      if (e.key === "ArrowRight") { e.preventDefault(); to(Math.min(n - 1, at + 1)); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); to(Math.max(0, at - 1)); }
+    };
+    window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
+  }, [keys, n, at]);
   const arrow = "absolute top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-black shadow opacity-0 transition-opacity group-hover/car:opacity-100 max-md:hidden";
   return (
     <div className={cn("group/car relative overflow-hidden", className)} style={style} onClick={e => e.stopPropagation()}>
       <div ref={ref} onScroll={e => { const el = e.currentTarget; setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth))); }}
-        className="flex size-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {slides.map((s, k) => <div key={k} onClick={() => onTap?.(k)} className={cn("relative size-full shrink-0 snap-center snap-always", slideClass)}>{s}</div>)}
+        className="flex size-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {slides.map((s, k) => <div key={k} onClick={() => onTap?.(k)} className={cn("relative size-full shrink-0 snap-center snap-always overflow-hidden", slideClass)}>{s}</div>)}
       </div>
       {n > 1 && <>
         <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white tabular-nums">{at + 1}/{n}</span>
@@ -181,6 +191,7 @@ export function PicsViewer() {
   const [dir, setDir] = useState(0);
   const go = d => { if (at + d < 0 || at + d >= list.length) return; setDir(d); setSt(s => ({ ...s, at: at + d })); };
   const close = () => setSt(null);
+  viewerOpen = !!st;
   useBackClose(!!st, close);
   useEffect(() => {
     if (!st) return;

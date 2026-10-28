@@ -291,3 +291,9 @@ button, [role="button"], [role="tab"], nav, label, summary, .select-none-ui { -w
 .pm-icon-pop button { height: 2rem; border-radius: 8px; font-size: 1.1rem; }
 .pm-icon-pop button:hover { background: var(--accent); }
 .pm-icon-pop button.wide { grid-column: 1 / -1; font-size: 0.8rem; color: var(--muted-foreground); }
+
+/* quiet scrollbars for windows with their own scrolling */
+.thin-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent; }
+.thin-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.thin-scroll::-webkit-scrollbar-thumb { background: color-mix(in oklch, var(--foreground) 22%, transparent); border-radius: 9999px; border: 2px solid transparent; background-clip: content-box; }
+.thin-scroll::-webkit-scrollbar-track { background: transparent; }
