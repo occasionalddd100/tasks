@@ -12,11 +12,13 @@ import { cn } from "@/lib/utils";
 // On the card they show as a row of thumbnails; tapping one opens a full-screen viewer you swipe through.
 export const gallery = c => [...(c.provider === "photo" && c.photo ? [c.photo] : []), ...(c.pics || [])];
 
+// the viewer is mounted once in the shell; anything can open it with a list of pictures ({ path } in storage, or { src })
 let openViewer = () => {};
-export const viewPics = (c, at = 0) => openViewer({ id: c.id, at });
+export const viewPics = (c, at = 0) => openViewer({ list: gallery(c), at });
+export const viewImages = (srcs, at = 0) => openViewer({ list: srcs.map(src => ({ src, path: src })), at });
 
 function Thumb({ p, className, onClick, children }) {
-  const url = usePhotoUrl(p.path);
+  const signed = usePhotoUrl(p.src ? null : p.path), url = p.src || signed;
   return (
     <button type="button" onClick={onClick} className={cn("relative overflow-hidden rounded-lg bg-muted", className)}>
       {url && <img src={url} alt="" loading="lazy" className="size-full object-cover" />}
@@ -41,28 +43,40 @@ export function PicsRow({ c, small }) {
   );
 }
 
+// upload pictures into a card one by one (each lands as soon as it is up); `onLeft` counts down
+export async function addPics(id, files, onLeft = () => {}) {
+  const imgs = [...files].filter(f => f.type.startsWith("image/"));
+  if (!imgs.length) return;
+  onLeft(imgs.length);
+  try {
+    for (const f of imgs) {
+      const p = await uploadPhoto(f, "stash");
+      const cur = getDb().clips.find(x => x.id === id)?.pics || [];
+      await update("clips", id, { pics: [...cur, p] });
+      onLeft(n => n - 1);
+    }
+  } catch (e) { toast.error("Не загрузилось: " + (e.message || e)); }
+  onLeft(0);
+}
+
 // in the card's window: all pictures, add more (several at once), remove one
 export function PicsEditor({ c }) {
   const [busy, setBusy] = useState(0);
   const file = useRef(null);
+  // Ctrl+V with a picture anywhere in the open card adds it here
+  useEffect(() => {
+    const on = e => {
+      const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith("image/"));
+      if (!files.length) return;
+      e.preventDefault(); addFiles(files);
+    };
+    window.addEventListener("paste", on); return () => window.removeEventListener("paste", on);
+  }, [c.id]);
   const all = gallery(c), off = all.length - (c.pics || []).length;
-  const addFiles = async files => {
-    const imgs = [...files].filter(f => f.type.startsWith("image/"));
-    if (!imgs.length) return;
-    setBusy(imgs.length);
-    try {
-      for (const f of imgs) {
-        const p = await uploadPhoto(f, "stash");
-        const cur = getDb().clips.find(x => x.id === c.id)?.pics || [];
-        await update("clips", c.id, { pics: [...cur, p] });
-        setBusy(n => n - 1);
-      }
-    } catch (e) { toast.error("Не загрузилось: " + (e.message || e)); }
-    setBusy(0);
-  };
+  const addFiles = files => addPics(c.id, files, setBusy);
   const drop = p => { update("clips", c.id, { pics: (c.pics || []).filter(x => x.path !== p.path) }); deletePhoto(p.path); };
   return (
-    <div className="flex flex-col gap-2" onPaste={e => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}>
+    <div className="flex flex-col gap-2">
       <div className="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-1.5">
         {all.map((p, k) => (
           <div key={p.path} className="group relative">
@@ -82,7 +96,7 @@ export function PicsEditor({ c }) {
 }
 
 function Slide({ p }) {
-  const url = usePhotoUrl(p.path);
+  const signed = usePhotoUrl(p.src ? null : p.path), url = p.src || signed;
   return url ? <img src={url} alt="" draggable={false} className="max-h-full max-w-full rounded-md object-contain select-none" /> : <Loader2Icon className="size-6 animate-spin text-white/60" />;
 }
 
@@ -90,8 +104,7 @@ function Slide({ p }) {
 export function PicsViewer() {
   const [st, setSt] = useState(null);
   useEffect(() => { openViewer = setSt; return () => { openViewer = () => {}; }; }, []);
-  const c = st && getDb().clips.find(x => x.id === st.id);
-  const list = c ? gallery(c) : [];
+  const list = st?.list || [];
   const at = Math.min(st?.at || 0, Math.max(0, list.length - 1));
   const [dir, setDir] = useState(0);
   const go = d => { if (at + d < 0 || at + d >= list.length) return; setDir(d); setSt(s => ({ ...s, at: at + d })); };
@@ -113,7 +126,7 @@ export function PicsViewer() {
           </div>
           <div className="relative min-h-0 flex-1 overflow-hidden">
             <AnimatePresence initial={false} custom={dir}>
-              <motion.div key={list[at].path} custom={dir} className="absolute inset-0 grid place-items-center px-2"
+              <motion.div key={at + list[at].path.slice(-40)} custom={dir} className="absolute inset-0 grid place-items-center px-2"
                 initial={{ x: dir * 300, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -dir * 300, opacity: 0 }} transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
                 drag={list.length > 1 ? "x" : false} dragConstraints={{ left: 0, right: 0 }} dragElastic={0.6}
                 onDragEnd={(e, i) => { if (i.offset.x < -60 || i.velocity.x < -400) go(1); else if (i.offset.x > 60 || i.velocity.x > 400) go(-1); }}
@@ -126,7 +139,7 @@ export function PicsViewer() {
           </div>
           {list.length > 1 && (
             <div className="flex justify-center gap-1.5 overflow-x-auto p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]" onClick={e => e.stopPropagation()}>
-              {list.map((p, k) => <Thumb key={p.path} p={p} onClick={() => { setDir(k > at ? 1 : -1); setSt(s => ({ ...s, at: k })); }}
+              {list.map((p, k) => <Thumb key={k} p={p} onClick={() => { setDir(k > at ? 1 : -1); setSt(s => ({ ...s, at: k })); }}
                 className={cn("size-12 shrink-0 transition-opacity", k === at ? "ring-2 ring-white" : "opacity-50 hover:opacity-90")} />)}
             </div>
           )}

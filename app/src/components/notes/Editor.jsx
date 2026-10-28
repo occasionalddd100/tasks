@@ -7,13 +7,16 @@ import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import { toast } from "sonner";
+import { extras, addGalleryItem, shrinkImage } from "@/components/notes/extras";
 
 const MAX_IMAGE = 1024 * 1024;
 // images live inside the note as data URLs, so keep them small
-const toDataUrl = file => new Promise((resolve, reject) => {
-  if (file.size > MAX_IMAGE) { toast.error("Картинка больше 1 МБ, вставь ссылкой"); return reject(new Error("too big")); }
-  const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file);
-});
+// (big photos are shrunk first; only what is still too big is refused)
+const toDataUrl = async file => {
+  const url = await shrinkImage(file).catch(() => null);
+  if (!url || url.length > MAX_IMAGE * 1.37) { toast.error("Картинка слишком большая, вставь ссылкой"); throw new Error("too big"); }
+  return url;
+};
 
 // Tab / Shift+Tab nest and un-nest list items like Obsidian; tables and code blocks keep their own Tab
 const inTable = state => { const $f = state.selection.$from; for (let d = $f.depth; d > 0; d--) if (/table/.test($f.node(d).type.name)) return true; return false; };
@@ -125,6 +128,7 @@ const RU = {
   [CrepeFeature.ImageBlock]: { onUpload: toDataUrl, inlineUploadButton: "Загрузить", inlineUploadPlaceholderText: "или вставь ссылку", blockUploadButton: "Загрузить файл", blockUploadPlaceholderText: "или вставь ссылку", blockCaptionPlaceholderText: "Подпись" },
   [CrepeFeature.LinkTooltip]: { inputPlaceholder: "Вставь ссылку" },
   [CrepeFeature.BlockEdit]: {
+    buildMenu: addGalleryItem,
     textGroup: { label: "Текст", text: { label: "Текст" }, h1: { label: "Заголовок 1" }, h2: { label: "Заголовок 2" }, h3: { label: "Заголовок 3" }, h4: { label: "Заголовок 4" }, h5: { label: "Заголовок 5" }, h6: { label: "Заголовок 6" }, quote: { label: "Цитата" }, divider: { label: "Разделитель" } },
     listGroup: { label: "Списки", bulletList: { label: "Маркированный" }, orderedList: { label: "Нумерованный" }, taskList: { label: "Чек-лист" } },
     advancedGroup: { label: "Ещё", image: { label: "Картинка" }, codeBlock: { label: "Код" }, table: { label: "Таблица" }, math: { label: "Формула" } },
@@ -142,7 +146,7 @@ export default function Editor({ value, onChange, onReady, readOnly, foldKey: st
     const c = new Crepe({ root: root.current, defaultValue: value || "", featureConfigs: RU });
     // Obsidian-style "-" bullets; opening a note must not rewrite it
     c.editor.config(ctx => ctx.update(remarkStringifyOptionsCtx, o => ({ ...o, bullet: "-" })));
-    c.editor.use(listTabs).use(headingKeys).use(sections(storeKey));
+    c.editor.use(listTabs).use(headingKeys).use(sections(storeKey)).use(extras);
     let ready = false;
     c.on(l => l.markdownUpdated((_, md) => {
       if (!ready || md === last.current) return;

@@ -11,6 +11,7 @@ import { ConfirmHost } from "@/components/Confirm";
 import { IconPickerHost } from "@/components/IconPicker";
 import MobileNav from "@/components/MobileNav";
 import { SettingsHost, openSettings } from "@/components/Settings";
+import { PicsViewer } from "@/components/stash/Pics";
 import ShareInbox from "@/components/stash/ShareInbox";
 const ZenView = lazy(() => import("@/components/tasks/ZenView"));
 import ZenFloat from "@/components/tasks/ZenFloat";
@@ -77,6 +78,10 @@ export default function Shell() {
   const db = useDb(), look = useAppearance();
   const [view, setView] = useState(readHash);
   const [menu, setMenu] = useState(false);
+  useEffect(() => {
+    const on = e => { if (innerWidth < 768) { window.__searchQ = e.detail; setMenu("search"); } };
+    window.addEventListener("globalsearch", on); return () => window.removeEventListener("globalsearch", on);
+  }, []);
 
   useEffect(() => { loadMe().catch(() => {}); }, []);
   // "N" anywhere outside a text field: throw a task into the drafts
@@ -150,6 +155,7 @@ export default function Shell() {
       <ConfirmHost />
       <SettingsHost />
       <ShareInbox go={go} />
+      <PicsViewer />
       <AnimatePresence>{view.zen && <Suspense fallback={null}><ZenView onClose={() => go({ focus: true })} /></Suspense>}</AnimatePresence>
       {!view.zen && <ZenFloat />}
       <IconPickerHost />
@@ -164,6 +170,12 @@ function Sidebar({ view, go, email, search }) {
   const [dropping, setDropping] = useState(false);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(!!search);
+  // a #tag tapped in a note opens this search with the tag in it
+  useEffect(() => {
+    const on = e => { setSearching(true); setQuery(e.detail || ""); };
+    if (window.__searchQ) { on({ detail: window.__searchQ }); window.__searchQ = ""; }
+    window.addEventListener("globalsearch", on); return () => window.removeEventListener("globalsearch", on);
+  }, []);
   const create = async kind => {
     if (kind === "folder") return newFolder("");
     const id = kind === "note" ? await newNote("") : kind === "stash" ? await newStash("") : await newProject("");

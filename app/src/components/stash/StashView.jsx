@@ -19,7 +19,7 @@ import { useDb, getDb, update, updateMany, remove } from "@/lib/db";
 import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh } from "@/lib/stash";
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
-import { PicsEditor, PicsRow, PicsViewer } from "@/components/stash/Pics";
+import { PicsEditor, PicsRow } from "@/components/stash/Pics";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ActionsDropdown, ActionsContext } from "@/components/ui/actions";
 import { confirmAction } from "@/components/Confirm";
@@ -173,7 +173,6 @@ export default function StashView({ id, fresh, go }) {
 
       {shown.length > limit && <div ref={more} className="h-10" />}
       <TagsDialog edit={tagEdit} setEdit={setTagEdit} clips={all} setTags={setTags} />
-      <PicsViewer />
       <ClipDialog id={open} setOpen={setOpen} tabs={tabs} allTags={tagCounts.map(([t]) => t)} moveTo={moveTo} />
     </div>
   );
@@ -338,6 +337,7 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
           { label: "Открыть", icon: PencilIcon, onSelect: onOpen },
           c.url && { label: "Открыть оригинал", icon: ExternalLinkIcon, onSelect: () => window.open(c.url, "_blank", "noopener") },
           tabs.length > 1 && { label: "На доску", icon: ArrowRightLeftIcon, sub: tabs.map(t => ({ label: t.name, disabled: t.id === c.tab, onSelect: () => moveTo(t.id) })) },
+          otherStashes(c).length > 0 && { label: "В другой стэш", icon: LayoutGridIcon, sub: otherStashes(c).map(s => ({ label: s.name || "Без названия", onSelect: () => toStash(c, s) })) },
           { label: "Размер карточек", icon: MaximizeIcon, sub: GRID.map((g, i) => ({ label: g.label, active: level === g.k, onSelect: () => setGrid(i) })) },
           { label: c.watched ? "Вернуть в очередь" : "Посмотрел", icon: c.watched ? EyeOffIcon : EyeIcon, onSelect: toggleSeen },
           { sep: true },
@@ -428,6 +428,15 @@ function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
               <div className="flex flex-wrap gap-1">
                 {tabs.map(t => <button key={t.id} type="button" disabled={t.id === c.tab} onClick={act(() => moveTo(t.id))}
                   className={cn("h-7 rounded-full border px-2.5 text-xs", t.id === c.tab ? "border-transparent bg-accent font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>{t.name}</button>)}
+              </div>
+            </div>
+          )}
+          {otherStashes(c).length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><LayoutGridIcon className="size-3.5" />В другой стэш</div>
+              <div className="flex flex-wrap gap-1">
+                {otherStashes(c).map(s => <button key={s.id} type="button" onClick={act(() => toStash(c, s))}
+                  className="h-7 rounded-full border px-2.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground">{s.name || "Без названия"}</button>)}
               </div>
             </div>
           )}
@@ -535,6 +544,15 @@ function TagsDialog({ edit, setEdit, clips, setTags }) {
     </Dialog>
   );
 }
+
+// moving a card to another stash: it lands on top of that stash's first board
+function toStash(c, s) {
+  if (!s || s.id === c.stash) return;
+  const tab = s.tabs?.[0]?.id || "";
+  update("clips", c.id, { stash: s.id, tab, order: Math.min(0, ...getDb().clips.filter(x => x.stash === s.id && x.tab === tab).map(x => x.order ?? 0)) - 1 });
+  toast(`Перенёс в «${s.name || "Без названия"}»`);
+}
+const otherStashes = c => getDb().stashes.filter(s => s.id !== c.stash);
 
 function delClip(c) {
   remove("clips", c.id);
@@ -724,6 +742,11 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
             {tabs.length > 1 && (
               <select value={c.tab} onChange={e => moveTo(c, e.target.value)} aria-label="Доска" className="h-9 rounded-lg border bg-background px-2 text-sm">
                 {tabs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            )}
+            {db.stashes.length > 1 && (
+              <select value={c.stash} onChange={e => { toStash(c, db.stashes.find(s => s.id === e.target.value)); setOpen(null); }} aria-label="Стэш" title="Перенести в другой стэш" className="h-9 max-w-[45%] rounded-lg border bg-background px-2 text-sm">
+                {db.stashes.map(s => <option key={s.id} value={s.id}>{s.id === c.stash ? "Стэш: " : "→ "}{s.name || "Без названия"}</option>)}
               </select>
             )}
             <button type="button" onClick={async () => { if (await confirmAction({ title: "Удалить карточку?" })) { setOpen(null); delClip(c); } }}

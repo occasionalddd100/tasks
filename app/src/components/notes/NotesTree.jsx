@@ -105,7 +105,7 @@ export default function NotesTree({ view, go, query }) {
     const hits = [
       ...db.projects.map(b => ({ ...b, kind: "project" })).filter(b => itemName(b).toLowerCase().includes(q)),
       ...db.stashes.map(b => ({ ...b, kind: "stash" })).filter(b => itemName(b).toLowerCase().includes(q)),
-      ...db.notes.map(n => ({ ...n, kind: "note" })).filter(n => noteTitle(n).toLowerCase().includes(q) || (n.body || "").toLowerCase().includes(q))
+      ...db.notes.map(n => ({ ...n, kind: "note" })).filter(n => noteTitle(n).toLowerCase().includes(q) || (n.body || "").replace(/\\#/g, "#").toLowerCase().includes(q))
         .sort((a, b) => (b.updated || "").localeCompare(a.updated || "")),
     ];
     return (
