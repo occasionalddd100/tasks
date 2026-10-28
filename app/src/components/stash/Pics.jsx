@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronLeftIcon, ChevronRightIcon, ImagePlusIcon, Loader2Icon, XIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, CopyIcon, DownloadIcon, ImagePlusIcon, Loader2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { update, getDb } from "@/lib/db";
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
@@ -100,6 +100,32 @@ function Slide({ p }) {
   return url ? <img src={url} alt="" draggable={false} className="max-h-full max-w-full rounded-md object-contain select-none" /> : <Loader2Icon className="size-6 animate-spin text-white/60" />;
 }
 
+const blobOf = url => fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); });
+// the clipboard takes only PNG, so other formats are redrawn first
+const toPng = blob => blob.type === "image/png" ? blob : createImageBitmap(blob).then(b => {
+  const cv = document.createElement("canvas"); cv.width = b.width; cv.height = b.height; cv.getContext("2d").drawImage(b, 0, 0);
+  return new Promise(r => cv.toBlob(r, "image/png"));
+});
+function Tools({ p }) {
+  const signed = usePhotoUrl(p.src ? null : p.path), url = p.src || signed;
+  const btn = "grid size-10 place-items-center rounded-full hover:bg-white/10 disabled:opacity-40";
+  const copy = async () => {
+    try { await navigator.clipboard.write([new ClipboardItem({ "image/png": blobOf(url).then(toPng) })]); toast.success("Картинка скопирована"); }
+    catch { toast.error("Не получилось скопировать"); }
+  };
+  const save = async () => {
+    try {
+      const b = await blobOf(url), a = document.createElement("a"), ext = (b.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
+      a.href = URL.createObjectURL(b); a.download = "картинка-" + new Date().toISOString().slice(0, 10) + "." + ext; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch { window.open(url, "_blank", "noopener"); }
+  };
+  return <>
+    <button type="button" onClick={e => { e.stopPropagation(); copy(); }} disabled={!url} aria-label="Копировать" title="Копировать" className={btn}><CopyIcon className="size-5" /></button>
+    <button type="button" onClick={e => { e.stopPropagation(); save(); }} disabled={!url} aria-label="Скачать" title="Скачать" className={btn}><DownloadIcon className="size-5" /></button>
+  </>;
+}
+
 // full-screen viewer: swipe or arrows, Esc / back closes
 export function PicsViewer() {
   const [st, setSt] = useState(null);
@@ -120,8 +146,10 @@ export function PicsViewer() {
       {st && list.length > 0 && (
         <motion.div key="v" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}
           className="fixed inset-0 z-[100] flex flex-col bg-black/92" style={{ backdropFilter: "blur(6px)" }}>
-          <div className="flex items-center justify-between p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-sm text-white/80">
+          <div className="flex items-center gap-1 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-sm text-white/80" onClick={e => e.stopPropagation()}>
             <span className="tabular-nums">{at + 1} / {list.length}</span>
+            <span className="ml-auto" />
+            <Tools p={list[at]} />
             <button type="button" onClick={close} aria-label="Закрыть" className="grid size-10 place-items-center rounded-full hover:bg-white/10"><XIcon className="size-5" /></button>
           </div>
           <div className="relative min-h-0 flex-1 overflow-hidden">

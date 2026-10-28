@@ -115,8 +115,28 @@ export const extras = $prose(() => new Plugin({
   // listening in the capture phase: crepe's list and image views swallow their own clicks
   view(view) {
     const on = e => { if (down(view, e)) { e.stopPropagation(); } };
+    // pictures open on click / double click (not mousedown: the click that follows would land on the viewer and close it)
+    // (while writing, the first click re-renders the picture, so a double click is caught as the second mousedown)
+    const pic = e => {
+      // a selected picture is covered by its wrapper, so look for the picture inside it too
+      const el = e.target instanceof Element ? e.target : null;
+      const t = el instanceof HTMLImageElement ? el : el?.closest(".image-wrapper")?.querySelector("img");
+      if (!t?.src || !t.closest(".pm-gallery, .milkdown-image-block, .milkdown-image-inline")) return;
+      if (view.editable && !e.altKey && !(e.type === "mousedown" && e.detail >= 2)) return;
+      if (!view.editable && e.type === "mousedown") return;
+      e.preventDefault(); e.stopPropagation();
+      const all = [...view.dom.querySelectorAll(":is(.pm-gallery, .milkdown-image-block, .milkdown-image-inline) img")].filter(i => i.src);
+      const open = () => viewImages(all.map(i => i.src), Math.max(0, all.indexOf(t)));
+      if (e.type === "click") return open();
+      let done = false;
+      const go = ev => { if (done) return; done = true; ev?.stopPropagation(); open(); };
+      window.addEventListener("click", go, { once: true, capture: true });
+      setTimeout(() => { window.removeEventListener("click", go, true); go(); }, 450);
+    };
     view.dom.addEventListener("mousedown", on, true);
-    return { destroy: () => view.dom.removeEventListener("mousedown", on, true) };
+    view.dom.addEventListener("click", pic, true);
+    view.dom.addEventListener("mousedown", pic, true);
+    return { destroy: () => { view.dom.removeEventListener("mousedown", on, true); view.dom.removeEventListener("click", pic, true); view.dom.removeEventListener("mousedown", pic, true); } };
   },
 }));
 
@@ -136,13 +156,6 @@ function down(view, e) {
             const img = view.state.schema.nodes.image;
             view.dispatch(view.state.tr.insert(pos + n.nodeSize - 1, srcs.map(src => img.create({ src, alt: "" }))));
           });
-          return true;
-        }
-        const g = t.closest(".pm-gallery");
-        if (g && t.tagName === "IMG" && (!view.editable || e.detail >= 2 || e.altKey)) {
-          e.preventDefault();
-          const all = [...g.querySelectorAll("img")].filter(i => i.src);
-          viewImages(all.map(i => i.src), Math.max(0, all.indexOf(t)));
           return true;
         }
         // tags: open the global search (in reading mode a tap, while writing Ctrl/⌘ + click)
