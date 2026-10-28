@@ -311,7 +311,7 @@ function useRowSpan() {
 }
 // grid density for all cards, per device: min card width on a computer, column count on a phone
 const GRID = [
-  { k: "l", label: "Крупно", w: 360, m: 1, gap: "gap-x-4" },
+  { k: "l", label: "Крупно", w: 360, m: 2, gap: "gap-x-2.5 sm:gap-x-4" }, // a phone shows at least two columns
   { k: "m", label: "Обычно", w: 270, m: 2, gap: "gap-x-2.5 sm:gap-x-4" },
   { k: "s", label: "Мельче", w: 200, m: 3, gap: "gap-x-2 sm:gap-x-3" },
   { k: "xs", label: "Мелко", w: 150, m: 4, gap: "gap-x-1.5 sm:gap-x-2" },
