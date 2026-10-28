@@ -595,8 +595,8 @@ function Preview({ c, compact, autoplay, onOpen, fit }) {
   if (!thumb && !embed) return null;
   return (
     <button type="button" onClick={e => { e.stopPropagation(); if (onOpen) return onOpen(); if (embed) setPlay(true); else if (c.url) window.open(c.url, "_blank", "noopener"); }}
-      className={cn(box, "group/p block")} style={sz(thumb ? ratio : 16 / 9)} aria-label={embed ? "Смотреть" : "Открыть"}>
-      {thumb ? <img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover/p:scale-105"
+      className={cn(box, "group/p block", fit && thumb && "size-full bg-transparent")} style={fit && thumb ? undefined : sz(thumb ? ratio : 16 / 9)} aria-label={embed ? "Смотреть" : "Открыть"}>
+      {thumb ? <img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className={cn("absolute inset-0 size-full transition-transform duration-500", fit ? "object-contain" : "object-cover group-hover/p:scale-105")}
         onError={() => { setBroken(true); if (c.url && c.provider !== "youtube") refresh(c.id, c.url); }} />
         : <div className="absolute inset-0 grid place-items-center" style={{ background: `linear-gradient(135deg, ${PROVIDER[c.provider]?.color}55, transparent)` }}><Brand p={c.provider} size={36} /></div>}
       {embed && (
