@@ -27,6 +27,52 @@ function Thumb({ p, className, onClick, children }) {
   );
 }
 
+export function PicImg({ p, fit, className }) {
+  const signed = usePhotoUrl(p.src ? null : p.path), url = p.src || signed;
+  return url ? <img src={url} alt="" loading="lazy" draggable={false} className={cn("size-full", fit ? "object-contain" : "object-cover", className)} /> : <div className={cn("size-full animate-pulse bg-muted", className)} />;
+}
+
+// Instagram-style carousel: swipe (or arrows on a computer), dots and a counter on top
+export function Carousel({ slides, className, slideClass, onTap, style }) {
+  const ref = useRef(null);
+  const [at, setAt] = useState(0);
+  const n = slides.length;
+  const to = k => { const el = ref.current; if (el) el.scrollTo({ left: k * el.clientWidth, behavior: "smooth" }); };
+  const arrow = "absolute top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-black shadow opacity-0 transition-opacity group-hover/car:opacity-100 max-md:hidden";
+  return (
+    <div className={cn("group/car relative overflow-hidden", className)} style={style} onClick={e => e.stopPropagation()}>
+      <div ref={ref} onScroll={e => { const el = e.currentTarget; setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth))); }}
+        className="flex size-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {slides.map((s, k) => <div key={k} onClick={() => onTap?.(k)} className={cn("relative size-full shrink-0 snap-center snap-always", slideClass)}>{s}</div>)}
+      </div>
+      {n > 1 && <>
+        <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white tabular-nums">{at + 1}/{n}</span>
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1">
+          {slides.map((_, k) => <span key={k} className={cn("size-1.5 rounded-full shadow transition-all", k === at ? "bg-white" : "bg-white/50")} />)}
+        </div>
+        {at > 0 && <button type="button" aria-label="Назад" onClick={e => { e.stopPropagation(); to(at - 1); }} className={cn(arrow, "left-2")}><ChevronLeftIcon className="size-4" /></button>}
+        {at < n - 1 && <button type="button" aria-label="Дальше" onClick={e => { e.stopPropagation(); to(at + 1); }} className={cn(arrow, "right-2")}><ChevronRightIcon className="size-4" /></button>}
+      </>}
+    </div>
+  );
+}
+
+// extra pictures on a board card: a little stack of previews over the cover, with "+N"; a tap opens the viewer
+export function PicsOverlay({ c, skip = 0, small }) {
+  const pics = (c.pics || []).slice(skip);
+  if (!pics.length) return null;
+  const off = gallery(c).length - (c.pics || []).length + skip, max = small ? 2 : 3, more = pics.length - max;
+  return (
+    <div className="absolute bottom-2 left-2 flex items-center" onClick={e => e.stopPropagation()}>
+      {pics.slice(0, max).map((p, k) => (
+        <Thumb key={p.path} p={p} onClick={() => viewPics(c, off + k)}
+          className={cn("size-10 shrink-0 border-2 border-white shadow-md transition-transform hover:z-10 hover:scale-110", small && "size-8", k > 0 && "-ml-3")} />
+      ))}
+      {more > 0 && <button type="button" onClick={() => viewPics(c, off + max)} className="-ml-2 grid h-7 min-w-7 place-items-center rounded-full bg-black/70 px-1.5 text-xs font-semibold text-white shadow-md backdrop-blur">+{more}</button>}
+    </div>
+  );
+}
+
 // thumbnails on the card itself (only the extra pictures; the main one is already the card's cover)
 export function PicsRow({ c, small }) {
   const pics = c.pics || [];

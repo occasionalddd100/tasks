@@ -19,7 +19,7 @@ import { useDb, getDb, update, updateMany, remove } from "@/lib/db";
 import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh } from "@/lib/stash";
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
-import { PicsEditor, PicsRow } from "@/components/stash/Pics";
+import { PicsEditor, PicImg, Carousel, PicsOverlay } from "@/components/stash/Pics";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ActionsDropdown, ActionsContext } from "@/components/ui/actions";
 import { confirmAction } from "@/components/Confirm";
@@ -353,7 +353,12 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
       exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }} transition={{ type: "spring", stiffness: 260, damping: 22 }}
       {...drag} draggable={grab} onDragStart={e => { setDragging(true); drag.onDragStart(e); }} onDragEnd={e => { setDragging(false); drag.onDragEnd(e); }}
       className="group relative overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-lg sm:rounded-2xl">
-      {hasMedia && <div className={cn(tiny && "max-h-56 overflow-hidden [&>*]:max-h-56")} onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)} onClick={onOpen}><Preview c={c} compact onOpen={onOpen} /></div>}
+      {(hasMedia || c.pics?.length > 0) && (
+        <div className={cn("relative", tiny && "max-h-56 overflow-hidden [&>*]:max-h-56")} onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)} onClick={onOpen}>
+          {hasMedia ? <Preview c={c} compact onOpen={onOpen} /> : <PicImg p={c.pics[0]} className="block h-auto max-h-[70vh]" />}
+          <PicsOverlay c={c} skip={hasMedia ? 0 : 1} small={small} />
+        </div>
+      )}
       <div className={cn("flex flex-col gap-1.5 p-2.5 sm:p-3", small && "gap-1 p-2 sm:p-2")} onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}>
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Brand p={c.provider} />
@@ -365,7 +370,6 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
         {c.title && <h3 className={cn("line-clamp-3 text-[13px] leading-snug font-semibold sm:line-clamp-2 sm:text-[15px]", small && "line-clamp-1 sm:line-clamp-1 sm:text-[13px]", size === "l" && "sm:text-lg")}>{c.title}</h3>}
         {c.text && (c.provider === "note" || c.provider === "x" || !c.title) && <p className={cn("text-sm leading-snug whitespace-pre-wrap", c.provider === "note" ? "line-clamp-[12] text-[15px]" : "line-clamp-4 text-muted-foreground", small && "line-clamp-2 text-[13px]")}>{c.text}</p>}
         {c.desc && <p className={cn("line-clamp-3 text-[13px] leading-snug text-muted-foreground", small && "line-clamp-2 text-xs", tiny && "line-clamp-1")}>{c.desc}</p>}
-        <PicsRow c={c} small={small} />
         {c.note && !small && <p className="flex items-center gap-1 text-xs text-muted-foreground"><FileTextIcon className="size-3" />есть заметка</p>}
         {c.tags?.length > 0 && !tiny && (
           <div className="flex flex-wrap gap-1 pt-0.5">
@@ -685,7 +689,8 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
   useEffect(() => { setNoteOpen(!!c?.note); }, [id]);
   if (!c) return <Dialog open={false} onOpenChange={() => setOpen(null)} />;
   const save = f => update("clips", c.id, f);
-  const media = (c.provider !== "note" && c.provider !== "link") || !!c.thumb;
+  const media = (c.provider !== "note" && c.provider !== "link") || !!c.thumb || c.pics?.length > 0;
+  const own = (c.provider !== "note" && c.provider !== "link") || !!c.thumb;
   const mediaRatio = c.vertical ? 9 / 16 : c.w && c.h ? Math.max(0.5, Math.min(2.2, c.w / c.h)) : 16 / 9;
 
   return (
@@ -695,7 +700,12 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
         <DialogTitle className="sr-only">{c.title || "Карточка"}</DialogTitle>
         {/* computer: the picture on the left at full height, everything else in a column on the right; phone: picture capped so the rest is in reach */}
         {media && <div className="grid h-[var(--mh)] place-items-center overflow-hidden bg-black/90 [container-type:size] max-md:rounded-t-2xl md:h-full md:rounded-l-lg"
-          style={{ "--mh": `min(48dvh, ${100 / mediaRatio}vw)` }}><Preview key={c.id} c={c} autoplay={c.provider !== "x"} fit /></div>}
+          style={{ "--mh": `min(48dvh, ${100 / mediaRatio}vw)` }}>
+          {c.pics?.length > 0
+            ? <Carousel className="size-full" slideClass="grid place-items-center [container-type:size]"
+                slides={[...(own ? [<Preview key="m" c={c} autoplay={false} fit />] : []), ...c.pics.map(p => <PicImg key={p.path} p={p} fit />)]} />
+            : <Preview key={c.id} c={c} autoplay={c.provider !== "x"} fit />}
+        </div>}
         <div className="flex flex-col gap-4 p-5 md:overflow-y-auto">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Brand p={c.provider} /><span className="truncate">{c.author ? "@" + c.author.replace(/^@/, "") : c.host || PROVIDER[c.provider]?.name}</span>
