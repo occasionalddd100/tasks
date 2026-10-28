@@ -112,16 +112,16 @@ export default function FocusView() {
     <div className={cn(VIEW, desk ? "max-w-[1400px] gap-3" : "max-w-5xl")}>
       <header className="flex items-center gap-2">
         <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Задачи</h1>
+        <button type="button" onClick={() => openTagEditor()} title="Править теги" aria-label="Править теги" className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground max-md:px-2.5"><PencilIcon className="size-3.5" /><span className="max-md:hidden">Теги</span></button>
         <ZenButton />
         <TodayDone />
       </header>
 
-      <div ref={chipsRef} className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
+      <div ref={chipsRef} className="-mx-4 grid auto-cols-max grid-flow-col grid-rows-2 items-center justify-start gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:flex md:flex-wrap md:px-0">
         <TagChip on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>
         <TagChip on={shownTag === WORK} n={list.length - done} onClick={() => setFilter(shownTag === WORK ? null : WORK)}><CrosshairIcon className="size-3.5" />В работе</TagChip>
         {groups.get(NONE)?.length > 0 && <TagChip on={shownTag === NONE} onClick={() => setFilter(shownTag === NONE ? null : NONE)} n={groups.get(NONE).length}><InboxIcon className="size-3.5" />Без тега</TagChip>}
         {tags.map(t => <TagChip key={t.id} on={shownTag === t.id} n={groups.get(t.id)?.length} onClick={() => setFilter(shownTag === t.id ? null : t.id)}><TagMark t={t} />{t.name}</TagChip>)}
-        <button type="button" onClick={() => openTagEditor()} aria-label="Править теги" className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-dashed px-3 text-sm text-muted-foreground hover:text-foreground"><PencilIcon className="size-3.5" />Теги</button>
       </div>
 
       {desk ? (
@@ -143,7 +143,6 @@ export default function FocusView() {
             {!shownTag && db.habits.length > 0 && <Habits habits={db.habits} />}
           </div>
           <aside className="sticky top-4 flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-2 overflow-y-auto pb-2 [scrollbar-width:thin] [&>*]:shrink-0">
-            <Bucket docked />
             {!shownTag && overdue.length > 0 && <Overdue tasks={overdue} />}
             {!shownTag && [...groups].filter(([, l]) => l.length).map(([id, l]) => {
               const tag = tags.find(t => t.id === id);
@@ -180,7 +179,7 @@ export default function FocusView() {
 
       <Fan open={fan} setOpen={setFan} items={fanItems} anchor="navRight"
         onPick={t => { if (t.id === "\u0000edit") { openTagEditor(); return; } setFilter(t.id === "\u0000all" ? null : t.id); jump(); }} />
-      {!desk && <Bucket />}
+      <Bucket />
       {/* the task you hold follows the finger as a small card; dropped on the pail it just vanishes into it */}
       <DragOverlay dropAnimation={null}>
         {dragged && <div className="max-w-72 cursor-grabbing rounded-xl border bg-card px-3 py-2 text-sm font-medium shadow-2xl" style={{ rotate: "-2deg" }}>{dragged.text}</div>}
