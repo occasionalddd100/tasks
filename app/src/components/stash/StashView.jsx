@@ -20,7 +20,7 @@ import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh } from
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
 import { PaletteIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PicsEditor, PicImg, Carousel, PicsOverlay } from "@/components/stash/Pics";
+import { PicsEditor, PicImg, Carousel, PicsOverlay, own as ownPic } from "@/components/stash/Pics";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ActionsDropdown, ActionsContext } from "@/components/ui/actions";
 import { confirmAction } from "@/components/Confirm";
@@ -374,7 +374,7 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
       {(hasMedia || c.pics?.length > 0) && (
         <div className={cn("relative", tiny && "max-h-56 overflow-hidden [&>*]:max-h-56")} onPointerDown={() => setGrab(false)} onPointerUp={() => setGrab(true)} onPointerLeave={() => setGrab(true)} onClick={onOpen}>
           {cover ? <PicImg p={cover} className="block h-auto max-h-[70vh]" /> : hasMedia ? <Preview c={c} compact onOpen={onOpen} /> : <PicImg p={c.pics[0]} className="block h-auto max-h-[70vh]" />}
-          <PicsOverlay c={c} hide={cover ? cover.path : hasMedia ? null : c.pics[0].path} small={small} />
+          <PicsOverlay c={c} hide={cover ? [cover.path] : hasMedia ? ownPic(c).map(p => p.path) : [c.pics[0].path]} small={small} />
         </div>
       )}
       <div className={cn("flex flex-col gap-1.5 p-2.5 sm:p-3", small && "gap-1 p-2 sm:p-2")} onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}>

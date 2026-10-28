@@ -10,7 +10,11 @@ import { cn } from "@/lib/utils";
 
 // a card can hold several pictures: the photo it was made from (if any) plus `pics` added later.
 // On the card they show as a row of thumbnails; tapping one opens a full-screen viewer you swipe through.
-export const gallery = c => [...(c.provider === "photo" && c.photo ? [c.photo] : []), ...(c.pics || [])];
+// the card's own picture counts too: an uploaded photo, a picture link, or a link's preview image
+export const own = c => c.provider === "photo" && c.photo ? [c.photo]
+  : c.provider === "image" && c.url ? [{ src: c.url, path: c.url }]
+  : c.provider === "link" && c.thumb ? [{ src: c.thumb, path: c.thumb }] : [];
+export const gallery = c => [...own(c), ...(c.pics || [])];
 
 // the viewer is mounted once in the shell; anything can open it with a list of pictures ({ path } in storage, or { src })
 let openViewer = () => {}, viewerOpen = false;
@@ -54,7 +58,7 @@ export function Carousel({ slides, className, slideClass, onTap, style, keys }) 
   return (
     <div className={cn("group/car relative overflow-hidden", className)} style={style} onClick={e => e.stopPropagation()}>
       <div ref={ref} onScroll={e => { const el = e.currentTarget; setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth))); }}
-        className="flex size-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        className="no-scrollbar flex size-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain">
         {slides.map((s, k) => <div key={k} onClick={() => onTap?.(k)} className={cn("relative size-full shrink-0 snap-center snap-always overflow-hidden", slideClass)}>{s}</div>)}
       </div>
       {n > 1 && <>
@@ -70,8 +74,9 @@ export function Carousel({ slides, className, slideClass, onTap, style, keys }) 
 }
 
 // extra pictures on a board card: a little stack of previews over the cover, with "+N"; a tap opens the viewer
-export function PicsOverlay({ c, hide, small }) {
-  const pics = (c.pics || []).filter(p => p.path !== hide);
+// hide: the paths already shown as the cover
+export function PicsOverlay({ c, hide = [], small }) {
+  const pics = gallery(c).filter(p => !hide.includes(p.path));
   if (!pics.length) return null;
   const all = gallery(c), at = p => Math.max(0, all.findIndex(x => x.path === p.path)), max = small ? 2 : 3, more = pics.length - max;
   return (
