@@ -55,11 +55,26 @@ export default function NotesTree({ view, go, query }) {
     sibs.splice(at, 0, me);
     updateMany("folders", sibs.map((f, i) => [f.id, f.id === id ? { order: i + 1, parent } : { order: i + 1 }]).filter(([fid, ch]) => fid === id || db.folders.find(f => f.id === fid)?.order !== ch.order));
   };
+  // a file dropped above/below another one: the whole folder's files get a fresh manual order
+  const placeFile = (d, into, target, after) => {
+    const sibs = t.files(into).filter(x => !(COLL[x.kind] === d.coll && x.id === d.id));
+    let at = sibs.findIndex(x => x.kind === target.kind && x.id === target.id);
+    at = at < 0 ? sibs.length : at + (after ? 1 : 0);
+    sibs.splice(at, 0, { kind: KIND[d.coll], id: d.id, me: true });
+    const by = {};
+    sibs.forEach((x, i) => {
+      const coll = COLL[x.kind], cur = db[coll]?.find(y => y.id === x.id);
+      if (x.me) (by[coll] ||= []).push([x.id, { folder: into, order: i + 1 }]);
+      else if (cur?.order !== i + 1) (by[coll] ||= []).push([x.id, { order: i + 1 }]);
+    });
+    Object.entries(by).forEach(([coll, list]) => updateMany(coll, list));
+  };
   const dropOn = (target, zone) => {
     const d = dragged.current; setOver(null); setDragging(false); dragged.current = null;
     if (!d || (d.coll === "folders" && d.id === target?.id)) return;
     const into = !target ? "" : target.kind === "folder" ? (zone === "inside" ? target.id : target.parent || "") : (target.folder || "");
     if (d.coll === "folders") moveFolder(d.id, into, target?.kind === "folder" && zone !== "inside" ? { id: target.id, after: zone === "after" } : null);
+    else if (target && target.kind !== "folder" && zone !== "inside") placeFile(d, into, target, zone === "after");
     else update(d.coll, d.id, { folder: into });
     if (into) toggle(into, true);
   };
@@ -73,7 +88,8 @@ export default function NotesTree({ view, go, query }) {
         if (!dragged.current) return;
         e.preventDefault(); e.stopPropagation();
         const r = e.currentTarget.getBoundingClientRect(), y = (e.clientY - r.top) / r.height;
-        const zone = !folder ? "inside" : dragged.current.coll !== "folders" ? "inside" : y < 0.28 ? "before" : y > 0.72 ? "after" : "inside";
+        const zone = !folder ? (dragged.current.coll === "folders" ? "inside" : y < 0.5 ? "before" : "after")
+          : dragged.current.coll !== "folders" ? "inside" : y < 0.28 ? "before" : y > 0.72 ? "after" : "inside";
         if (over?.key !== key || over?.zone !== zone) setOver({ key, zone });
       },
       onDragLeave: e => { if (!e.currentTarget.contains(e.relatedTarget) && over?.key === key) setOver(null); },
@@ -243,7 +259,7 @@ function FileRow({ x, depth, active, go, folders, shared, onShare, dnd = {}, pin
   return (
     <li>
       <ActionsContext items={items}>
-        <Row depth={depth} active={active} onClick={() => go({ [x.kind]: x.id })} {...drag} drop={dropZone && "file"}>
+        <Row depth={depth} active={active} onClick={() => go({ [x.kind]: x.id })} {...drag} drop={dropZone === "inside" ? "file" : dropZone}>
           <span className="size-3.5 shrink-0" />
           <ItemIcon x={x} fallback={Icon} />
           <span className={cn("truncate", !(x.name || x.title)?.trim() && "text-muted-foreground")}>{itemName(x)}</span>

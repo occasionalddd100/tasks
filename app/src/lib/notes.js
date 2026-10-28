@@ -15,7 +15,8 @@ export function tree(folders, notes, projects, stashes = []) {
   for (const b of stashes) put(files, b.folder && fids.has(b.folder) ? b.folder : "", { ...b, kind: "stash" });
   // folders keep a manual order once dragged; the rest follow by name
   kids.forEach(l => l.sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9) || byName(a, b)));
-  files.forEach(l => l.sort((a, b) => (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || byName(a, b)));
+  // files too, once dragged into place; never dragged ones go below, by kind and name
+  files.forEach(l => l.sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9) || (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || byName(a, b)));
   return { folders: p => kids.get(p) || [], files: p => files.get(p) || [] };
 }
 
