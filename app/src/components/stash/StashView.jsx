@@ -130,7 +130,8 @@ export default function StashView({ id, fresh, go }) {
         onAdd={addTab} onRename={renameTab} onDelete={deleteTab} dragTab={dragTab} setDragTab={setDragTab} onDrop={dropOnTab} dragging={() => !!dragged.current} /></div>
 
       <AddLine stash={id} tab={target} inputRef={addRef} />
-      <Sources stash={stash} tab={target} />
+      {/* computer folders: a desktop-only thing */}
+      <div className="contents max-md:hidden"><Sources stash={stash} tab={target} /></div>
 
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex h-9 min-w-40 flex-1 items-center gap-2 rounded-lg border bg-card px-3 focus-within:ring-2 focus-within:ring-ring/40 sm:max-w-xs">
