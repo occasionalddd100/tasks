@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon, SparklesIcon, XIcon, PencilLineIcon } from "lucide-react";
+import { ArrowUpIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon, SparklesIcon, XIcon, PencilLineIcon } from "lucide-react";
 import { useDb, getDb, put } from "@/lib/db";
 import { today, plural } from "@/lib/tasks";
 import { addDone, removeDone, exText, exAt } from "@/lib/done";
@@ -127,6 +127,7 @@ function Composer({ date, doc, onToday, burst }) {
   const [kind, setKind] = useState("thought");
   const ta = useRef(null);
   const isToday = date === today(), t = dayTitle(date);
+  const phone = useMedia("(max-width: 639px)");
   useEffect(() => { const el = ta.current; if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 160) + "px"; } }, [text]);
   const add = () => {
     const v = text.trim(); if (!v) return;
@@ -155,10 +156,10 @@ function Composer({ date, doc, onToday, burst }) {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); add(); }
               if (e.key === "Tab" && !text.includes("\t")) { e.preventDefault(); setKind(k => (k === "done" ? "thought" : "done")); }
             }}
-            placeholder={kind === "done" ? "Что сделал?" : isToday ? "Что происходит, о чём думаешь?" : "Что было в этот день?"}
+            placeholder={kind === "done" ? "Что сделал?" : isToday ? (phone ? "О чём думаешь?" : "Что происходит, о чём думаешь?") : "Что было в этот день?"}
             aria-label={kind === "done" ? "Что сделал" : "Запись в дневник"}
             className="min-h-9 min-w-0 flex-1 resize-none bg-transparent px-1 py-1.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/60" />
-          <button type="button" onClick={add} disabled={!text.trim()} className="h-9 shrink-0 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-opacity disabled:opacity-30">Записать</button>
+          <button type="button" onClick={add} disabled={!text.trim()} aria-label="Записать" className="grid h-9 shrink-0 place-items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-opacity disabled:opacity-30 max-sm:w-9 max-sm:px-0">{phone ? <ArrowUpIcon className="size-4" /> : "Записать"}</button>
         </div>
         <div className="flex items-center gap-3 border-t px-3 py-1.5 text-xs text-muted-foreground">
           <span className="shrink-0">в <b className="font-semibold text-foreground">{t.main.toLowerCase()}</b></span>
@@ -257,7 +258,7 @@ function DaySection({ b, on, refFn }) {
         </ol>
       )}
       {grid.length > 0 && (
-        <ul className={cn("ml-[3.9rem] grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-1.5", line.length > 0 && "mt-2")}>
+        <ul className={cn("ml-[3.9rem] max-sm:ml-0 grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-1.5", line.length > 0 && "mt-2")}>
           {grid.map((e, k) => (
             <motion.li key={e.key} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: Math.min(k * 0.02, 0.3) }}
               className={cn("group relative flex min-w-0 items-start gap-2 rounded-lg border px-2.5 py-1.5", e.kind === "habit" ? "border-violet-500/25 bg-violet-500/[0.06]" : "border-good/25 bg-good/[0.07]")}>
@@ -271,8 +272,8 @@ function DaySection({ b, on, refFn }) {
           ))}
         </ul>
       )}
-      {!list.length && <p className="ml-[3.9rem] pl-4 text-sm text-muted-foreground/70">{isToday ? "Пока пусто. Напиши строчку сверху." : "Без записей."}</p>}
-      <DaySummary date={date} doc={doc} note={note} className="mt-2 ml-[3.9rem] w-[calc(100%-3.9rem)]" quiet={!isToday} />
+      {!list.length && <p className="ml-[3.9rem] max-sm:ml-0 pl-4 text-sm text-muted-foreground/70">{isToday ? "Пока пусто. Напиши строчку сверху." : "Без записей."}</p>}
+      <DaySummary date={date} doc={doc} note={note} className="mt-2 ml-[3.9rem] max-sm:ml-0 w-[calc(100%-3.9rem)] max-sm:w-full" quiet={!isToday} />
     </section>
   );
 }
@@ -314,7 +315,7 @@ export function DaySummary({ date, doc, note = "", className, quiet }) {
 function EmptyRun({ days, onPick }) {
   const n = days.length;
   return (
-    <button type="button" onClick={() => onPick(days[0])} className="my-1 ml-[3.9rem] flex items-center gap-2 py-1 text-left text-xs text-muted-foreground/70 hover:text-foreground">
+    <button type="button" onClick={() => onPick(days[0])} className="my-1 ml-[3.9rem] max-sm:ml-0 flex items-center gap-2 py-1 text-left text-xs text-muted-foreground/70 hover:text-foreground">
       <span className="h-px w-6 bg-border" />
       {n === 1 ? dayTitle(days[0]).main + " · без записей" : n + " " + plural(n, ["день", "дня", "дней"]) + " без записей"}
     </button>
@@ -359,4 +360,10 @@ function Streak({ info }) {
       {n >= 2 && <span className="flex items-center gap-1"><FlameIcon className="size-3.5 text-orange-500" /><b className="text-foreground">{n}</b> {plural(n, ["день", "дня", "дней"])} подряд</span>}
     </div>
   );
+}
+
+function useMedia(q) {
+  const [on, setOn] = useState(() => matchMedia(q).matches);
+  useEffect(() => { const m = matchMedia(q), f = () => setOn(m.matches); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, [q]);
+  return on;
 }
