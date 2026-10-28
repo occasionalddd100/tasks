@@ -91,7 +91,7 @@ export function ProjectView({ id, fresh, go }) {
 
       {project.personal && isMine(project) && <DraftsCard link={false} wide />}
 
-      <PillTabs>
+      <PillTabs sticky>
         {tabs.map(b => b.id === board?.id && renaming
           ? <TabRename key={b.id} value={b.name} onDone={n => { setRenaming(false); if (n && n !== b.name) update("boards", b.id, { name: n }); }} />
           : <ActionsContext key={b.id} items={tabItems(b)}>

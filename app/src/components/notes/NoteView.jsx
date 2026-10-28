@@ -81,7 +81,7 @@ export default function NoteView({ id, fresh, go }) {
       <header className="flex items-start gap-2">
         <ItemIcon x={note} fallback={FileTextIcon} className="mt-2 size-6 md:mt-2.5" />
         <textarea
-          ref={titleRef} rows={1} value={title} placeholder="Без названия" readOnly={!!other || reading}
+          data-page-title ref={titleRef} rows={1} value={title} placeholder="Без названия" readOnly={!!other || reading}
           onFocus={() => { editingTitle.current = true; }}
           onBlur={() => { editingTitle.current = false; }}
           onChange={e => { setTitle(e.target.value); save({ title: e.target.value }); }}

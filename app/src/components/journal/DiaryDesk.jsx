@@ -46,8 +46,8 @@ function useEntries(info) {
       if (it.from === "из задач") { const t = taskMeta.get(date + "\n" + it.text); out.push({ key: "k" + (t?.id || it.text), kind: "task", text: it.text, at: t?.at, where: t?.where, open: t && (() => openTask(t.id)) }); }
       else out.push({ key: "h" + it.text + out.length, kind: it.from === "повторяющаяся" ? "habit" : "done", text: it.text, at: null });
     }
-    // timed entries in order; the ones without a time keep their place after them
-    const timed = out.filter(e => e.at).sort((a, b) => a.at.localeCompare(b.at));
+    // timed entries, newest first; the ones without a time keep their place after them
+    const timed = out.filter(e => e.at).sort((a, b) => b.at.localeCompare(a.at));
     return { list: [...timed, ...out.filter(e => !e.at)], note, doc };
   };
 }

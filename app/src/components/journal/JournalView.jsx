@@ -101,9 +101,9 @@ export default function JournalView({ mode = "timeline" }) {
         <h1 className="text-3xl font-bold tracking-tight max-md:hidden md:text-4xl">Таймлайн</h1>
         <DayTimeline />
       </> : <>
-      <header className="flex flex-col gap-3">
+      <header className="flex flex-col gap-3 max-md:hidden">
         <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold tracking-tight max-sm:hidden md:text-4xl">Дневник</h1>
+          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Дневник</h1>
         </div>
       </header>
       <PillTabs>{TABS.filter(x => !desk || x.k !== "days").map(({ k, label, icon: Icon }) => <PillTab key={k} on={shownTab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>

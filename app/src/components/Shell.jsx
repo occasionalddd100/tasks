@@ -80,6 +80,21 @@ export default function Shell() {
   const db = useDb(), look = useAppearance();
   const [view, setView] = useState(readHash);
   const [menu, setMenu] = useState(false);
+  // phone: a page with its own big title ([data-page-title]) keeps the top bar empty until that title scrolls away
+  const [bigTitle, setBigTitle] = useState(false);
+  useEffect(() => {
+    const main = document.querySelector("main"); if (!main) return;
+    let io = null, cur;
+    const attach = () => {
+      const el = main.querySelector("[data-page-title]"); if (el === cur) return;
+      io?.disconnect(); io = null; cur = el;
+      if (!el) return setBigTitle(false);
+      io = new IntersectionObserver(([e]) => setBigTitle(e.isIntersecting), { root: main, rootMargin: "-48px 0px 0px 0px" });
+      io.observe(el);
+    };
+    const mo = new MutationObserver(attach); mo.observe(main, { childList: true, subtree: true }); attach();
+    return () => { mo.disconnect(); io?.disconnect(); };
+  }, []);
   useEffect(() => {
     const on = e => { if (innerWidth < 768) { window.__searchQ = e.detail; setMenu("search"); } };
     window.addEventListener("globalsearch", on); return () => window.removeEventListener("globalsearch", on);
@@ -131,7 +146,7 @@ export default function Shell() {
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto max-md:pb-[calc(4rem+env(safe-area-inset-bottom))]">
         <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b bg-background/90 px-2 md:hidden" style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
           <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}><MenuIcon /></Button>
-          <span className="truncate text-sm font-medium">{title}</span>
+          <span className={cn("truncate text-sm font-medium transition-all duration-200", bigTitle && "translate-y-1 opacity-0")}>{title}</span>
           {/* a view can put its own buttons here (tasks: tags, focus, done today) */}
           <div id="topbar-slot" className="ml-auto flex items-center gap-1.5 empty:hidden" />
           {db.pending > 0 && <span className="ml-auto rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400" title="Сохранится, когда появится интернет">не отправлено: {db.pending}</span>}

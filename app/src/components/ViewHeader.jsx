@@ -6,7 +6,7 @@ export const VIEW = "mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 pt-3
 
 export const ViewHeader = forwardRef(function ViewHeader({ icon, children, className, ...input }, ref) {
   return (
-    <header className="flex items-center gap-2">
+    <header data-page-title className="flex items-center gap-2">
       {icon}
       <input ref={ref} placeholder="Без названия" {...input}
         className={cn("min-w-0 flex-1 bg-transparent text-xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50 md:text-3xl", className)} />
@@ -26,6 +26,10 @@ export const PillTab = forwardRef(function PillTab({ on, drop, children, classNa
   );
 });
 
-export const PillTabs = ({ children }) => (
-  <div role="tablist" className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0 [scrollbar-width:none]">{children}</div>
+// sticky: on a phone the tabs stay pinned under the top bar, on a blurred strip
+const BLUR = { backdropFilter: "blur(14px) saturate(1.6)", WebkitBackdropFilter: "blur(14px) saturate(1.6)" };
+export const PillTabs = ({ children, sticky }) => (
+  <div role="tablist" style={sticky ? BLUR : undefined}
+    className={cn("-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0 [scrollbar-width:none]",
+      sticky && "max-md:sticky max-md:top-12 max-md:z-10 max-md:border-b max-md:bg-background/80 max-md:py-1.5")}>{children}</div>
 );
