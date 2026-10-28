@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -38,6 +39,21 @@ export default function FocusView() {
   const setFilter = v => { lastTag = v; store.set(v); setFilterRaw(v); };
   const [fan, setFan] = useState(false);
   const chipsRef = useRef(null);
+  const phone = !useMedia("(min-width: 768px)");
+  const [slot, setSlot] = useState(null);
+  useEffect(() => setSlot(document.getElementById("topbar-slot")), []);
+  // the pinned chips get smaller once the list scrolls under them
+  const [small, setSmall] = useState(false);
+  useEffect(() => {
+    const main = document.querySelector("main"); if (!main || !phone) return;
+    const on = () => setSmall(s => main.scrollTop > (s ? 24 : 64));
+    main.addEventListener("scroll", on, { passive: true }); on();
+    return () => main.removeEventListener("scroll", on);
+  }, [phone]);
+  const actions = <>
+    <button type="button" onClick={() => openTagEditor()} title="Править теги" aria-label="Править теги" className="inline-flex h-9 transition-all shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground max-md:px-2.5"><PencilIcon className="size-3.5" /><span className="max-md:hidden">Теги</span></button>
+    <ZenButton /><TodayDone />
+  </>;
   // a filter picked in the fan: the page starts over at the top, its chip in view
   const jump = () => setTimeout(() => {
     document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
@@ -110,15 +126,14 @@ export default function FocusView() {
   return (
     <DndContext sensors={sensors} collisionDetection={collide} onDragStart={e => setDragId(e.active.id)} onDragCancel={() => setDragId(null)} onDragEnd={onDragEnd}>
     <div className={cn(VIEW, desk ? "max-w-[1400px] gap-3" : "max-w-5xl")}>
-      {/* phone: the buttons and tag chips stay pinned under the top bar (which already says «Задачи») */}
-      <div className="flex flex-col gap-3 max-md:sticky max-md:top-12 max-md:z-10 max-md:-mx-4 max-md:-mt-3 max-md:gap-2 max-md:border-b max-md:bg-background/90 max-md:px-4 max-md:py-2 max-md:backdrop-blur-md">
-      <header className="flex items-center gap-2">
-        <h1 className="flex-1 text-2xl font-bold tracking-tight max-md:hidden md:text-3xl">Задачи</h1>
-        <span className="flex-1 md:hidden" />
-        <button type="button" onClick={() => openTagEditor()} title="Править теги" aria-label="Править теги" className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground max-md:px-2.5"><PencilIcon className="size-3.5" /><span className="max-md:hidden">Теги</span></button>
-        <ZenButton />
-        <TodayDone />
-      </header>
+      {/* phone: the buttons go up into the top bar, the tag chips stay pinned under it and shrink into one row on scroll */}
+      <div className={cn("flex flex-col gap-3 max-md:sticky max-md:top-12 max-md:z-10 max-md:-mx-4 max-md:-mt-3 max-md:border-b max-md:bg-background/80 max-md:px-4 max-md:transition-[padding] max-md:duration-300", small ? "max-md:py-1.5" : "max-md:py-2.5")}
+        style={phone ? { backdropFilter: "blur(14px) saturate(1.6)", WebkitBackdropFilter: "blur(14px) saturate(1.6)" } : undefined}>
+      {phone && slot && createPortal(<div className="flex items-center gap-1.5 [&_button]:h-8 [&_button]:text-xs">{actions}</div>, slot)}
+      {!phone && <header className="flex items-center gap-2">
+        <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Задачи</h1>
+        {actions}
+      </header>}
 
       {(() => {
         // phone: two rows that scroll sideways together, each row flowing on its own (no grid columns);
@@ -134,7 +149,7 @@ export default function FocusView() {
         for (let i = 0; i < chips.length; i++) { acc += chips[i][0]; if (acc >= total / 2) { cut = i + 1; break; } }
         return (
           <div ref={chipsRef} className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:overflow-visible md:px-0">
-            <div className="flex w-max flex-col gap-1.5 md:w-auto md:flex-row md:flex-wrap">
+            <div className={cn("flex w-max gap-1.5 md:w-auto md:flex-row md:flex-wrap", small ? "flex-row" : "flex-col", small && "max-md:[&_button]:h-7 max-md:[&_button]:px-2.5 max-md:[&_button]:text-xs")}>
               <div className="flex gap-1.5 md:contents">{chips.slice(0, cut).map(([, el]) => el)}</div>
               {cut < chips.length && <div className="flex gap-1.5 md:contents">{chips.slice(cut).map(([, el]) => el)}</div>}
             </div>
@@ -211,7 +226,7 @@ export default function FocusView() {
 function TagChip({ on, color, n, onClick, children }) {
   return (
     <button type="button" onClick={onClick} aria-pressed={on}
-      className={cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors",
+      className={cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all duration-300 max-md:h-8 max-md:px-3",
         on ? "border-foreground bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}>
       {color && <span className="size-2 rounded-full" style={{ background: color }} />}{children}
       {n > 0 && <span className="opacity-60 tabular-nums">{n}</span>}

@@ -132,9 +132,11 @@ export default function Shell() {
         <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b bg-background/90 px-2 md:hidden" style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
           <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}><MenuIcon /></Button>
           <span className="truncate text-sm font-medium">{title}</span>
+          {/* a view can put its own buttons here (tasks: tags, focus, done today) */}
+          <div id="topbar-slot" className="ml-auto flex items-center gap-1.5 empty:hidden" />
           {db.pending > 0 && <span className="ml-auto rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400" title="Сохранится, когда появится интернет">не отправлено: {db.pending}</span>}
           {/* reload past any cached copy, to pick up a fresh version of the site */}
-          <Button variant="ghost" size="icon" aria-label="Обновить" title="Обновить" className={cn(!(db.pending > 0) && "ml-auto")}
+          <Button variant="ghost" size="icon" aria-label="Обновить" title="Обновить" className="ml-auto [#topbar-slot:not(:empty)~&]:ml-0"
             onClick={() => { if (db.pending > 0 && !confirm("Есть неотправленные изменения, они могут потеряться. Всё равно обновить?")) return; freshReload("manual" + Date.now()); }}><RotateCwIcon /></Button>
         </div>
         {db.error && <p className="m-4 rounded-md border border-destructive/40 p-3 text-sm text-destructive">Нет связи с базой: {db.error}. Обнови страницу.</p>}
