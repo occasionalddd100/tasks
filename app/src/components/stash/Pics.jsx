@@ -14,7 +14,9 @@ export const gallery = c => [...(c.provider === "photo" && c.photo ? [c.photo] :
 
 // the viewer is mounted once in the shell; anything can open it with a list of pictures ({ path } in storage, or { src })
 let openViewer = () => {}, viewerOpen = false;
-export const viewPics = (c, at = 0) => openViewer({ list: gallery(c), at });
+// the viewer shows the chosen cover first; `at` is an index in gallery(c)
+const coverFirst = c => { const g = gallery(c), k = g.findIndex(p => p.path === c.cover); return k > 0 ? [g[k], ...g.slice(0, k), ...g.slice(k + 1)] : g; };
+export const viewPics = (c, at = 0) => { const g = gallery(c), list = coverFirst(c); openViewer({ list, at: Math.max(0, list.indexOf(g[at])) }); };
 export const viewImages = (srcs, at = 0) => openViewer({ list: srcs.map(src => ({ src, path: src })), at });
 
 function Thumb({ p, className, onClick, children }) {

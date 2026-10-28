@@ -731,7 +731,10 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
           style={{ "--mh": `min(48dvh, ${100 / mediaRatio}vw)` }}>
           {c.pics?.length > 0
             ? <Carousel keys className="size-full" slideClass="flex items-center justify-center [container-type:size]"
-                slides={[...(own ? [<Preview key="m" c={c} autoplay={false} fit />] : []), ...c.pics.map(p => <PicImg key={p.path} p={p} fit />)]} />
+                slides={[
+                  ...c.pics.filter(p => p.path === c.cover).map(p => <PicImg key={p.path} p={p} fit />), // the chosen cover comes first
+                  ...(own ? [<Preview key="m" c={c} autoplay={false} fit />] : []),
+                  ...c.pics.filter(p => p.path !== c.cover).map(p => <PicImg key={p.path} p={p} fit />)]} />
             : <Preview key={c.id} c={c} autoplay={c.provider !== "x"} fit />}
         </div>}
         <div className="thin-scroll flex min-h-0 flex-col gap-4 p-5 md:overflow-y-auto">
