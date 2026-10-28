@@ -19,6 +19,7 @@ import { useDb, getDb, update, updateMany, remove } from "@/lib/db";
 import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh } from "@/lib/stash";
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
 import { cn } from "@/lib/utils";
+import { PicsEditor, PicsRow, PicsViewer } from "@/components/stash/Pics";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ActionsDropdown, ActionsContext } from "@/components/ui/actions";
 import { confirmAction } from "@/components/Confirm";
@@ -172,6 +173,7 @@ export default function StashView({ id, fresh, go }) {
 
       {shown.length > limit && <div ref={more} className="h-10" />}
       <TagsDialog edit={tagEdit} setEdit={setTagEdit} clips={all} setTags={setTags} />
+      <PicsViewer />
       <ClipDialog id={open} setOpen={setOpen} tabs={tabs} allTags={tagCounts.map(([t]) => t)} moveTo={moveTo} />
     </div>
   );
@@ -363,6 +365,7 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
         {c.title && <h3 className={cn("line-clamp-3 text-[13px] leading-snug font-semibold sm:line-clamp-2 sm:text-[15px]", small && "line-clamp-1 sm:line-clamp-1 sm:text-[13px]", size === "l" && "sm:text-lg")}>{c.title}</h3>}
         {c.text && (c.provider === "note" || c.provider === "x" || !c.title) && <p className={cn("text-sm leading-snug whitespace-pre-wrap", c.provider === "note" ? "line-clamp-[12] text-[15px]" : "line-clamp-4 text-muted-foreground", small && "line-clamp-2 text-[13px]")}>{c.text}</p>}
         {c.desc && <p className={cn("line-clamp-3 text-[13px] leading-snug text-muted-foreground", small && "line-clamp-2 text-xs", tiny && "line-clamp-1")}>{c.desc}</p>}
+        <PicsRow c={c} small={small} />
         {c.note && !small && <p className="flex items-center gap-1 text-xs text-muted-foreground"><FileTextIcon className="size-3" />есть заметка</p>}
         {c.tags?.length > 0 && !tiny && (
           <div className="flex flex-wrap gap-1 pt-0.5">
@@ -401,6 +404,11 @@ function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
       <Pop.Portal>
         <Pop.Content align="end" sideOffset={6} collisionPadding={12} onClick={e => e.stopPropagation()} onOpenAutoFocus={e => { if (matchMedia("(pointer: coarse)").matches) e.preventDefault(); }}
           className="z-50 flex w-72 max-w-[calc(100vw-24px)] flex-col gap-3 rounded-2xl border bg-popover p-3 text-popover-foreground shadow-xl origin-(--radix-popover-content-transform-origin) data-[state=open]:animate-[menu-in_120ms_ease-out]">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><ImageIcon className="size-3.5" />Картинки</div>
+            <PicsEditor c={c} />
+          </div>
+
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><TagIcon className="size-3.5" />Теги</div>
             <ClipTags c={c} allTags={allTags} />
@@ -531,27 +539,30 @@ function TagsDialog({ edit, setEdit, clips, setTags }) {
 function delClip(c) {
   remove("clips", c.id);
   if (c.photo?.path) deletePhoto(c.photo.path);
+  for (const p of c.pics || []) deletePhoto(p.path);
 }
 
 // the media itself: a cover with a play button that turns into the real player, or the video/photo right away
-function Preview({ c, compact, autoplay, onOpen }) {
+function Preview({ c, compact, autoplay, onOpen, fit }) {
   const [play, setPlay] = useState(!!autoplay);
   const [broken, setBroken] = useState(false);
   const [xEmbed, setXEmbed] = useState(false);
   const photoUrl = usePhotoUrl(c.photo?.path);
   const ratio = c.vertical ? 9 / 16 : c.w && c.h ? Math.max(0.5, Math.min(2.2, c.w / c.h)) : 16 / 9;
-  const box = "relative w-full overflow-hidden bg-muted";
+  // fit: inside the card window the media fills a box of fixed height (container) without overflowing it
+  const box = fit ? "relative overflow-hidden bg-muted" : "relative w-full overflow-hidden bg-muted";
+  const sz = r => fit ? { aspectRatio: r, width: `min(100cqw, ${r * 100}cqh)` } : { aspectRatio: r };
   const maxH = compact ? "max-h-[70vh]" : "max-h-[75vh]";
 
-  if (c.provider === "local") return <LocalMedia c={c} compact={compact} autoplay={autoplay} />;
-  if (c.provider === "photo") return photoUrl ? <img src={photoUrl} alt="" className={cn("block w-full object-cover", maxH)} /> : <div className={box} style={{ aspectRatio: ratio }} />;
-  if (c.provider === "image") return <img src={c.url} alt="" loading="lazy" className={cn("block w-full object-cover", maxH)} />;
+  if (c.provider === "local") return <LocalMedia c={c} compact={compact} autoplay={autoplay} fit={fit} />;
+  if (c.provider === "photo") return photoUrl ? <img src={photoUrl} alt="" className={fit ? "block size-full object-contain" : cn("block w-full object-cover", maxH)} /> : <div className={box} style={sz(ratio)} />;
+  if (c.provider === "image") return <img src={c.url} alt="" loading="lazy" className={fit ? "block size-full object-contain" : cn("block w-full object-cover", maxH)} />;
 
   // X keeps the actual video file and photos: play them right in the card
   // if X refuses the file (it sometimes blocks other sites), fall back to X's own embedded post
   if (c.provider === "x" && xEmbed) {
     return (
-      <div className="relative w-full bg-black" style={{ height: compact ? 460 : 600 }} onClick={e => e.stopPropagation()}>
+      <div className="relative w-full bg-black" style={{ height: fit ? "100%" : compact ? 460 : 600 }} onClick={e => e.stopPropagation()}>
         <iframe src={`https://platform.twitter.com/embed/Tweet.html?id=${c.vid}&theme=dark&dnt=true&hideThread=true`} title={c.title || "Пост в X"} allow="autoplay; fullscreen" allowFullScreen className="absolute inset-0 size-full border-0" />
       </div>
     );
@@ -559,7 +570,7 @@ function Preview({ c, compact, autoplay, onOpen }) {
   const video = c.video && (c.provider === "x" || c.provider === "video" || c.provider === "link");
   if (video) {
     return (
-      <div className={cn(box, "bg-black")} style={{ aspectRatio: ratio }} onClick={e => e.stopPropagation()}>
+      <div className={cn(box, "bg-black")} style={sz(ratio)} onClick={e => e.stopPropagation()}>
         <NoRefVideo src={c.video} poster={c.thumb} autoplay={autoplay} menu={compact} onFail={() => c.provider === "x" && c.vid && setXEmbed(true)} />
       </div>
     );
@@ -575,7 +586,7 @@ function Preview({ c, compact, autoplay, onOpen }) {
   const embed = embedUrl(c, true);
   if (play && embed) {
     return (
-      <div className={cn(box, "bg-black", c.provider === "instagram" && "bg-white")} style={{ aspectRatio: c.provider === "instagram" ? (c.vertical ? 9 / 16 : 4 / 5) : ratio }} onClick={e => e.stopPropagation()}>
+      <div className={cn(box, "bg-black", c.provider === "instagram" && "bg-white")} style={sz(c.provider === "instagram" ? (c.vertical ? 9 / 16 : 4 / 5) : ratio)} onClick={e => e.stopPropagation()}>
         <iframe src={embed} title={c.title || "Видео"} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen className="absolute inset-0 size-full border-0" />
       </div>
     );
@@ -584,7 +595,7 @@ function Preview({ c, compact, autoplay, onOpen }) {
   if (!thumb && !embed) return null;
   return (
     <button type="button" onClick={e => { e.stopPropagation(); if (onOpen) return onOpen(); if (embed) setPlay(true); else if (c.url) window.open(c.url, "_blank", "noopener"); }}
-      className={cn(box, "group/p block")} style={{ aspectRatio: thumb ? ratio : 16 / 9 }} aria-label={embed ? "Смотреть" : "Открыть"}>
+      className={cn(box, "group/p block")} style={sz(thumb ? ratio : 16 / 9)} aria-label={embed ? "Смотреть" : "Открыть"}>
       {thumb ? <img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover/p:scale-105"
         onError={() => { setBroken(true); if (c.url && c.provider !== "youtube") refresh(c.id, c.url); }} />
         : <div className="absolute inset-0 grid place-items-center" style={{ background: `linear-gradient(135deg, ${PROVIDER[c.provider]?.color}55, transparent)` }}><Brand p={c.provider} size={36} /></div>}
@@ -656,13 +667,18 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
   useEffect(() => { setNoteOpen(!!c?.note); }, [id]);
   if (!c) return <Dialog open={false} onOpenChange={() => setOpen(null)} />;
   const save = f => update("clips", c.id, f);
+  const media = (c.provider !== "note" && c.provider !== "link") || !!c.thumb;
+  const mediaRatio = c.vertical ? 9 / 16 : c.w && c.h ? Math.max(0.5, Math.min(2.2, c.w / c.h)) : 16 / 9;
 
   return (
     <Dialog open={!!id} onOpenChange={o => !o && setOpen(null)}>
-      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[env(safe-area-inset-bottom)]">
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className={cn("max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[env(safe-area-inset-bottom)]",
+        media && "md:h-[88dvh] md:max-w-[min(92vw,80rem)] md:grid-cols-[minmax(0,1fr)_24rem] md:overflow-hidden")}>
         <DialogTitle className="sr-only">{c.title || "Карточка"}</DialogTitle>
-        {(c.provider !== "note" && c.provider !== "link") || c.thumb ? <div className="overflow-hidden rounded-t-lg max-sm:rounded-t-2xl"><Preview key={c.id} c={c} autoplay={c.provider !== "x"} /></div> : null}
-        <div className="flex flex-col gap-4 p-5">
+        {/* computer: the picture on the left at full height, everything else in a column on the right; phone: picture capped so the rest is in reach */}
+        {media && <div className="grid h-[var(--mh)] place-items-center overflow-hidden bg-black/90 [container-type:size] max-md:rounded-t-2xl md:h-full md:rounded-l-lg"
+          style={{ "--mh": `min(48dvh, ${100 / mediaRatio}vw)` }}><Preview key={c.id} c={c} autoplay={c.provider !== "x"} fit /></div>}
+        <div className="flex flex-col gap-4 p-5 md:overflow-y-auto">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Brand p={c.provider} /><span className="truncate">{c.author ? "@" + c.author.replace(/^@/, "") : c.host || PROVIDER[c.provider]?.name}</span>
             {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex shrink-0 items-center gap-1 hover:text-foreground">оригинал<ExternalLinkIcon className="size-3.5" /></a>}
@@ -676,6 +692,11 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
           )}
           <Draft as="textarea" key={c.id + "d"} value={c.desc || ""} onSave={desc => save({ desc })} rows={2} placeholder="Короткое описание: зачем сохранил, что посмотреть"
             className="w-full resize-none bg-transparent text-sm leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/50" aria-label="Описание" />
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><ImageIcon className="size-3.5" />Картинки</div>
+            <PicsEditor c={c} />
+          </div>
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><TagIcon className="size-3.5" />Теги</div>
@@ -761,13 +782,13 @@ function Sources({ stash, tab }) {
 }
 
 // a file from a connected folder; asks for access again after the browser restarts
-function LocalMedia({ c, compact, autoplay }) {
+function LocalMedia({ c, compact, autoplay, fit }) {
   useFolders();
   const [r, setR] = useState(null);
   useEffect(() => { let on = true; fileUrl(c).then(x => on && setR(x)); return () => { on = false; }; });
-  const maxH = compact ? "max-h-[70vh]" : "max-h-[75vh]";
+  const maxH = fit ? "size-full object-contain" : compact ? "max-h-[70vh]" : "max-h-[75vh]";
   if (r?.url) return c.video
-    ? <div onClick={e => e.stopPropagation()}><video src={r.url} controls playsInline autoPlay={!!autoplay} preload="metadata" className={cn("block w-full bg-black", maxH)} /></div>
+    ? <div onClick={e => e.stopPropagation()} className={cn(fit && "size-full")}><video src={r.url} controls playsInline autoPlay={!!autoplay} preload="metadata" className={cn("block w-full bg-black", maxH)} /></div>
     : <img src={r.url} alt={c.name} className={cn("block w-full object-cover", maxH)} />;
   return (
     <div className="grid aspect-[4/3] place-items-center gap-2 bg-muted p-4 text-center text-xs text-muted-foreground">
