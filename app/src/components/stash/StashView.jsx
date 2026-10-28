@@ -973,8 +973,10 @@ function BoardsSheet({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, o
   useEffect(() => { if (!open) setEditing(null); }, [open]);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="max-h-[85dvh] gap-2 overflow-y-auto overscroll-contain p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        <DialogTitle className="px-1 pb-1 text-base">Доски</DialogTitle>
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="flex max-h-[min(85dvh,85vh)] flex-col gap-2 overflow-hidden p-4 sm:max-w-sm max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <DialogTitle className="shrink-0 px-1 pb-1 text-base">Доски</DialogTitle>
+        {/* the list scrolls; the title and «Новая доска» stay in place */}
+        <div className="thin-scroll -mx-1 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-1 [&>*]:shrink-0">
         {[{ id: ALL, name: "Все", n: total }, ...tabs.map(t => ({ ...t, n: counts(t.id) }))].map(t => editing === t.id ? (
           <form key={t.id} className="flex h-11 items-center gap-2" onSubmit={e => { e.preventDefault(); onRename(t, new FormData(e.currentTarget).get("name") || ""); setEditing(null); }}>
             <input name="name" autoFocus defaultValue={t.name} onFocus={e => e.target.select()} aria-label="Название доски" enterKeyHint="done"
@@ -989,7 +991,8 @@ function BoardsSheet({ open, setOpen, tabs, cur, setTab, counts, total, onAdd, o
             {t.id !== ALL && <button type="button" onClick={() => setEditing(t.id)} aria-label={"Переименовать " + t.name} className="grid size-11 shrink-0 place-items-center opacity-60"><PencilIcon className="size-4" /></button>}
           </div>
         ))}
-        <button type="button" onClick={() => { onAdd(); setOpen(false); }} className="flex h-11 items-center gap-3 rounded-xl border border-dashed px-3 text-[15px] text-muted-foreground"><PlusIcon className="size-4" />Новая доска</button>
+        </div>
+        <button type="button" onClick={() => { onAdd(); setOpen(false); }} className="flex h-11 shrink-0 items-center gap-3 rounded-xl border border-dashed px-3 text-[15px] text-muted-foreground"><PlusIcon className="size-4" />Новая доска</button>
       </DialogContent>
     </Dialog>
   );
