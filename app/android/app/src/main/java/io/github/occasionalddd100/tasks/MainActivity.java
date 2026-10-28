@@ -1,6 +1,13 @@
 package io.github.occasionalddd100.tasks;
 
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Intent;
+import android.media.MediaScannerConnection;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.webkit.MimeTypeMap;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
@@ -13,7 +20,13 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -37,6 +50,12 @@ public class MainActivity extends BridgeActivity {
             @JavascriptInterface
             public String take() { String s = pendingShare; pendingShare = null; return s; }
         }, "AndroidShare");
+        // saving pictures and videos into the phone's gallery: window.AndroidMedia.save('[{"url":…,"name":…}]'),
+        // the result comes back as a "mediasaved" event with { ok, fail }
+        bridge.getWebView().addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void save(String json) { new Thread(() -> saveAll(json)).start(); }
+        }, "AndroidMedia");
         readShare(getIntent());
     }
 
@@ -96,5 +115,79 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private void saveAll(String json) {
+        int ok = 0, fail = 0;
+        try {
+            JSONArray list = new JSONArray(json);
+            for (int i = 0; i < list.length(); i++) {
+                JSONObject it = list.getJSONObject(i);
+                try { saveOne(it.getString("url"), it.optString("name", "")); ok++; } catch (Exception e) { fail++; }
+            }
+        } catch (Exception e) { fail++; }
+        String js = "window.dispatchEvent(new CustomEvent('mediasaved',{detail:{ok:" + ok + ",fail:" + fail + "}}))";
+        bridge.getWebView().post(() -> bridge.getWebView().evaluateJavascript(js, null));
+    }
+
+    private void saveOne(String url, String name) throws Exception {
+        InputStream in; String mime;
+        HttpURLConnection con = null;
+        if (url.startsWith("data:")) {
+            int comma = url.indexOf(',');
+            String head = url.substring(5, comma);
+            mime = head.split(";")[0];
+            in = new ByteArrayInputStream(Base64.decode(url.substring(comma + 1), Base64.DEFAULT));
+        } else {
+            con = (HttpURLConnection) new URL(url).openConnection();
+            con.setInstanceFollowRedirects(true);
+            con.setConnectTimeout(15000); con.setReadTimeout(60000);
+            con.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) Tasks");
+            if (con.getResponseCode() >= 400) throw new Exception("http " + con.getResponseCode());
+            mime = con.getContentType();
+            in = con.getInputStream();
+        }
+        if (mime != null) mime = mime.split(";")[0].trim().toLowerCase();
+        if (mime == null || mime.isEmpty() || mime.equals("application/octet-stream") || mime.equals("binary/octet-stream")) {
+            String ext = MimeTypeMap.getFileExtensionFromUrl(url.split("\\?")[0]);
+            String m = ext == null ? null : MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase());
+            mime = m != null ? m : "image/jpeg";
+        }
+        boolean video = mime.startsWith("video/");
+        String ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime);
+        if (ext == null) ext = video ? "mp4" : "jpg";
+        String base = name == null || name.isEmpty() ? (video ? "video-" : "img-") + System.currentTimeMillis() : name.replaceAll("[\\\\/:*?\"<>|]", "_");
+        String file = base + "." + ext;
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                ContentResolver cr = getContentResolver();
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.MediaColumns.DISPLAY_NAME, file);
+                v.put(MediaStore.MediaColumns.MIME_TYPE, mime);
+                v.put(MediaStore.MediaColumns.RELATIVE_PATH, (video ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES) + "/Задачи");
+                v.put(MediaStore.MediaColumns.IS_PENDING, 1);
+                Uri col = video ? MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY) : MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+                Uri dst = cr.insert(col, v);
+                if (dst == null) throw new Exception("no uri");
+                try (OutputStream out = cr.openOutputStream(dst)) { copy(in, out); }
+                catch (Exception e) { cr.delete(dst, null, null); throw e; }
+                v.clear(); v.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                cr.update(dst, v, null, null);
+            } else {
+                File dir = new File(Environment.getExternalStoragePublicDirectory(video ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES), "Задачи");
+                dir.mkdirs();
+                File f = new File(dir, file);
+                try (OutputStream out = new FileOutputStream(f)) { copy(in, out); }
+                MediaScannerConnection.scanFile(this, new String[]{ f.getAbsolutePath() }, new String[]{ mime }, null);
+            }
+        } finally {
+            in.close();
+            if (con != null) con.disconnect();
+        }
+    }
+
+    private static void copy(InputStream in, OutputStream out) throws Exception {
+        byte[] buf = new byte[64 * 1024]; int n;
+        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
     }
 }

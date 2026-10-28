@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { ChevronLeftIcon, ChevronRightIcon, CopyIcon, StarIcon, DownloadIcon, ImagePlusIcon, Loader2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { update, getDb } from "@/lib/db";
-import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
+import { uploadPhoto, usePhotoUrl, deletePhoto, photoUrl } from "@/lib/photos";
+import { saveMedia } from "@/lib/saveMedia";
 import { useBackClose } from "@/lib/back";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +16,12 @@ export const own = c => c.provider === "photo" && c.photo ? [c.photo]
   : c.provider === "image" && c.url ? [{ src: c.url, path: c.url }]
   : c.provider === "link" && c.thumb ? [{ src: c.thumb, path: c.thumb }] : [];
 export const gallery = c => [...own(c), ...(c.pics || [])];
+// everything on a card that can be saved: its pictures and its video file
+export const mediaCount = c => gallery(c).length + (c.video ? 1 : 0);
+export const saveCard = async c => saveMedia([
+  ...(c.video ? [{ url: c.video }] : []),
+  ...await Promise.all(gallery(c).map(async p => ({ url: p.src || await photoUrl(p.path) }))),
+]);
 
 // the viewer is mounted once in the shell; anything can open it with a list of pictures ({ path } in storage, or { src })
 let openViewer = () => {}, viewerOpen = false;
@@ -173,23 +180,20 @@ const toPng = blob => blob.type === "image/png" ? blob : createImageBitmap(blob)
   const cv = document.createElement("canvas"); cv.width = b.width; cv.height = b.height; cv.getContext("2d").drawImage(b, 0, 0);
   return new Promise(r => cv.toBlob(r, "image/png"));
 });
-function Tools({ p }) {
+function Tools({ p, list }) {
   const signed = usePhotoUrl(p.src ? null : p.path), url = p.src || signed;
   const btn = "grid size-10 place-items-center rounded-full hover:bg-white/10 disabled:opacity-40";
   const copy = async () => {
     try { await navigator.clipboard.write([new ClipboardItem({ "image/png": blobOf(url).then(toPng) })]); toast.success("Картинка скопирована"); }
     catch { toast.error("Не получилось скопировать"); }
   };
-  const save = async () => {
-    try {
-      const b = await blobOf(url), a = document.createElement("a"), ext = (b.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
-      a.href = URL.createObjectURL(b); a.download = "картинка-" + new Date().toISOString().slice(0, 10) + "." + ext; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    } catch { window.open(url, "_blank", "noopener"); }
-  };
+  const save = () => saveMedia([{ url }]);
+  const saveAll = async () => saveMedia(await Promise.all(list.map(async q => ({ url: q.src || await photoUrl(q.path) }))));
   return <>
     <button type="button" onClick={e => { e.stopPropagation(); copy(); }} disabled={!url} aria-label="Копировать" title="Копировать" className={btn}><CopyIcon className="size-5" /></button>
     <button type="button" onClick={e => { e.stopPropagation(); save(); }} disabled={!url} aria-label="Скачать" title="Скачать" className={btn}><DownloadIcon className="size-5" /></button>
+    {list.length > 1 && <button type="button" onClick={e => { e.stopPropagation(); saveAll(); }} aria-label="Скачать все" title="Скачать все"
+      className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-sm hover:bg-white/10"><DownloadIcon className="size-4" />Все {list.length}</button>}
   </>;
 }
 
@@ -217,7 +221,7 @@ export function PicsViewer() {
           <div className="flex items-center gap-1 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-sm text-white/80" onClick={e => e.stopPropagation()}>
             <span className="tabular-nums">{at + 1} / {list.length}</span>
             <span className="ml-auto" />
-            <Tools p={list[at]} />
+            <Tools p={list[at]} list={list} />
             <button type="button" onClick={close} aria-label="Закрыть" className="grid size-10 place-items-center rounded-full hover:bg-white/10"><XIcon className="size-5" /></button>
           </div>
           <div className="relative min-h-0 flex-1 overflow-hidden">

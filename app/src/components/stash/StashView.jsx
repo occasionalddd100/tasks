@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, 
 import * as Pop from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  CheckIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
+  CheckIcon, DownloadIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
   SearchIcon, StickyNoteIcon, ArrowUpIcon, ChevronUpIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
   FolderPlusIcon, FolderIcon, CopyIcon, MaximizeIcon, ZoomInIcon, ZoomOutIcon, FolderOpenIcon, RefreshCwIcon, Columns3Icon, HardDriveIcon, LockIcon, UsersIcon,
 } from "lucide-react";
@@ -20,7 +20,7 @@ import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh } from
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
 import { PaletteIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PicsEditor, PicImg, Carousel, PicsOverlay, own as ownPic } from "@/components/stash/Pics";
+import { PicsEditor, PicImg, Carousel, PicsOverlay, own as ownPic, saveCard, mediaCount } from "@/components/stash/Pics";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ActionsDropdown, ActionsContext } from "@/components/ui/actions";
 import { confirmAction } from "@/components/Confirm";
@@ -355,6 +355,7 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
   const items = [
           { label: "Открыть", icon: PencilIcon, onSelect: onOpen },
           c.url && { label: "Открыть оригинал", icon: ExternalLinkIcon, onSelect: () => window.open(c.url, "_blank", "noopener") },
+          mediaCount(c) > 0 && { label: mediaCount(c) > 1 ? "Скачать всё (" + mediaCount(c) + ")" : "Скачать", icon: DownloadIcon, onSelect: () => saveCard(c) },
           tabs.length > 1 && { label: "На доску", icon: ArrowRightLeftIcon, sub: tabs.map(t => ({ label: t.name, disabled: t.id === c.tab, onSelect: () => moveTo(t.id) })) },
           otherStashes(c).length > 0 && { label: "В другой стэш", icon: LayoutGridIcon, sub: otherStashes(c).map(s => ({ label: s.name || "Без названия", onSelect: () => toStash(c, s) })) },
           { label: "Размер карточек", icon: MaximizeIcon, sub: GRID.map((g, i) => ({ label: g.label, active: level === g.k, onSelect: () => setGrid(i) })) },
@@ -468,6 +469,7 @@ function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
           <div className="-mx-1 flex flex-col border-t pt-2">
             <Row icon={PencilIcon} onClick={act(onOpen)}>Открыть</Row>
             {c.url && <Row icon={ExternalLinkIcon} onClick={act(() => window.open(c.url, "_blank", "noopener"))}>Открыть оригинал</Row>}
+            {mediaCount(c) > 0 && <Row icon={DownloadIcon} onClick={act(() => saveCard(c))}>{mediaCount(c) > 1 ? "Скачать всё (" + mediaCount(c) + ")" : "Скачать"}</Row>}
             {c.url && <Row icon={CopyIcon} onClick={act(() => navigator.clipboard?.writeText(c.url).then(() => toast("Ссылка скопирована")))}>Скопировать ссылку</Row>}
             <Row icon={c.watched ? EyeOffIcon : EyeIcon} onClick={act(toggleSeen)}>{c.watched ? "Вернуть в очередь" : "Посмотрел"}</Row>
             <Row icon={Trash2Icon} danger onClick={act(() => delClip(c))}>Удалить</Row>
@@ -796,6 +798,8 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
                 {db.stashes.map(s => <option key={s.id} value={s.id}>{s.id === c.stash ? "Стэш: " : "→ "}{s.name || "Без названия"}</option>)}
               </select>
             )}
+            {mediaCount(c) > 0 && <button type="button" onClick={() => saveCard(c)} title={mediaCount(c) > 1 ? "Скачать все картинки и видео" : "Скачать"}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"><DownloadIcon className="size-4" />{mediaCount(c) > 1 ? "Все " + mediaCount(c) : "Скачать"}</button>}
             <button type="button" onClick={async () => { if (await confirmAction({ title: "Удалить карточку?" })) { setOpen(null); delClip(c); } }}
               className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-destructive hover:bg-destructive/10"><Trash2Icon className="size-4" />Удалить</button>
           </div>

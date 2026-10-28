@@ -56,3 +56,13 @@ export async function uploadPhoto(file, date) {
 }
 
 export const deletePhoto = path => sb.storage.from(BUCKET).remove([path]);
+
+// the same signed link, outside React (for downloads)
+export async function photoUrl(path) {
+  if (!path || /^(https?|data|blob):/.test(path)) return path;
+  if (!urls.has(path)) {
+    const { data } = await sb.storage.from(BUCKET).createSignedUrl(path, 60 * 60 * 24);
+    if (data?.signedUrl) urls.set(path, data.signedUrl);
+  }
+  return urls.get(path);
+}
