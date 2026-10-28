@@ -43,9 +43,10 @@ function useNow(step) {
 const PHONE = "(max-width: 767px)";
 const usePhone = () => useSyncExternalStore(f => { const m = matchMedia(PHONE); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, () => matchMedia(PHONE).matches);
 
-export default function DayTimeline() {
+// vertical: the phone layout (a column of hours), used in the computer's side column too
+export default function DayTimeline({ vertical }) {
   const db = useDb();
-  const phone = usePhone();
+  const phone = usePhone() || !!vertical;
   const now = useNow(20e3);
   // 6 hours behind, a day ahead: "now" sits near the left and tomorrow morning is always in view
   const start = useMemo(() => { const d = new Date(now); d.setMinutes(0, 0, 0); return d.getTime() - 6 * H; }, [Math.floor(now / H)]);

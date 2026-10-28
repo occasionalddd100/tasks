@@ -52,7 +52,7 @@ function useEntries(info) {
   };
 }
 
-export default function DiaryDesk({ info, onPick, burst }) {
+export default function DiaryDesk({ info, onPick, burst, side }) {
   const now = today();
   const [count, setCount] = useState(21); // days loaded into the feed, grows as you scroll down
   const [active, setActive] = useState(now); // the day at the top of the view: the line and the slider write into it
@@ -102,7 +102,7 @@ export default function DiaryDesk({ info, onPick, burst }) {
   };
 
   return (
-    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_17rem] xl:grid-cols-[minmax(0,1fr)_19rem]">
+    <div className={cn("grid items-start gap-8", side ? "lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_24rem]" : "lg:grid-cols-[minmax(0,1fr)_17rem] xl:grid-cols-[minmax(0,1fr)_19rem]")}>
       <div ref={feed} className="min-w-0">
         <Composer date={active} doc={info(active).doc} onToday={() => goTo(now)} burst={burst} />
         <div className="flex flex-col">
@@ -112,8 +112,9 @@ export default function DiaryDesk({ info, onPick, burst }) {
           <div ref={more} className="h-[60vh]" />
         </div>
       </div>
-      <aside className="sticky top-6 flex flex-col gap-4 max-lg:hidden">
+      <aside className={cn("sticky top-6 flex flex-col gap-4 max-lg:hidden", side && "thin-scroll max-h-[calc(100dvh-3rem)] overflow-y-auto pb-4 [&>*]:shrink-0")}>
         <MiniCalendar info={info} sel={active} onPick={goTo} />
+        {side}
         <Streak info={info} />
       </aside>
     </div>

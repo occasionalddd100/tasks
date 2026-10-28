@@ -190,10 +190,10 @@ function Sidebar({ view, go, email, search }) {
         {[
           { k: "focus", label: "Задачи", icon: ListTodoIcon, n: focusOpen(db), on: view.focus },
           { k: "journal", label: "Таймлайн", icon: GanttChartIcon, on: view.journal },
-          { k: "diary", label: "Дневник", icon: BookOpenIcon, on: view.diary },
-        ].map(({ k, label, icon: Icon, n, on, run }) => (
+          { k: "diary", label: "Дневник", icon: BookOpenIcon, on: view.diary, cls: "lg:hidden" }, // on a computer the diary lives inside «Таймлайн»
+        ].map(({ k, label, icon: Icon, n, on, run, cls }) => (
           <button key={k} type="button" onClick={() => (run ? run() : go({ [k]: true }))}
-            className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", on && "bg-accent")}>
+            className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", on && "bg-accent", cls)}>
             <Icon className="size-4" />{label}
             {n > 0 && <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-xs tabular-nums text-foreground/80">{n}</span>}
           </button>
