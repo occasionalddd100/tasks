@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { getDb, update, updateMany, remove } from "@/lib/db";
 import { today, dueLabel, stale } from "@/lib/tasks";
-import { toBucket } from "@/lib/focus";
 import { renderMd } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -177,7 +176,8 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub }) {
           {stack && sub && <span className="min-w-0 truncate pl-1 text-xs text-muted-foreground/70">{sub}</span>}
         </div>
   );
-  const swipe = useSwipe(() => toggle(!t.done), () => !t.done && toBucket(t), (x, y) => openWheel(t, x, y), !inCard);
+  // no side swipes: a hold still opens the tag wheel
+  const swipe = useSwipe(null, null, (x, y) => openWheel(t, x, y), false);
   const tapOpen = phone && !overlay;
   const row = (
     <div {...(tapOpen ? swipe.handlers : {})}

@@ -156,6 +156,18 @@ function TagMenu({ items, title, onPick }) {
 
 // the tasks split by when; drag one onto the pail to put it aside; subtasks under their task
 function WorkList({ list }) {
+  const db = useDb();
+  // two or more tasks of one tag in a group fold together under the tag, where the first of them stood
+  const bunch = tasks => {
+    const out = [], at = new Map();
+    for (const t of tasks) {
+      const tag = tagOfTask(db, t);
+      if (!tag || tasks.filter(x => tagOfTask(db, x)?.id === tag.id).length < 2) { out.push({ tasks: [t] }); continue; }
+      if (!at.has(tag.id)) { at.set(tag.id, out.length); out.push({ tag, tasks: [] }); }
+      out[at.get(tag.id)].tasks.push(t);
+    }
+    return out;
+  };
   const now = today(), tomorrow = addDays(1);
   const [adding, setAdding] = useState(null);
   const groups = WORK_GROUPS.map(g => ({ ...g, tasks: list.filter(t => groupOf(t, now, tomorrow) === g.k) })).filter(g => g.tasks.length || g.k === adding);
@@ -165,7 +177,7 @@ function WorkList({ list }) {
         {groups.map(g => (
           <Group key={g.k} id={"work:" + g.k} title={g.l} icon={g.icon} color={g.c} n={g.tasks.length}
             onAdd={g.add} withDate={g.k === "planned"} adding={adding === g.k} setAdding={v => setAdding(v ? g.k : null)}>
-            <ul>{g.tasks.map(t => <WorkItem key={t.id} t={t} />)}</ul>
+            <ul>{bunch(g.tasks).map(b => b.tag ? <TagBunch key={b.tag.id} id={g.k + ":" + b.tag.id} tag={b.tag} tasks={b.tasks} /> : <WorkItem key={b.tasks[0].id} t={b.tasks[0]} />)}</ul>
           </Group>
         ))}
         {/* groups with nothing in them yet: one quiet row of ＋ to start one */}
@@ -201,6 +213,23 @@ export function groupOf(t, now, tomorrow) {
   if (t.due === tomorrow) return "tomorrow";
   if (t.due) return "planned";
   return "free";
+}
+
+// tasks of one tag inside a group: a row with the tag and count that folds them (remembered per group and tag)
+function TagBunch({ id, tag, tasks }) {
+  const [open, setOpenRaw] = useState(() => !loadFold().has("bunch:" + id));
+  const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); v ? f.delete("bunch:" + id) : f.add("bunch:" + id); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
+  return (
+    <li>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}
+        className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-left text-sm text-muted-foreground hover:bg-accent/50">
+        <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+        <TagMark t={tag} /><span className="font-medium text-foreground">{tag.name}</span>
+        <span className="text-xs tabular-nums">{tasks.length}</span>
+      </button>
+      {open && <ul className="ml-3 border-l pl-1">{tasks.map(t => <WorkItem key={t.id} t={t} />)}</ul>}
+    </li>
+  );
 }
 
 // one foldable block, the same look everywhere: coloured edge and tint, title, count, chevron (remembered per block)
