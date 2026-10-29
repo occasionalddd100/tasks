@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from "motion/react";
 import { AlarmClockIcon, BellIcon, BellRingIcon, CheckIcon, CrosshairIcon, FlameIcon, MoonStarIcon, SunIcon, SunriseIcon, SunsetIcon, CalendarClockIcon, CalendarDaysIcon, ChevronDownIcon, PlusIcon, XIcon } from "lucide-react";
 import { useDb, update } from "@/lib/db";
 import { today, plural } from "@/lib/tasks";
-import { inFocus } from "@/lib/focus";
 import { timeOf, plan } from "@/lib/reminders";
 import { isApp } from "@/lib/native";
 import { exText, exAt } from "@/lib/done";
@@ -62,7 +61,7 @@ export default function DayTimeline({ vertical }) {
       if (t.hidden || !t.text?.trim()) continue;
       if (t.done ? !(mineDone(t) && t.doneOn >= d0) : !mineOpen(t)) continue;
       const time = timeOf(t);
-      const important = !t.done && ((t.due && t.due <= td) || t.prio === "urgent" || inFocus(t));
+      const important = !t.done && ((t.due && t.due <= td) || t.prio === "urgent");
       if (!time) { if (important) untimed.push(t); continue; }
       let when = null;
       if (t.due) { if (dates.has(t.due)) when = at(t.due, time); else if (!t.done && t.due < d0) { untimed.push(t); continue; } }
@@ -83,7 +82,7 @@ export default function DayTimeline({ vertical }) {
       });
     }
     events.sort((a, b) => a.when - b.when);
-    const rank = t => (t.due && t.due < td ? 0 : t.prio === "urgent" ? 1 : t.due === td ? 2 : inFocus(t) ? 3 : 4);
+    const rank = t => (t.due && t.due < td ? 0 : t.prio === "urgent" ? 1 : t.due === td ? 2 : 3);
     untimed.sort((a, b) => rank(a) - rank(b));
     return { events, untimed };
   }, [db.tasks, db.days, db.me, start, end, Math.floor(now / 60e3)]);

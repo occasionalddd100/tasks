@@ -1,34 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
-import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { CrosshairIcon, FlameIcon, HashIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon, CornerDownRightIcon } from "lucide-react";
+import { DndContext, DragOverlay, PointerSensor, TouchSensor, pointerWithin, useDraggable, useSensor, useSensors } from "@dnd-kit/core";
+import { CrosshairIcon, FlameIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon, CornerDownRightIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import * as Pop from "@radix-ui/react-popover";
-import { useDb, updateMany, update, add } from "@/lib/db";
-import { focusList, clearDone, inFocus, toFocus, inBucket, toBucket } from "@/lib/focus";
+import { useDb, update, add } from "@/lib/db";
+import { openList, toBucket } from "@/lib/focus";
 import { exText, exAt } from "@/lib/done";
 import Bucket from "@/components/tasks/Bucket";
 import { tagsOf, tagOfTask } from "@/lib/tags";
 import { draftsOf } from "@/lib/personal";
 import { cn } from "@/lib/utils";
 import { stale, byOrder, today, dueLabel, dayDiff, plural, addDays, nextOrder } from "@/lib/tasks";
-import { Button } from "@/components/ui/button";
 import { VIEW } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
 import { useFresh, setAmbient, addTask } from "@/components/tasks/QuickAdd";
 import { TagMark } from "@/components/tasks/TagMark";
 import { openTask } from "@/components/tasks/TaskSheet";
-import { openWheel, moveWheel, endWheel } from "@/components/tasks/TagWheel";
 import { Fan, fanMax } from "@/components/Fan";
 import { useTasksTap } from "@/components/MobileNav";
 import { Habits, useJournal } from "@/components/tasks/ProjectViews";
 import { openTagEditor } from "@/components/tasks/TagEditor";
 
-// The home screen. On top: add a task (with a tag it lands on that board). Then "В работе": what I'm on now,
-// added and removed at will. Below, the rest of «Личное»: one row per tag (its categories), scrolled sideways (or one tag as a list).
-const NONE = "\u0000none", WORK = "\u0000work";
+// The home screen: every open task of «Личное», split by when (overdue, priority, today, tomorrow, planned, no date).
+// The tags are a menu (a second tap on «Задачи» on the phone, the title on the computer); one tag shows as a list.
+const NONE = "\u0000none", ALL = "\u0000all", EDIT = "\u0000edit";
 let lastTag = null;
 const store = { get: () => { try { return localStorage.getItem("tasksTag"); } catch { return null; } }, set: v => { try { v ? localStorage.setItem("tasksTag", v) : localStorage.removeItem("tasksTag"); } catch {} } };
 
@@ -38,181 +34,87 @@ export default function FocusView() {
   const [filter, setFilterRaw] = useState(() => lastTag ?? store.get());
   const setFilter = v => { lastTag = v; store.set(v); setFilterRaw(v); };
   const [fan, setFan] = useState(false);
-  const chipsRef = useRef(null);
   const phone = !useMedia("(min-width: 768px)");
   const [slot, setSlot] = useState(null);
   useEffect(() => setSlot(document.getElementById("topbar-slot")), []);
-  // the pinned chips get smaller once the list scrolls under them
-  const [small, setSmall] = useState(false);
-  useEffect(() => {
-    const main = document.querySelector("main"); if (!main || !phone) return;
-    const on = () => setSmall(s => main.scrollTop > (s ? 24 : 64));
-    main.addEventListener("scroll", on, { passive: true }); on();
-    return () => main.removeEventListener("scroll", on);
-  }, [phone]);
   const actions = <>
     <button type="button" onClick={() => openTagEditor()} title="Править теги" aria-label="Править теги" className="inline-flex h-9 transition-all shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground max-md:px-2.5"><PencilIcon className="size-3.5" /><span className="max-md:hidden">Теги</span></button>
     <ZenButton /><TodayDone />
   </>;
-  // a filter picked in the fan: the page starts over at the top, its chip in view
-  const jump = () => setTimeout(() => {
-    document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
-    const row = chipsRef.current, chip = row?.querySelector("[aria-pressed=true]");
-    if (chip) row.scrollTo({ left: chip.offsetLeft - row.clientWidth / 2 + chip.offsetWidth / 2, behavior: "smooth" });
-  }, 60);
+  // a tag picked in the menu: the page starts over at the top
+  const jump = () => setTimeout(() => document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" }), 60);
+  // the tags live in a menu: on the phone a second tap on «Задачи» fans them out
   useTasksTap(() => setFan(f => !f));
-  const list = focusList(db);
-  const desk = useMedia("(min-width: 1024px)");
-  const done = list.filter(t => t.done).length;
   const drafts = draftsOf(db);
-
-  // open tasks not in work, top level, not someone else's
-  const rest = useMemo(() => {
-    const me = db.me, now = today();
-    const rank = t => (t.due && t.due < now ? 0 : t.due === now ? 1 : t.prio === "urgent" ? 2 : t.due ? 3 : 4);
-    const mine = new Set([drafts?.id, ...tags.map(t => t.id)]);
-    return db.tasks.filter(t => mine.has(t.cat) && !t.done && !t.hidden && !t.parent && !inFocus(t) && !inBucket(t) && t.text?.trim() && (!t.assignee || t.assignee === me))
-      .sort((a, b) => rank(a) - rank(b) || (a.due || "9").localeCompare(b.due || "9") || byOrder(a, b));
-  }, [db.tasks, db.me, drafts?.id, tags.map(t => t.id).join()]);
   const now = today();
-  const overdue = useMemo(() => rest.filter(t => t.due && t.due < now), [rest, now]);
+
+  // every open task of mine, split by when; ticked today ones stay in «Сделано» until the day is over
+  const rest = useMemo(() => openList(db).sort((a, b) => (a.due || "9").localeCompare(b.due || "9") || (a.time || "9").localeCompare(b.time || "9") || byOrder(a, b)),
+    [db.tasks, db.me, db.cats, drafts?.id, tags.map(t => t.id).join()]);
+  const list = useMemo(() => {
+    const mine = new Set([drafts?.id, ...tags.map(t => t.id)]);
+    const done = db.tasks.filter(t => t.done && t.doneOn === now && !t.hidden && !t.parent && mine.has(t.cat) && (t.doneBy || t._owner) === db.me)
+      .sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || ""));
+    return [...rest, ...done];
+  }, [rest, db.tasks, now]);
   const groups = useMemo(() => {
     const by = new Map([[NONE, []], ...tags.map(t => [t.id, []])]);
-    // in «Все» the overdue ones have their own block on top, so they don't repeat in the rows
-    for (const t of rest) {
-      if (!filter && t.due && t.due < now) continue;
-      by.get(t.cat === drafts?.id ? NONE : t.cat)?.push(t);
-    }
+    for (const t of rest) by.get(t.cat === drafts?.id ? NONE : t.cat)?.push(t);
     return by;
-  }, [rest, tags.map(t => t.id).join(), drafts?.id, !filter, now]);
-  const shownTag = filter && (filter === NONE || filter === WORK || tags.some(t => t.id === filter)) ? filter : null;
+  }, [rest, tags.map(t => t.id).join(), drafts?.id]);
+  const shownTag = filter && (filter === NONE || tags.some(t => t.id === filter)) ? filter : null;
   // a task just added from ＋ must be seen: drop a filter that would hide it
   const freshId = useFresh(), fresh = db.tasks.find(t => t.id === freshId);
   useEffect(() => {
     if (!fresh || !shownTag) return;
-    const key = inFocus(fresh) ? WORK : fresh.cat === drafts?.id ? NONE : fresh.cat;
+    const key = fresh.cat === drafts?.id ? NONE : fresh.cat;
     if (key !== shownTag) setFilter(null);
   }, [fresh?.id]);
-  // ＋ adds to what's on screen: the picked tag, or straight into work
-  useEffect(() => { setAmbient({ tag: shownTag && shownTag !== NONE && shownTag !== WORK ? shownTag : null, work: shownTag === WORK }); return () => setAmbient(null); }, [shownTag]);
+  // ＋ adds to what's on screen: the picked tag
+  useEffect(() => { setAmbient({ tag: shownTag && shownTag !== NONE ? shownTag : null }); return () => setAmbient(null); }, [shownTag]);
   const tagName = id => id === NONE ? "Без тега" : tags.find(t => t.id === id)?.name;
 
-  const fanItems = [
-    { id: "\u0000all", name: "Все", on: !shownTag, glyph: <ListTodoIcon className="size-5" /> },
-    { id: WORK, name: "В работе", n: list.length - done, on: shownTag === WORK, glyph: <CrosshairIcon className="size-5" /> },
+  const menu = [
+    { id: ALL, name: "Все", n: rest.length, on: !shownTag, glyph: <ListTodoIcon className="size-5" /> },
     groups.get(NONE)?.length && { id: NONE, name: "Без тега", n: groups.get(NONE).length, on: shownTag === NONE, glyph: <InboxIcon className="size-5" /> },
-    ...tags.map(t => ({ id: t.id, name: t.name, n: groups.get(t.id)?.length || 0, on: shownTag === t.id,
+    ...tags.map(t => ({ id: t.id, name: t.name, n: groups.get(t.id)?.length || 0, on: shownTag === t.id, tag: t,
       glyph: t.emoji ? <span className="text-xl leading-none">{t.emoji}</span> : <span className="text-base font-semibold" style={t.color ? { color: t.color } : undefined}>{(t.name.trim()[0] || "#").toUpperCase()}</span> })),
-  ].filter(Boolean).slice(0, fanMax(1)).concat({ id: "\u0000edit", name: "Править теги", glyph: <PencilIcon className="size-5" /> });
+  ].filter(Boolean);
+  const pick = id => { if (id === EDIT) { openTagEditor(); return; } setFilter(id === ALL ? null : id); jump(); };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  // the pail wins whenever the pointer is over it; otherwise the usual nearest slot in the list
-  const collide = args => { const hit = pointerWithin(args).find(c => c.id === "bucket"); return hit ? [hit] : closestCenter({ ...args, droppableContainers: args.droppableContainers.filter(c => c.id !== "bucket") }); };
+  // a task can be dragged onto the pail to put it aside
   const [dragId, setDragId] = useState(null);
   const dragged = dragId && list.find(t => t.id === dragId);
   const onDragEnd = ({ active, over }) => {
     setDragId(null);
-    if (!over || active.id === over.id) return;
-    if (over.id === "bucket") { const t = list.find(x => x.id === active.id); if (t) toBucket(t); return; }
-    const ids = list.map(t => t.id);
-    const next = arrayMove(ids, ids.indexOf(active.id), ids.indexOf(over.id));
-    updateMany("tasks", next.map((id, i) => [id, i + 1]).filter(([id, f]) => list.find(t => t.id === id)?.focus !== f).map(([id, focus]) => [id, { focus }]));
+    if (over?.id === "bucket") { const t = list.find(x => x.id === active.id); if (t) toBucket(t); }
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={collide} onDragStart={e => setDragId(e.active.id)} onDragCancel={() => setDragId(null)} onDragEnd={onDragEnd}>
-    <div className={cn(VIEW, desk ? "max-w-[1400px] gap-3" : "max-w-5xl")}>
-      {/* phone: the buttons go up into the top bar, the tag chips stay pinned under it and shrink into one row on scroll */}
-      <div className={cn("flex flex-col gap-3 max-md:sticky max-md:top-[var(--bar)] max-md:z-10 max-md:-mx-4 max-md:-mt-3 max-md:border-b max-md:bg-background/80 max-md:px-4 max-md:transition-[padding] max-md:duration-300", small ? "max-md:py-1.5" : "max-md:py-2.5")}
-        style={phone ? { backdropFilter: "blur(14px) saturate(1.6)", WebkitBackdropFilter: "blur(14px) saturate(1.6)" } : undefined}>
+    <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={e => setDragId(e.active.id)} onDragCancel={() => setDragId(null)} onDragEnd={onDragEnd}>
+    <div className={cn(VIEW, "max-w-3xl")}>
       {phone && slot && createPortal(<div className="flex items-center gap-1.5 [&_button]:h-8 [&_button]:text-xs">{actions}</div>, slot)}
       {!phone && <header className="flex items-center gap-2">
-        <h1 className="flex-1 text-2xl font-bold tracking-tight md:text-3xl">Задачи</h1>
+        <div className="flex-1"><TagMenu items={menu} title={shownTag ? tagName(shownTag) : "Задачи"} onPick={pick} /></div>
         {actions}
       </header>}
 
-      {(() => {
-        // phone: two rows that scroll sideways together, each row flowing on its own (no grid columns);
-        // the chips are split in order where the first row reaches about half the total width
-        const chips = [
-          [3, <TagChip key="all" on={!shownTag} onClick={() => setFilter(null)}>Все</TagChip>],
-          [9, <TagChip key="work" on={shownTag === WORK} n={list.length - done} onClick={() => setFilter(shownTag === WORK ? null : WORK)}><CrosshairIcon className="size-3.5" />В работе</TagChip>],
-          groups.get(NONE)?.length > 0 && [10, <TagChip key="none" on={shownTag === NONE} onClick={() => setFilter(shownTag === NONE ? null : NONE)} n={groups.get(NONE).length}><InboxIcon className="size-3.5" />Без тега</TagChip>],
-          ...tags.map(t => [t.name.length + 5, <TagChip key={t.id} on={shownTag === t.id} n={groups.get(t.id)?.length} onClick={() => setFilter(shownTag === t.id ? null : t.id)}><TagMark t={t} />{t.name}</TagChip>]),
-        ].filter(Boolean);
-        const total = chips.reduce((n, [w]) => n + w, 0);
-        let acc = 0, cut = chips.length;
-        for (let i = 0; i < chips.length; i++) { acc += chips[i][0]; if (acc >= total / 2) { cut = i + 1; break; } }
-        return (
-          <div ref={chipsRef} className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:overflow-visible md:px-0">
-            <div className={cn("flex w-max gap-1.5 md:w-auto md:flex-row md:flex-wrap", small ? "flex-row" : "flex-col", small && "max-md:[&_button]:h-7 max-md:[&_button]:px-2.5 max-md:[&_button]:text-xs")}>
-              <div className="flex gap-1.5 md:contents">{chips.slice(0, cut).map(([, el]) => el)}</div>
-              {cut < chips.length && <div className="flex gap-1.5 md:contents">{chips.slice(cut).map(([, el]) => el)}</div>}
-            </div>
-          </div>
-        );
-      })()}
-      </div>
-
-      {desk ? (
-        // computer: work on the left; on the right the pail (always in sight), overdue and every tag as a dense list
-        <div className="grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] items-start gap-5">
-          <div className="flex min-w-0 flex-col gap-4">
-            {(!shownTag || shownTag === WORK) && <section className="flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <h2 className="flex items-center gap-2 text-base font-semibold"><CrosshairIcon className="size-4 text-primary" />В работе</h2>
-          {list.length > 0 && <span className="rounded-full bg-foreground/[.06] px-2 py-px text-xs font-medium text-muted-foreground tabular-nums">{list.length - done}</span>}
-          {done > 0 && <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={clearDone}>Убрать сделанные</Button>}
-        </div>
-        {list.length === 0
-          ? <p className="py-3 text-sm text-muted-foreground">Пусто. Смахни задачу влево или нажми ＋ на карточке ниже, и она окажется тут.</p>
-          : <WorkList list={list} />}
-      </section>}
-
-            {shownTag && shownTag !== WORK && <TagList cat={shownTag === NONE ? drafts?.id : shownTag} tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />}
-            {!shownTag && db.habits.length > 0 && <Habits habits={db.habits} />}
-          </div>
-          <aside className="sticky top-4 flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-2 overflow-y-auto pb-2 [scrollbar-width:thin] [&>*]:shrink-0">
-            {!shownTag && overdue.length > 0 && <Overdue tasks={overdue} />}
-            {!shownTag && [...groups].filter(([, l]) => l.length).map(([id, l]) => {
-              const tag = tags.find(t => t.id === id);
-              return <TagGroup key={id} id={id} name={tagName(id)} tag={tag} tasks={l} onOpen={() => setFilter(id)} />;
-            })}
-            {!shownTag && !rest.length && <p className="px-1 text-sm text-muted-foreground">Других открытых задач нет.</p>}
-          </aside>
-        </div>
-      ) : <>
-      {(!shownTag || shownTag === WORK) && <section className="flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <h2 className="flex items-center gap-2 text-base font-semibold"><CrosshairIcon className="size-4 text-primary" />В работе</h2>
-          {list.length > 0 && <span className="rounded-full bg-foreground/[.06] px-2 py-px text-xs font-medium text-muted-foreground tabular-nums">{list.length - done}</span>}
-          {done > 0 && <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={clearDone}>Убрать сделанные</Button>}
-        </div>
-        {list.length === 0
-          ? <p className="py-3 text-sm text-muted-foreground">Пусто. Смахни задачу влево или нажми ＋ на карточке ниже, и она окажется тут.</p>
-          : <WorkList list={list} />}
-      </section>}
-
-      {!shownTag && overdue.length > 0 && <Overdue tasks={overdue} />}
-
-      {shownTag !== WORK && <section className="flex flex-col gap-3">
-        {shownTag
-          ? <TagList cat={shownTag === NONE ? drafts?.id : shownTag} tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
-          : [...groups].filter(([, l]) => l.length).map(([id, l]) => (
-              <TagRow key={id} id={id} name={tagName(id)} tag={tags.find(t => t.id === id)} color={tags.find(t => t.id === id)?.color} tasks={l} onOpen={() => setFilter(id)} />
-            ))}
-        {!rest.length && <p className="text-sm text-muted-foreground">Других открытых задач нет.</p>}
-      </section>}
+      {shownTag
+        ? <TagList cat={shownTag === NONE ? drafts?.id : shownTag} tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
+        : <section className="flex flex-col gap-1">
+            {list.length === 0
+              ? <p className="py-3 text-sm text-muted-foreground">Открытых задач нет. Нажми ＋, чтобы добавить.</p>
+              : <WorkList list={list} />}
+          </section>}
 
       {!shownTag && db.habits.length > 0 && <Habits habits={db.habits} />}
-      </>}
 
-      <Fan open={fan} setOpen={setFan} items={fanItems} anchor="navRight"
-        onPick={t => { if (t.id === "\u0000edit") { openTagEditor(); return; } setFilter(t.id === "\u0000all" ? null : t.id); jump(); }} />
+      <Fan open={fan} setOpen={setFan} items={menu.slice(0, fanMax(1)).concat({ id: EDIT, name: "Править теги", glyph: <PencilIcon className="size-5" /> })} anchor="navRight"
+        onPick={t => pick(t.id)} />
       <Bucket />
       {/* the task you hold follows the finger as a small card; dropped on the pail it just vanishes into it */}
       <DragOverlay dropAnimation={null}>
@@ -223,25 +125,42 @@ export default function FocusView() {
   );
 }
 
-function TagChip({ on, color, n, onClick, children }) {
+// computer: the title is the tag menu (Все, Без тега, every tag, Править теги)
+function TagMenu({ items, title, onPick }) {
+  const [open, setOpen] = useState(false);
   return (
-    <button type="button" onClick={onClick} aria-pressed={on}
-      className={cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all duration-300 max-md:h-8 max-md:px-3",
-        on ? "border-foreground bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}>
-      {color && <span className="size-2 rounded-full" style={{ background: color }} />}{children}
-      {n > 0 && <span className="opacity-60 tabular-nums">{n}</span>}
-    </button>
+    <Pop.Root open={open} onOpenChange={setOpen}>
+      <Pop.Trigger asChild>
+        <button type="button" className="-ml-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-2xl font-bold tracking-tight hover:bg-accent md:text-3xl">
+          {title}<ChevronDownIcon className="size-5 text-muted-foreground" />
+        </button>
+      </Pop.Trigger>
+      <Pop.Portal>
+        <Pop.Content align="start" sideOffset={6}
+          className="z-50 w-64 max-h-[70vh] overflow-y-auto rounded-2xl border bg-popover p-1.5 text-popover-foreground shadow-xl data-[state=open]:animate-[menu-in_140ms_ease-out]">
+          {[...items, { id: EDIT, name: "Править теги" }].map(it => (
+            <button key={it.id} type="button" onClick={() => { setOpen(false); onPick(it.id); }}
+              className={cn("flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-accent", it.on && "bg-accent font-medium", it.id === EDIT && "mt-1 border-t pt-2 text-muted-foreground")}>
+              <span className="grid w-5 shrink-0 place-items-center">
+                {it.id === EDIT ? <PencilIcon className="size-3.5" /> : it.id === ALL ? <ListTodoIcon className="size-4" /> : it.id === NONE ? <InboxIcon className="size-4" /> : <TagMark t={it.tag} />}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{it.name}</span>
+              {it.n > 0 && <span className="text-xs text-muted-foreground tabular-nums">{it.n}</span>}
+            </button>
+          ))}
+        </Pop.Content>
+      </Pop.Portal>
+    </Pop.Root>
   );
 }
 
-// "В работе": drag to reorder, or onto the pail to put aside; subtasks under their task
+// the tasks split by when; drag one onto the pail to put it aside; subtasks under their task
 function WorkList({ list }) {
   const now = today(), tomorrow = addDays(1);
   const [adding, setAdding] = useState(null);
   const groups = WORK_GROUPS.map(g => ({ ...g, tasks: list.filter(t => groupOf(t, now, tomorrow) === g.k) })).filter(g => g.tasks.length || g.k === adding);
   const empty = WORK_GROUPS.filter(g => g.add && !groups.some(x => x.k === g.k));
   return (
-    <SortableContext items={list.map(t => t.id)} strategy={verticalListSortingStrategy}>
       <div className="flex flex-col gap-2">
         {groups.map(g => (
           <Group key={g.k} id={"work:" + g.k} title={g.l} icon={g.icon} color={g.c} n={g.tasks.length}
@@ -261,18 +180,17 @@ function WorkList({ list }) {
           </div>
         )}
       </div>
-    </SortableContext>
   );
 }
 
-// «В работе» split by when: each task lands in the first group that fits
+// split by when: each task lands in the first group that fits
 export const WORK_GROUPS = [
   { k: "late", l: "Просрочено", c: "#ef4444", icon: AlarmClockIcon },
-  { k: "urgent", l: "Приоритет", c: "#f97316", icon: FlameIcon, add: async v => { const r = await addTask(v, { work: true }); if (r?.id) update("tasks", r.id, { prio: "urgent" }); } },
-  { k: "today", l: "Сегодня", c: "#f59e0b", icon: SunIcon, add: v => addTask(v, { work: true, due: today() }) },
-  { k: "tomorrow", l: "Завтра", c: "#0ea5e9", icon: SunriseIcon, add: v => addTask(v, { work: true, due: addDays(1) }) },
-  { k: "planned", l: "Запланированные", c: "#8b5cf6", icon: CalendarClockIcon, add: (v, date) => addTask(v, { work: true, due: date || addDays(2) }) },
-  { k: "free", l: "Без срока", c: "#64748b", icon: InboxIcon, add: v => addTask(v, { work: true }) },
+  { k: "urgent", l: "Приоритет", c: "#f97316", icon: FlameIcon, add: async v => { const r = await addTask(v); if (r?.id) update("tasks", r.id, { prio: "urgent" }); } },
+  { k: "today", l: "Сегодня", c: "#f59e0b", icon: SunIcon, add: v => addTask(v, { due: today() }) },
+  { k: "tomorrow", l: "Завтра", c: "#0ea5e9", icon: SunriseIcon, add: v => addTask(v, { due: addDays(1) }) },
+  { k: "planned", l: "Запланированные", c: "#8b5cf6", icon: CalendarClockIcon, add: (v, date) => addTask(v, { due: date || addDays(2) }) },
+  { k: "free", l: "Без срока", c: "#64748b", icon: InboxIcon, add: v => addTask(v) },
   { k: "done", l: "Сделано", c: "#22c55e", icon: CheckIcon },
 ];
 export function groupOf(t, now, tomorrow) {
@@ -345,16 +263,16 @@ function WorkItem({ t }) {
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);
   const tag = tagOfTask(db, t), cat = db.cats.find(c => c.id === t.cat), board = db.boards.find(b => b.id === cat?.board);
   const name = tag?.name || (cat?.drafts ? "" : db.projects.find(p => p.id === board?.project)?.name);
-  const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: t.id });
+  const { setNodeRef, setActivatorNodeRef, attributes, listeners, isDragging } = useDraggable({ id: t.id, disabled: t.done });
   const [sub, setSub] = useState(false);
   return (
-    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition,  }}
+    <li ref={setNodeRef}
       className={cn("relative rounded-lg", isDragging && "z-10 opacity-30")}>
       {/* a soft tint and a thin bar in the tag's colour, so work from different tags reads apart */}
       {tag && <span className="absolute inset-y-2.5 left-0.5 w-[3px] rounded-full opacity-80" style={{ background: tag.color }} />}
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
         <div className="group/w relative">
-          <TaskRow t={t} noFocusMark onAddSub={() => setSub(true)} sub={name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
+          <TaskRow t={t} onAddSub={() => setSub(true)} sub={name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={t.done ? undefined : { ref: setActivatorNodeRef, ...attributes, ...listeners }} />
           {!t.done && <div className="absolute top-1/2 right-11 flex -translate-y-1/2 gap-0.5 rounded-md bg-background/80 opacity-0 transition-opacity group-hover/w:opacity-100 focus-within:opacity-100 max-md:hidden">
             <PrioBtn t={t} />
             <button type="button" onClick={() => setSub(true)} title="Добавить подзадачу" aria-label={"Подзадача к: " + t.text}
@@ -366,23 +284,6 @@ function WorkItem({ t }) {
         <SubTasks t={t} kids={kids} adding={sub} setAdding={setSub} />
       </motion.div>
     </li>
-  );
-}
-
-// one tag: its tasks as cards in a row you scroll sideways; the rows themselves scroll down
-function TagRow({ id, name, tag, color, tasks, onOpen }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <button type="button" onClick={onOpen} className="flex h-7 items-center gap-1.5 self-start rounded-full px-2.5 text-sm font-semibold"
-        style={color ? { background: `color-mix(in oklab, transparent 75%, ${color})` } : { background: "var(--muted)" }}>
-        {id === NONE ? <InboxIcon className="size-4 text-muted-foreground" /> : tag?.emoji ? <TagMark t={tag} size="md" /> : <HashIcon className="size-3.5" style={{ color }} />}
-        {name}<span className="font-normal opacity-60 tabular-nums">{tasks.length}</span>
-      </button>
-      <div data-hscroll className="-mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:px-0">
-        {tasks.slice(0, 30).map(t => <Card key={t.id} t={t} color={color} />)}
-        {tasks.length > 30 && <button type="button" onClick={onOpen} className="grid w-28 shrink-0 snap-start place-items-center rounded-2xl border border-dashed text-sm text-muted-foreground">ещё {tasks.length - 30}</button>}
-      </div>
-    </div>
   );
 }
 
@@ -413,56 +314,6 @@ function TagList({ cat, tasks, name, onClear }) {
   );
 }
 
-// a card: tap opens the task, hold opens the tag wheel, ＋ puts it in work
-function Card({ t, color }) {
-  const db = useDb(), fresh = useFresh() === t.id;
-  const ref = useRef(null);
-  useEffect(() => { if (fresh) setTimeout(() => ref.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" }), 250); }, [fresh]);
-  const kids = db.tasks.filter(k => k.parent === t.id && !stale(k));
-  const late = t.due && t.due < today();
-  const hold = useHold(t);
-  const lv = levelOf(t);
-  return (
-    <div ref={ref} {...hold.handlers} onClick={() => !hold.held.current && openTask(t.id)} onContextMenu={e => { e.preventDefault(); if (!hold.held.current) openWheel(t, e.clientX, e.clientY, true); }}
-      style={color ? { background: `color-mix(in oklab, var(--card) 84%, ${color})`, borderColor: `color-mix(in oklab, var(--border) 50%, ${color})` } : undefined}
-      className={cn("relative flex h-32 w-44 shrink-0 snap-start cursor-pointer flex-col rounded-2xl border bg-card p-3 shadow-xs transition-[transform,box-shadow] select-none [-webkit-touch-callout:none] active:scale-[.98] md:w-52",
-        fresh && "ring-2 ring-primary ring-offset-2 ring-offset-background")}>
-      {lv && <span aria-hidden className="absolute inset-x-3 top-0 h-[3px] rounded-b-full" style={{ background: lv.c }} />}
-      {lv && <span className="mb-1 inline-flex items-center gap-1 self-start text-[11px] font-semibold" style={{ color: lv.c }}>{lv.icon && <lv.icon className="size-3" />}{lv.l}</span>}
-      <p className={cn("text-[14px] leading-snug font-medium", lv ? "line-clamp-3" : "line-clamp-4")}>{t.text}</p>
-      <div className="mt-auto flex items-center gap-1.5 pt-2 text-xs text-muted-foreground">
-        {t.due && !(lv && lv.l !== "срочно") && <span className={cn("rounded-md bg-muted px-1.5 py-0.5 whitespace-nowrap", late && "text-destructive")}>{dueLabel(t.due)}{t.time ? " " + t.time : ""}</span>}
-        {kids.length > 0 && <span className="tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
-        <button type="button" onClick={e => { e.stopPropagation(); toFocus(t); }} aria-label={"В работу: " + t.text}
-          className="ml-auto grid size-8 place-items-center rounded-full bg-foreground/[.06] text-foreground hover:bg-primary hover:text-primary-foreground">
-          <PlusIcon className="size-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// hold a card still for a moment: the tag wheel opens under the finger, the same finger picks
-function useHold(t) {
-  const timer = useRef(0), start = useRef(null), held = useRef(false);
-  const stopScroll = (el, on) => { const s = el?.closest("[data-hscroll]"); if (s) s.style.overflowX = on ? "hidden" : ""; };
-  const handlers = {
-    onPointerDown: e => {
-      if (e.pointerType === "mouse") return;
-      held.current = false; start.current = { x: e.clientX, y: e.clientY, el: e.currentTarget };
-      clearTimeout(timer.current);
-      timer.current = setTimeout(() => { held.current = true; stopScroll(start.current.el, true); openWheel(t, start.current.x, start.current.y); }, 450);
-    },
-    onPointerMove: e => {
-      if (held.current) return moveWheel(e.clientX, e.clientY);
-      if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 8) clearTimeout(timer.current);
-    },
-    onPointerUp: () => { clearTimeout(timer.current); if (held.current) { endWheel(); stopScroll(start.current?.el, false); setTimeout(() => { held.current = false; }, 400); } start.current = null; },
-    onPointerCancel: () => { clearTimeout(timer.current); if (held.current) { endWheel(); stopScroll(start.current?.el, false); held.current = false; } start.current = null; },
-  };
-  return { handlers, held };
-}
-
 // how pressing a task is, at a glance: overdue and urgent in red, today in amber, the next few days in blue
 const RED = "#ef4444", AMBER = "#f59e0b", BLUE = "#0ea5e9";
 export function levelOf(t) {
@@ -472,15 +323,6 @@ export function levelOf(t) {
   if (t.due === now || t.prio === "today") return { c: AMBER, l: "сегодня" + (t.time ? " в " + t.time : "") };
   if (k != null && k <= 3) return { c: BLUE, l: dueLabel(t.due) };
   return null;
-}
-
-// overdue tasks outside work: one block on top, in the same look as the groups of «В работе»
-function Overdue({ tasks }) {
-  return (
-    <Group id="overdue" title="Просрочено, не в работе" icon={AlarmClockIcon} color="#ef4444" n={tasks.length}>
-      <ul>{tasks.map(t => <SubRow key={t.id} t={t} />)}</ul>
-    </Group>
-  );
 }
 
 // "✓ N сегодня": hover (or tap) shows everything done today, in time order
@@ -540,56 +382,19 @@ function useMedia(q) {
   return on;
 }
 
-// computer: a tag as a foldable dense list; each line shows how pressing it is, ＋ puts it in work
-function TagGroup({ id, name, tag, tasks, onOpen }) {
-  const color = tag?.color || "#64748b";
-  const icon = id === NONE ? InboxIcon : HashIcon;
-  return (
-    <Group id={"tag:" + id} onAdd={v => addTask(v, { tag: id === NONE ? null : id })} title={name} icon={tag?.emoji ? () => <span className="text-[13px] leading-none">{tag.emoji}</span> : icon} color={color} n={tasks.length}>
-      <ul>
-        {tasks.slice(0, 40).map(t => <DenseRow key={t.id} t={t} />)}
-        {tasks.length > 40 && <li><button type="button" onClick={onOpen} className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground">ещё {tasks.length - 40} →</button></li>}
-      </ul>
-    </Group>
-  );
-}
-
-function DenseRow({ t }) {
-  const db = useDb();
-  const lv = levelOf(t), kids = db.tasks.filter(k => k.parent === t.id && !stale(k));
-  const [sub, setSub] = useState(false);
-  return (<>
-    <li className="group relative flex h-8 items-center gap-2 rounded-md pr-1 pl-2.5 hover:bg-accent/70"
-      onContextMenu={e => { e.preventDefault(); openWheel(t, e.clientX, e.clientY, true); }}>
-      <span aria-hidden className="absolute inset-y-1.5 left-0.5 w-[3px] rounded-full" style={{ background: lv?.c || "transparent" }} />
-      <button type="button" onClick={() => openTask(t.id)} className="min-w-0 flex-1 truncate text-left text-[13.5px]">{t.text}</button>
-      {kids.length > 0 && <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
-      {lv ? <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium" style={{ color: lv.c }}>{lv.icon && <lv.icon className="size-3" />}{lv.l}</span>
-        : t.due && <span className="shrink-0 text-[11px] text-muted-foreground">{dueLabel(t.due)}</span>}
-      <PrioBtn t={t} small />
-      <button type="button" onClick={() => setSub(true)} aria-label={"Подзадача к: " + t.text} title="Добавить подзадачу"
-        className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100"><CornerDownRightIcon className="size-3.5" /></button>
-      <button type="button" onClick={() => toFocus(t)} aria-label={"В работу: " + t.text} title="В работу"
-        className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-primary hover:text-primary-foreground focus:opacity-100"><PlusIcon className="size-3.5" /></button>
-    </li>
-    {sub && <li className="ml-4 border-l pl-1"><AddLine placeholder={"Подзадача к «" + t.text + "»"} className="py-0.5"
-      onAdd={v => add("tasks", { text: v, cat: t.cat, parent: t.id, order: nextOrder(db.tasks.filter(k => k.parent === t.id)), done: false })} onClose={() => setSub(false)} /></li>}
-  </>);
-}
-
 // a task's subtasks under it, and the line to add one
 function SubTasks({ t, kids, adding, setAdding }) {
   if (!kids.length && !adding) return null;
   return (
     <ul className="mb-1 ml-9 border-l pl-2" aria-label={"Подзадачи: " + t.text}>
-      {kids.map(k => <li key={k.id}><TaskRow t={k} noFocusMark /></li>)}
+      {kids.map(k => <li key={k.id}><TaskRow t={k} /></li>)}
       {adding && <li><AddLine placeholder="Подзадача, Enter — ещё одна" className="px-0"
         onAdd={v => add("tasks", { text: v, cat: t.cat, parent: t.id, order: nextOrder(kids), done: false })} onClose={() => setAdding(false)} /></li>}
     </ul>
   );
 }
 
-// a task anywhere outside work, with its subtasks and «Добавить подзадачу» in its menu
+// a task in a tag's list, with its subtasks and «Добавить подзадачу» in its menu
 function SubRow({ t }) {
   const db = useDb();
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);

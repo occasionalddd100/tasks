@@ -1,12 +1,12 @@
 import { toast } from "sonner";
 import { createContext, useContext, useRef, useState, useSyncExternalStore } from "react";
 import {
-  AlarmClockIcon, AlarmClockOffIcon, CalendarIcon, CrosshairIcon, CalendarXIcon, ChevronRightIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlameIcon,
+  AlarmClockIcon, AlarmClockOffIcon, ArchiveIcon, CalendarIcon, CalendarXIcon, ChevronRightIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlameIcon,
   GripVerticalIcon, FolderInputIcon, UserIcon, UserXIcon, PencilIcon, Trash2Icon, CheckIcon, CopyIcon, HashIcon,
 } from "lucide-react";
 import { getDb, update, updateMany, remove } from "@/lib/db";
 import { today, dueLabel, stale } from "@/lib/tasks";
-import { inFocus, toFocus, fromFocus } from "@/lib/focus";
+import { toBucket } from "@/lib/focus";
 import { renderMd } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -96,7 +96,7 @@ export async function deleteTask(t) {
 // rows in narrow places (kanban cards) put the date and marks under the text, as on the phone
 export const Stacked = createContext(false);
 
-export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocusMark }) {
+export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub }) {
   const [editing, setEditing] = useState(null); // "text" | "note"
   const [noteOpen, setNoteOpen] = useState(false);
   const [sheet, setSheet] = useState(false);
@@ -121,10 +121,8 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
   const openDate = () => openPicker(dateRef), openTime = () => openPicker(timeRef);
   const when = t.due ? dueLabel(t.due) + (t.time ? " " + t.time : "") : "";
 
-  const focused = inFocus(t);
   const items = [
     { label: "Открыть", icon: PencilIcon, hint: "двойной клик", onSelect: () => setTimeout(() => setSheet(true)) },
-    !t.done && { label: focused ? "Убрать из работы" : "В работу", icon: CrosshairIcon, onSelect: () => (focused ? fromFocus(t) : toFocus(t)) },
     canHide && { label: "Скрыть в выполненные", icon: EyeOffIcon, onSelect: () => hideTask(t) },
     { label: hasBody ? "Открыть заметку" : "Добавить заметку", icon: FileTextIcon, onSelect: () => setNoteOpen(true) },
     onAddSub && { label: "Добавить подзадачу", icon: CornerDownRightIcon, onSelect: onAddSub },
@@ -175,12 +173,11 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
               </button>
             } />
           )}
-          {focused && !t.done && !noFocusMark && <span className="grid size-6 place-items-center text-primary" title="В фокусе" aria-label="В фокусе"><CrosshairIcon className="size-3.5" /></span>}
           {urgent && <span className="grid size-6 place-items-center text-red-500" title="Срочно" aria-label="Срочно"><FlameIcon className="size-3.5" /></span>}
           {stack && sub && <span className="min-w-0 truncate pl-1 text-xs text-muted-foreground/70">{sub}</span>}
         </div>
   );
-  const swipe = useSwipe(() => toggle(!t.done), () => !t.done && (focused ? fromFocus(t) : toFocus(t)), (x, y) => openWheel(t, x, y), !inCard);
+  const swipe = useSwipe(() => toggle(!t.done), () => !t.done && toBucket(t), (x, y) => openWheel(t, x, y), !inCard);
   const tapOpen = phone && !overlay;
   const row = (
     <div {...(tapOpen ? swipe.handlers : {})}
@@ -232,7 +229,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
             </span>
           )}
         {t.note && <span className="mt-0.5 block text-[13px] text-muted-foreground">{t.note}</span>}
-        {stack && (t.due || canHide || who || (focused && !t.done && !noFocusMark) || urgent || sub) && meta}
+        {stack && (t.due || canHide || who || urgent || sub) && meta}
         {!stack && sub && <div className="truncate text-xs text-muted-foreground/70">{sub}</div>}
       </div>
       {!stack && meta}
@@ -245,7 +242,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub, noFocus
       swipe.dx > 0 ? "justify-start bg-emerald-500" : "justify-end bg-primary", Math.abs(swipe.dx) < SWIPE && "opacity-60")}>
       {swipe.dx > 0
         ? <span className="flex items-center gap-1.5"><CheckIcon className="size-4" />{t.done ? "Вернуть" : "Готово"}</span>
-        : !t.done && <span className="flex items-center gap-1.5"><CrosshairIcon className="size-4" />{focused ? "Из работы" : "В работу"}</span>}
+        : !t.done && <span className="flex items-center gap-1.5"><ArchiveIcon className="size-4" />Отложить</span>}
     </div>
   );
   // the dialog sits outside the menu trigger so right-clicks inside the editor don't open the task menu

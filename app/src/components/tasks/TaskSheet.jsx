@@ -1,11 +1,10 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import * as D from "@radix-ui/react-dialog";
 import {
-  AlarmClockIcon, CalendarIcon, CopyIcon, CornerDownRightIcon, CrosshairIcon, EyeOffIcon, FileTextIcon, FlameIcon, ColumnsIcon, PencilIcon, Trash2Icon, UserIcon, XIcon,
+  AlarmClockIcon, CalendarIcon, CopyIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlameIcon, ColumnsIcon, PencilIcon, Trash2Icon, UserIcon, XIcon,
 } from "lucide-react";
 import { getDb, update, updateMany, useDb } from "@/lib/db";
 import { today, addDays, dueLabel, byOrder } from "@/lib/tasks";
-import { inFocus, toFocus, fromFocus } from "@/lib/focus";
 import { useBackClose } from "@/lib/back";
 import { renderMd } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
@@ -29,7 +28,7 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
   const saveText = () => { const v = text.trim(); if (v && v !== t.text) update("tasks", t.id, { text: v }); else setText(t.text); };
 
   const set = f => update("tasks", t.id, f);
-  const focused = inFocus(t), urgent = t.prio === "urgent";
+  const urgent = t.prio === "urgent";
   const done = v => set(v ? { done: true, doneOn: today(), doneAt: new Date().toISOString(), doneBy: getDb().me } : { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false });
   const day = d => set(t.due === d ? { due: "", time: "" } : { due: d });
 
@@ -66,9 +65,6 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
 
             {!t.done && <>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button type="button" onClick={() => (focused ? fromFocus(t) : toFocus(t))} className={chip(focused, "border-primary bg-primary text-primary-foreground")}>
-                  <CrosshairIcon className="size-4" />{focused ? "В работе" : "В работу"}
-                </button>
                 {(urgent || !t.done) && <button type="button" onClick={() => set({ prio: urgent ? "" : "urgent" })} aria-pressed={urgent} className={chip(urgent, "border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400")}>
                   <FlameIcon className="size-4" />Приоритет
                 </button>}

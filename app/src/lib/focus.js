@@ -1,4 +1,17 @@
 import { getDb, update, updateMany, put } from "@/lib/db";
+import { tagsOf } from "@/lib/tags";
+import { draftsOf } from "@/lib/personal";
+import { today } from "@/lib/tasks";
+
+// My open tasks of «Личное» (its tags and drafts): top level, not put aside, not someone else's.
+// The home screen splits them by when (overdue, priority, today, tomorrow, planned, no date).
+export function openList(db) {
+  const mine = new Set([draftsOf(db)?.id, ...tagsOf(db).map(t => t.id)]);
+  return db.tasks.filter(t => mine.has(t.cat) && !t.done && !t.hidden && !t.parent && !inBucket(t) && t.text?.trim() && (!t.assignee || t.assignee === db.me));
+}
+// what is on for today: overdue, due today, urgent
+export const isNow = (t, now = today()) => (t.due && t.due <= now) || t.prio === "urgent" || t.prio === "today";
+export const nowList = db => openList(db).filter(t => isNow(t)).sort((a, b) => (a.due || "9").localeCompare(b.due || "9") || (a.time || "9").localeCompare(b.time || "9"));
 
 // Фокус: tasks from any project picked for "now". A task stays where it lives and gets `focus`
 // (its place in the list); null takes it out. The sprint lives in prefs: { start } while it runs.

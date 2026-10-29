@@ -2,17 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "motion/react";
 import { ArchiveIcon, CheckIcon, ChevronRightIcon, LayersIcon, PlayIcon, PauseIcon, SunIcon, SunriseIcon, CrosshairIcon, XIcon, TimerIcon, SparklesIcon, RotateCcwIcon } from "lucide-react";
 import { useDb, getDb, update, add } from "@/lib/db";
-import { focusList, inFocus, inBucket, toBucket, nextFocus, placeOf } from "@/lib/focus";
+import { openList, isNow, toBucket, placeOf } from "@/lib/focus";
 import { today, addDays, byOrder, stale, nextOrder, plural } from "@/lib/tasks";
-import { tagsOf } from "@/lib/tags";
-import { draftsOf } from "@/lib/personal";
 import { cn } from "@/lib/utils";
 import { useZenTimer } from "@/lib/zenTimer";
 import { WORK_GROUPS, groupOf, levelOf } from "@/components/tasks/FocusView";
 
 // Фокус: a 3D space with one task in front and the rest of the queue going back into the depth.
-// Two modes: «Делать» — the work queue one card at a time (✓ / later / to the pail, a 25-min timer);
-// «Разбор» — open tasks not in work, one by one: today / tomorrow / into work / pail / skip.
+// Two modes: «Делать» — today's queue one card at a time (✓ / later / to the pail, a 25-min timer);
+// «Разбор» — open tasks not for today, one by one: today / tomorrow / pail / skip.
 // Big type, dark calm room, nothing else on screen: the point is to see one thing.
 const GOAL = 3;
 const done = t => update("tasks", t.id, { done: true, doneOn: today(), doneAt: new Date().toISOString(), doneBy: getDb().me });
@@ -21,14 +19,14 @@ export default function ZenView({ onClose }) {
   const db = useDb();
   const now = today(), tomorrow = addDays(1);
   const order = Object.fromEntries(WORK_GROUPS.map((g, k) => [g.k, k]));
-  const work = useMemo(() => focusList(db).filter(t => !t.done && !t.parent)
-    .sort((a, b) => order[groupOf(a, now, tomorrow)] - order[groupOf(b, now, tomorrow)] || a.focus - b.focus), [db.tasks, now]);
+  // «Делать»: what is on for today (overdue, priority, today)
+  const work = useMemo(() => openList(db).filter(t => isNow(t, now))
+    .sort((a, b) => order[groupOf(a, now, tomorrow)] - order[groupOf(b, now, tomorrow)] || (a.time || "9").localeCompare(b.time || "9") || byOrder(a, b)), [db.tasks, now]);
 
   // triage: what isn't decided yet, most pressing first
   const triage = useMemo(() => {
-    const mine = new Set([draftsOf(db)?.id, ...tagsOf(db).map(t => t.id)]);
     const rank = t => (t.due && t.due < now ? 0 : t.due === now ? 1 : t.prio === "urgent" ? 2 : t.due && t.due <= addDays(3) ? 3 : t.due ? 4 : 5);
-    return db.tasks.filter(t => mine.has(t.cat) && !t.done && !t.hidden && !t.parent && !inFocus(t) && !inBucket(t) && t.text?.trim() && (!t.assignee || t.assignee === db.me))
+    return openList(db).filter(t => !isNow(t, now))
       .sort((a, b) => rank(a) - rank(b) || (a.due || "9").localeCompare(b.due || "9") || byOrder(a, b));
   }, [db.tasks, db.cats, now]);
 
@@ -51,9 +49,8 @@ export default function ZenView({ onClose }) {
     later,
     pail: () => cur && leave("down", () => toBucket(cur)),
   } : {
-    today: () => cur && leave("up", () => update("tasks", cur.id, { focus: nextFocus(), focusBy: db.me, due: now })),
-    tomorrow: () => cur && leave("up", () => update("tasks", cur.id, { focus: nextFocus(), focusBy: db.me, due: tomorrow })),
-    work: () => cur && leave("up", () => update("tasks", cur.id, { focus: nextFocus(), focusBy: db.me })),
+    today: () => cur && leave("up", () => update("tasks", cur.id, { due: now })),
+    tomorrow: () => cur && leave("up", () => update("tasks", cur.id, { due: tomorrow })),
     pail: () => cur && leave("down", () => toBucket(cur)),
     done: () => cur && leave("up", () => done(cur)),
     later,
@@ -72,8 +69,8 @@ export default function ZenView({ onClose }) {
         else if (k === "arrowdown" || k === "b" || k === "и") actions.pail();
         else if (k === "t" || k === "е") timer.toggle();
       } else {
-        if (k === "1") actions.today(); else if (k === "2") actions.tomorrow(); else if (k === "3") actions.work();
-        else if (k === "4" || k === "arrowdown") actions.pail(); else if (k === "arrowright" || k === " ") { e.preventDefault(); actions.later(); }
+        if (k === "1") actions.today(); else if (k === "2") actions.tomorrow(); 
+        else if (k === "3" || k === "arrowdown") actions.pail(); else if (k === "arrowright" || k === " ") { e.preventDefault(); actions.later(); }
         else if (k === "enter") actions.done();
       }
     };
@@ -106,7 +103,7 @@ export default function ZenView({ onClose }) {
           <div className="relative h-[min(56vh,460px)] w-[min(92vw,640px)]" style={{ transformStyle: "preserve-3d" }}>
             <AnimatePresence custom={fly}>
               {queue.slice(0, 5).map((t, k) => (
-                <Card key={t.id} t={t} depth={k} mode={mode} timer={k === 0 ? timer : null} onSwipe={k === 0 ? (mode === "do" ? { up: actions.done, right: actions.later, down: actions.pail } : { up: actions.work, right: actions.later, down: actions.pail }) : null} fly={fly} />
+                <Card key={t.id} t={t} depth={k} mode={mode} timer={k === 0 ? timer : null} onSwipe={k === 0 ? (mode === "do" ? { up: actions.done, right: actions.later, down: actions.pail } : { up: actions.today, right: actions.later, down: actions.pail }) : null} fly={fly} />
               ))}
             </AnimatePresence>
           </div>
@@ -124,8 +121,7 @@ export default function ZenView({ onClose }) {
           </> : <>
             <Act onClick={actions.today} icon={SunIcon} hint="1" main>Сегодня</Act>
             <Act onClick={actions.tomorrow} icon={SunriseIcon} hint="2">Завтра</Act>
-            <Act onClick={actions.work} icon={CrosshairIcon} hint="3">В работу</Act>
-            <Act onClick={actions.pail} icon={ArchiveIcon} hint="4">В ведёрко</Act>
+            <Act onClick={actions.pail} icon={ArchiveIcon} hint="3">В ведёрко</Act>
             <Act onClick={actions.later} icon={ChevronRightIcon} hint="→">Пропустить</Act>
             <Act onClick={actions.done} icon={CheckIcon} hint="Enter">Уже сделано</Act>
           </>}
@@ -238,9 +234,9 @@ function Goal({ n }) {
 
 function Empty({ mode, setMode, work, triage, doneToday, onClose }) {
   const text = mode === "do"
-    ? work === 0 && triage > 0 ? { h: "В работе пусто", p: `Разбери задачи: ${triage} ждут решения. Выбери 1–3 на сегодня.`, b: "Начать разбор", go: () => setMode("sort") }
-      : { h: doneToday >= GOAL ? "Всё на сегодня сделано" : "Очередь пуста", p: doneToday ? `Сегодня ${doneToday} ${plural(doneToday, ["дело", "дела", "дел"])}. Можно выдохнуть.` : "Добавь задачу в работу, и она появится тут.", b: "Выйти", go: onClose }
-    : { h: "Разобрано", p: work ? `В работе ${work}. Пора делать.` : "Нерешённых задач нет.", b: work ? "Делать" : "Выйти", go: work ? () => setMode("do") : onClose };
+    ? work === 0 && triage > 0 ? { h: "На сегодня пусто", p: `Разбери задачи: ${triage} ждут решения. Выбери 1–3 на сегодня.`, b: "Начать разбор", go: () => setMode("sort") }
+      : { h: doneToday >= GOAL ? "Всё на сегодня сделано" : "Очередь пуста", p: doneToday ? `Сегодня ${doneToday} ${plural(doneToday, ["дело", "дела", "дел"])}. Можно выдохнуть.` : "Поставь задаче срок на сегодня, и она появится тут.", b: "Выйти", go: onClose }
+    : { h: "Разобрано", p: work ? `На сегодня ${work}. Пора делать.` : "Нерешённых задач нет.", b: work ? "Делать" : "Выйти", go: work ? () => setMode("do") : onClose };
   return (
     <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex max-w-md flex-col items-center gap-3 text-center">
       <SparklesIcon className="size-8 text-white/40" />

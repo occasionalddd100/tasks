@@ -1,15 +1,15 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Maximize2Icon, PauseIcon, PlayIcon, XIcon } from "lucide-react";
 import { useDb } from "@/lib/db";
-import { focusList } from "@/lib/focus";
+import { nowList } from "@/lib/focus";
 import { useZenTimer } from "@/lib/zenTimer";
 
 // Фокус closed with the timer on: a small window floats over the app (drag it anywhere) with the time,
-// the task at the top of work, pause, back into focus, and stop.
+// the first task for today, pause, back into focus, and stop.
 export default function ZenFloat() {
   const db = useDb();
   const t = useZenTimer();
-  const cur = focusList(db).find(x => !x.done && !x.parent);
+  const cur = nowList(db)[0];
   const R = 15, C = 2 * Math.PI * R, part = t.left / t.total;
   return (
     <AnimatePresence>

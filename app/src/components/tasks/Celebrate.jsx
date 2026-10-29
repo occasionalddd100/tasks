@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useDb } from "@/lib/db";
-import { focusList } from "@/lib/focus";
+import { nowList } from "@/lib/focus";
+import { today } from "@/lib/tasks";
 
-// Ticking off work should feel good. Every done task in «В работе» pops a little confetti,
+// Ticking off tasks should feel good. Every done task for today pops a little confetti,
 // the last two get a word of encouragement, and an empty list sets off fireworks.
 const COLORS = ["#f43f5e", "#fb923c", "#facc15", "#4ade80", "#38bdf8", "#a78bfa", "#f472b6"];
 const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function Celebrate() {
   const db = useDb();
-  const list = db.ready ? focusList(db) : null;
-  const open = list?.filter(t => !t.done).length, done = list?.filter(t => t.done).length;
+  // today's list: what is still open for today, and what I ticked off today
+  const now = today();
+  const open = db.ready ? nowList(db).length : null;
+  const done = db.ready ? db.tasks.filter(t => t.done && t.doneOn === now && !t.parent && (t.doneBy || t._owner) === db.me).length : null;
   const prev = useRef(null), cv = useRef(null), parts = useRef([]), raf = useRef(0);
   const [msg, setMsg] = useState(null);
 
@@ -40,12 +43,12 @@ export function Celebrate() {
 
   useEffect(() => {
     const p = prev.current; prev.current = { open, done };
-    // only a task getting done counts, not one taken out of work or the done ones cleared away
+    // only a task getting done counts, not one moved to another day
     if (!p || open == null || !(open < p.open && done > p.done)) return;
     const W = innerWidth, H = innerHeight, quiet = calm();
     if (open === 0) {
       navigator.vibrate?.([30, 60, 30, 60, 80]);
-      setMsg({ big: true, title: "Всё сделано!", sub: `${done} из ${done} в работе. Красавчик` });
+      setMsg({ big: true, title: "Всё сделано!", sub: `${done} за сегодня. Красавчик` });
       if (!quiet) {
         burst(0, H, 90, { dir: -Math.PI / 3, spread: 0.7, speed: 22, g: 0.3 });
         burst(W, H, 90, { dir: -Math.PI * 2 / 3, spread: 0.7, speed: 22, g: 0.3 });

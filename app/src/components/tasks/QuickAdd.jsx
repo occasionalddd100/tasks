@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import * as D from "@radix-ui/react-dialog";
 import { motion, AnimatePresence } from "motion/react";
-import { AlarmClockIcon, ArrowUpIcon, CalendarIcon, CheckIcon, CrosshairIcon, HashIcon, SunIcon, XIcon } from "lucide-react";
+import { AlarmClockIcon, ArrowUpIcon, CalendarIcon, CheckIcon, HashIcon, SunIcon, XIcon } from "lucide-react";
 import { add, getDb, useDb } from "@/lib/db";
-import { nextFocus } from "@/lib/focus";
 import { tagsOf, tagGroups, parseTag, targetCat } from "@/lib/tags";
 import { ensurePersonal } from "@/lib/personal";
 import { today, dueLabel } from "@/lib/tasks";
@@ -15,13 +14,13 @@ import { toast } from "sonner";
 
 // One way to add a task, everywhere: type it, pick a tag (or write #тег); a tag is a category of «Личное».
 // No tag: it waits in "Личное · Черновики". The ＋ in the phone bar and the N key open the same field in a sheet.
-let open = false, preset = null, presetWork = false, ambient = null; const subs = new Set();
-// the screen I'm on can say where ＋ should put things (the tag or «В работе» picked on the home screen)
+let open = false, preset = null, ambient = null; const subs = new Set();
+// the screen I'm on can say where ＋ should put things (the tag picked on the home screen)
 export const setAmbient = a => { ambient = a; };
-const setOpen = (v, tag) => { open = v; if (v) { preset = tag ?? ambient?.tag ?? null; presetWork = !tag && !!ambient?.work; } subs.forEach(f => f()); };
+const setOpen = (v, tag) => { open = v; if (v) { preset = tag ?? ambient?.tag ?? null; } subs.forEach(f => f()); };
 export const openQuickAdd = tag => setOpen(true, typeof tag === "string" ? tag : null);
 
-export async function addTask(raw, { tag, work, day, due, time } = {}) {
+export async function addTask(raw, { tag, day, due, time } = {}) {
   const tags = tagsOf(getDb()), p = parseTag(raw, tags);
   const text = p.text; if (!text) return null;
   const tagId = p.tag?.id ?? tag ?? null;
@@ -29,7 +28,7 @@ export async function addTask(raw, { tag, work, day, due, time } = {}) {
   if (!cat) { await ensurePersonal(); cat = targetCat(tagId); }
   if (!cat) return null;
   const top = Math.min(1, ...getDb().tasks.filter(x => x.cat === cat).map(x => x.order ?? 1));
-  const id = await add("tasks", { text, cat, order: top - 1, done: false, ...(work ? { focus: nextFocus(), focusBy: getDb().me } : {}), ...(day ? { due: today() } : {}), ...(due ? { due } : {}), ...(time ? { time } : {}) });
+  const id = await add("tasks", { text, cat, order: top - 1, done: false, ...(day ? { due: today() } : {}), ...(due ? { due } : {}), ...(time ? { time } : {}) });
   if (id) flash(id);
   return { id, text, tag: tags.find(t => t.id === tagId) || null };
 }
@@ -39,13 +38,13 @@ let fresh = null; const freshSubs = new Set();
 function flash(id) { fresh = id; freshSubs.forEach(f => f()); setTimeout(() => { if (fresh === id) { fresh = null; freshSubs.forEach(f => f()); } }, 4000); }
 export const useFresh = () => useSyncExternalStore(f => (freshSubs.add(f), () => freshSubs.delete(f)), () => fresh);
 
-export function Composer({ autoFocus, defaultTag = null, work: workDefault = false, onAdded, className }) {
+export function Composer({ autoFocus, defaultTag = null, onAdded, className }) {
   const db = useDb(), all = tagsOf(db);
   // the tag I came from goes first, so I see where the task will land
   const tags = defaultTag ? [...all.filter(t => t.id === defaultTag), ...all.filter(t => t.id !== defaultTag)] : all;
   const [text, setText] = useState("");
   const [tag, setTag] = useState(defaultTag);
-  const [work, setWork] = useState(workDefault), [due, setDue] = useState(""), [time, setTime] = useState(""), [did, setDid] = useState(false);
+  const [due, setDue] = useState(""), [time, setTime] = useState(""), [did, setDid] = useState(false);
   const ref = useRef(null);
   useEffect(() => { setTag(defaultTag); }, [defaultTag]);
   useEffect(() => { if (autoFocus) setTimeout(() => ref.current?.focus(), 60); }, [autoFocus]);
@@ -56,7 +55,7 @@ export function Composer({ autoFocus, defaultTag = null, work: workDefault = fal
     e?.preventDefault();
     if (!text.trim()) return;
     // "Уже сделал": no task, just a line on today's timeline
-    const r = did ? (addDone(text), { text: text.trim(), did: true }) : await addTask(text, { tag: cur, work, due, time: due ? time : "" });
+    const r = did ? (addDone(text), { text: text.trim(), did: true }) : await addTask(text, { tag: cur, due, time: due ? time : "" });
     if (r) { onAdded?.(r); setText(""); setDue(""); setTime(""); ref.current?.focus(); }
   };
   const tile = (on, cls) => cn("flex h-14 flex-col items-center justify-center gap-1 rounded-xl border text-[12px] leading-none font-medium transition-colors disabled:opacity-40 [&_svg]:size-4", on ? cls : "text-muted-foreground");
@@ -74,10 +73,9 @@ export function Composer({ autoFocus, defaultTag = null, work: workDefault = fal
           <ArrowUpIcon className="size-6" />
         </button>
       </div>
-      {/* four small tiles in one row: what kind of entry and when */}
-      <div className="grid grid-cols-4 gap-1.5">
+      {/* three small tiles in one row: what kind of entry and when */}
+      <div className="grid grid-cols-3 gap-1.5">
         <button type="button" onClick={() => setDid(d => !d)} aria-pressed={did} className={tile(did, "border-emerald-500/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400")}><CheckIcon />Сделал</button>
-        <button type="button" disabled={did} onClick={() => setWork(w => !w)} aria-pressed={work} className={tile(work && !did, "border-primary bg-primary text-primary-foreground")}><CrosshairIcon />В работу</button>
         <button type="button" disabled={did} onClick={() => { setDue(d => (d === today() ? "" : today())); }} aria-pressed={due === today()} className={tile(due === today() && !did, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400")}><SunIcon />Сегодня</button>
         {/* the phone's own calendar and clock sit on top of the tile */}
         <label className={cn(tile(!!due && due !== today() && !did, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), "relative", did && "pointer-events-none opacity-40")}>
@@ -142,7 +140,7 @@ export function QuickAddHost() {
             <D.Close className="grid size-8 place-items-center rounded-full text-muted-foreground active:bg-accent" aria-label="Закрыть"><XIcon className="size-5" /></D.Close>
           </div>
           <D.Description className="sr-only">Задача попадёт на доску выбранного тега, без тега — в черновики</D.Description>
-          <Composer autoFocus={isOpen} defaultTag={preset} work={presetWork} onAdded={r => { setOpen(false); toast(r.did ? "Записал в таймлайн" : "Добавил" + (r.tag ? " в «" + r.tag.name + "»" : " без тега")); }} />
+          <Composer autoFocus={isOpen} defaultTag={preset} onAdded={r => { setOpen(false); toast(r.did ? "Записал в таймлайн" : "Добавил" + (r.tag ? " в «" + r.tag.name + "»" : " без тега")); }} />
         </D.Content>
       </D.Portal>
     </D.Root>

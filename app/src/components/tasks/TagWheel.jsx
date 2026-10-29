@@ -1,9 +1,8 @@
 import { useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CheckIcon, CrosshairIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { useDb } from "@/lib/db";
 import { tagsOf, tagOfTask, setTag } from "@/lib/tags";
-import { inFocus, toFocus, fromFocus } from "@/lib/focus";
 import { useBackClose } from "@/lib/back";
 import { cn } from "@/lib/utils";
 
@@ -31,9 +30,8 @@ export function TagWheelHost() {
   let items = [], cx = 0, cy = 0, hot = null;
   if (s) {
     const cur = tagOfTask(db, t)?.id;
-    const work = { id: "\u0000work", name: inFocus(t) ? "Из работы" : "В работу", glyph: <CrosshairIcon className="size-4" />, on: inFocus(t), run: () => (inFocus(t) ? fromFocus(t) : toFocus(t)) };
     const tags = tagsOf(db).slice(0, 9).map(g => ({ id: g.id, name: g.name, color: g.color, emoji: g.emoji, on: g.id === cur, run: () => setTag(t, g.id) }));
-    items = [work, ...tags];
+    items = tags;
     // keep the whole ring on screen
     cx = Math.min(innerWidth - R - 44, Math.max(R + 44, s.x)); cy = Math.min(innerHeight - R - 60, Math.max(R + 60, s.y));
     const n = items.length;

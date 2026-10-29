@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { AnimatePresence, motion, useAnimationControls } from "motion/react";
-import { CornerUpLeftIcon, XIcon } from "lucide-react";
+import { CornerUpLeftIcon } from "lucide-react";
 import { useDb } from "@/lib/db";
-import { bucketList, toFocus, fromBucket } from "@/lib/focus";
+import { bucketList, fromBucket } from "@/lib/focus";
 import { placeOf } from "@/lib/focus";
 import { openTask } from "@/components/tasks/TaskSheet";
 import { useBackClose } from "@/lib/back";
@@ -64,7 +64,7 @@ export default function Bucket({ docked }) {
               <span className="text-xs text-muted-foreground">отложено: {list.length}</span>
             </div>
             {list.length === 0
-              ? <p className="px-4 py-5 text-sm text-muted-foreground">Пусто. Перетащи сюда задачу из «В работе», и она подождёт тут.</p>
+              ? <p className="px-4 py-5 text-sm text-muted-foreground">Пусто. Перетащи сюда задачу, и она подождёт тут.</p>
               : <BucketItems list={list} db={db} onOpen={() => setOpen(false)} />}
           </motion.div>
         </>}
@@ -105,10 +105,8 @@ function BucketItems({ list, db, onOpen, dense }) {
               <span className={cn("leading-snug", dense ? "line-clamp-1 text-[13px]" : "line-clamp-2 text-sm")}>{t.text}</span>
               {!dense && <span className="block truncate text-[11px] text-muted-foreground">{placeOf(db, t)}</span>}
             </button>
-            <button type="button" onClick={() => toFocus(t)} title="Вернуть в работу" aria-label={"Вернуть в работу: " + t.text}
+            <button type="button" onClick={() => fromBucket(t)} title="Вернуть из ведёрка" aria-label={"Вернуть: " + t.text}
               className={cn("grid shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-primary hover:text-primary-foreground", dense ? "size-7" : "size-8")}><CornerUpLeftIcon className="size-4" /></button>
-            <button type="button" onClick={() => fromBucket(t)} title="Достать из ведёрка (останется в своём теге)" aria-label={"Убрать из ведёрка: " + t.text}
-              className={cn("grid shrink-0 place-items-center rounded-md text-muted-foreground opacity-60 hover:bg-background hover:text-foreground hover:opacity-100", dense ? "size-7" : "size-8")}><XIcon className="size-4" /></button>
           </motion.li>
         ))}
       </AnimatePresence>
