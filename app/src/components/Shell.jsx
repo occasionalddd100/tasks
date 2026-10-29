@@ -10,6 +10,7 @@ import { ActionsContext } from "@/components/ui/actions";
 import { ConfirmHost } from "@/components/Confirm";
 import { IconPickerHost } from "@/components/IconPicker";
 import MobileNav from "@/components/MobileNav";
+import { useShortcut, ShortcutPicker } from "@/components/NavShortcut";
 import { SettingsHost, openSettings } from "@/components/Settings";
 import { PicsViewer } from "@/components/stash/Pics";
 import ShareInbox from "@/components/stash/ShareInbox";
@@ -136,6 +137,7 @@ export default function Shell() {
   const diary = !view.note && !project && !stash && !!view.diary;
   const focus = !view.note && !project && !stash && !diary;
   const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : focus ? "Задачи" : "Дневник";
+  const shortcut = useShortcut({ note: view.note, stash, project }, go);
   const sidebar = <Sidebar view={{ ...view, project, focus, personal, diary }} go={go} email={db.email} search={menu === "search"} />;
 
   return (
@@ -171,7 +173,8 @@ export default function Shell() {
       </main>
       <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onAdd={() => openQuickAdd()}
         diary={{ onClick: () => go({ diary: true }), active: diary }}
-        tasks={{ onClick: () => go({ focus: true }), active: focus, badge: nowList(db).length }} />
+        tasks={{ onClick: () => go({ focus: true }), active: focus, badge: nowList(db).length }} shortcut={shortcut} />
+      <ShortcutPicker />
       <TagWheelHost />
       <TagEditorHost />
       <Celebrate />
