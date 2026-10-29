@@ -44,9 +44,26 @@ async function unfurl(url: string) {
     return { title: d?.author?.name ? `${d.author.name} (@${d.author.screen_name})` : "Пост в X", text: d?.text || "", thumb: v?.thumbnail_url || ph[0]?.url || d?.author?.avatar_url || "",
       video: v?.url || "", photos: ph.map((p: { url: string }) => p.url), author: d?.author?.screen_name || "", w: v?.width || ph[0]?.width || 0, h: v?.height || ph[0]?.height || 0 };
   }
+  // TikTok: a short link (vm. / vt.) is resolved first; the oEmbed caption is the video's description,
+  // and when TikTok's oEmbed refuses (it does, now and then, from server addresses) tikwm's open API fills in
+  if (host.endsWith("tiktok.com")) {
+    let full = url;
+    if (!/\/video\/\d+/.test(u.pathname)) { try { full = (await get(url, { Accept: "text/html" })).url; } catch { /* keep the short one */ } }
+    const vid = full.match(/\/video\/(\d+)/)?.[1] || "";
+    let o: Record<string, any> = {}, t: Record<string, any> = {};
+    try { o = await (await get("https://www.tiktok.com/oembed?url=" + encodeURIComponent(full))).json(); } catch { /* try the other one */ }
+    if (!o.thumbnail_url || !o.title) {
+      try { t = (await (await get("https://www.tikwm.com/api/?url=" + encodeURIComponent(full))).json())?.data || {}; } catch { /* nothing more to try */ }
+    }
+    const abs = (x = "") => x.startsWith("/") ? "https://www.tikwm.com" + x : x;
+    const author = o.author_unique_id || t.author?.unique_id || o.author_name || "";
+    const text = o.title || t.title || "";
+    if (!text && !o.thumbnail_url && !t.cover) throw new Error("TikTok не ответил");
+    return { title: o.author_name || t.author?.nickname || "TikTok", text, thumb: o.thumbnail_url || abs(t.origin_cover || t.cover), author, vid: vid || t.id || "", url: full,
+      w: o.thumbnail_width || t.width || 0, h: o.thumbnail_height || t.height || 0 };
+  }
   // oEmbed where the platform has one
   const oembed = host.endsWith("youtube.com") || host === "youtu.be" ? "https://www.youtube.com/oembed?format=json&url="
-    : host.endsWith("tiktok.com") ? "https://www.tiktok.com/oembed?url="
     : host.endsWith("vimeo.com") ? "https://vimeo.com/api/oembed.json?url="
     : host.endsWith("soundcloud.com") ? "https://soundcloud.com/oembed?format=json&url=" : "";
   if (oembed) {

@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { sb, add, update, getDb } from "@/lib/db";
 
 // what a link points to, from the URL alone: enough to embed the player even before the preview arrives
@@ -65,15 +66,26 @@ export async function addLink(stash, tab, raw) {
   return id;
 }
 
-export async function refresh(id, url) {
+// a card asks the server again at most once per session by itself (an expired preview image, a card without one);
+// `force` is the «Обновить превью» button
+const asked = new Set();
+export async function refresh(id, url, force) {
+  if (!force && asked.has(id)) return;
+  asked.add(id);
+  if (force) await update("clips", id, { loading: true });
   try {
     const d = await unfurl(url);
-    const fields = { loading: false, title: d.title || "", text: d.text || "", thumb: d.thumb || "", video: d.video || "", photos: d.photos || [], author: d.author || "", w: d.w || 0, h: d.h || 0 };
+    const c = getDb().clips.find(x => x.id === id); // what the card already says (maybe edited by hand) stays
+    const fields = { loading: false, title: c?.title || d.title || "", text: c?.text || d.text || "", thumb: d.thumb || "", video: d.video || "", photos: d.photos || [], author: d.author || "", w: d.w || 0, h: d.h || 0 };
+    if (d.vid) fields.vid = d.vid;
+    if (force) toast.success(d.thumb ? "Превью обновлено" : "Обновил, но картинки у ссылки нет");
     if (d.kind === "image") fields.provider = "image";
     if (d.kind === "video") fields.provider = "video";
     await update("clips", id, fields);
-  } catch { await update("clips", id, { loading: false }); }
+  } catch (e) { await update("clips", id, { loading: false }); if (force) toast.error("Не получилось: " + (e.message || e)); }
 }
+// cards from a link that ended up without a picture
+export const needsPreview = c => c.url && !c.loading && !c.thumb && !c.video && !["note", "photo", "image"].includes(c.provider);
 
 export const addText = (stash, tab, text) => add("clips", { stash, tab, provider: "note", url: "", title: "", text: text.trim(), desc: "", note: "", tags: [], order: topOrder(stash, tab), added: new Date().toISOString() });
 export const addPhoto = (stash, tab, photo) => add("clips", { stash, tab, provider: "photo", url: "", photo, title: "", text: "", desc: "", note: "", tags: [], order: topOrder(stash, tab), added: new Date().toISOString(), w: photo.w, h: photo.h });

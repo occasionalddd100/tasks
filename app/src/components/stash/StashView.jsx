@@ -16,7 +16,7 @@ const FolderPortal = lazy(() => import("@/components/stash/FolderPortal"));
 import { isMine } from "@/lib/db";
 import { toast } from "sonner";
 import { useDb, getDb, update, updateMany, remove } from "@/lib/db";
-import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh } from "@/lib/stash";
+import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh, needsPreview } from "@/lib/stash";
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
 import { PaletteIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,13 @@ export default function StashView({ id, fresh, go }) {
   tagHues = stash?.tagColors || {}; tagStash = id;
   const grid = GRID[useGrid()];
   const all = useMemo(() => db.clips.filter(c => c.stash === id), [db.clips, id]);
+  // cards left without a preview (the site didn't answer back then) try once more, a few at a time
+  useEffect(() => {
+    if (!db.ready) return;
+    const list = all.filter(needsPreview).slice(0, 8);
+    const timers = list.map((c, k) => setTimeout(() => refresh(c.id, c.url), 1500 + k * 1200));
+    return () => timers.forEach(clearTimeout);
+  }, [id, db.ready]);
   const tagCounts = useMemo(() => {
     const m = new Map();
     for (const c of all) if (cur === ALL || c.tab === cur) for (const t of c.tags || []) m.set(t, (m.get(t) || 0) + 1);
@@ -434,6 +441,7 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
   const items = [
           { label: "Открыть", icon: PencilIcon, onSelect: onOpen },
           c.url && { label: "Открыть оригинал", icon: ExternalLinkIcon, onSelect: () => window.open(c.url, "_blank", "noopener") },
+          c.url && { label: "Обновить превью", icon: RefreshCwIcon, onSelect: () => refresh(c.id, c.url, true) },
           mediaCount(c) > 0 && { label: mediaCount(c) > 1 ? "Скачать всё (" + mediaCount(c) + ")" : "Скачать", icon: DownloadIcon, onSelect: () => saveCard(c) },
           tabs.length > 1 && { label: "На доску", icon: ArrowRightLeftIcon, sub: tabs.map(t => ({ label: t.name, disabled: t.id === c.tab, onSelect: () => moveTo(t.id) })) },
           otherStashes(c).length > 0 && { label: "В другой стэш", icon: LayoutGridIcon, sub: otherStashes(c).map(s => ({ label: s.name || "Без названия", onSelect: () => toStash(c, s) })) },
@@ -548,6 +556,7 @@ function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
           <div className="-mx-1 flex flex-col border-t pt-2">
             <Row icon={PencilIcon} onClick={act(onOpen)}>Открыть</Row>
             {c.url && <Row icon={ExternalLinkIcon} onClick={act(() => window.open(c.url, "_blank", "noopener"))}>Открыть оригинал</Row>}
+            {c.url && <Row icon={RefreshCwIcon} onClick={act(() => refresh(c.id, c.url, true))}>Обновить превью</Row>}
             {mediaCount(c) > 0 && <Row icon={DownloadIcon} onClick={act(() => saveCard(c))}>{mediaCount(c) > 1 ? "Скачать всё (" + mediaCount(c) + ")" : "Скачать"}</Row>}
             {c.url && <Row icon={CopyIcon} onClick={act(() => navigator.clipboard?.writeText(c.url).then(() => toast("Ссылка скопирована")))}>Скопировать ссылку</Row>}
             <Row icon={c.watched ? EyeOffIcon : EyeIcon} onClick={act(toggleSeen)}>{c.watched ? "Вернуть в очередь" : "Посмотрел"}</Row>
@@ -673,7 +682,7 @@ function delClip(c) {
 // the media itself: a cover with a play button that turns into the real player, or the video/photo right away
 function Preview({ c, compact, autoplay, onOpen, fit }) {
   const [play, setPlay] = useState(!!autoplay);
-  const [broken, setBroken] = useState(false);
+  const [broken, setBroken] = useState(""); // the picture link that failed (a fresh one from the server shows again)
   const [xEmbed, setXEmbed] = useState(false);
   const photoUrl = usePhotoUrl(c.photo?.path);
   const ratio = c.vertical ? 9 / 16 : c.w && c.h ? Math.max(0.5, Math.min(2.2, c.w / c.h)) : 16 / 9;
@@ -719,13 +728,13 @@ function Preview({ c, compact, autoplay, onOpen, fit }) {
       </div>
     );
   }
-  const thumb = !broken && (c.thumb || (c.provider === "youtube" ? `https://i.ytimg.com/vi/${c.vid}/hqdefault.jpg` : ""));
+  const thumb = broken !== (c.thumb || "-") && (c.thumb || (c.provider === "youtube" ? `https://i.ytimg.com/vi/${c.vid}/hqdefault.jpg` : ""));
   if (!thumb && !embed) return null;
   return (
     <button type="button" onClick={e => { e.stopPropagation(); if (onOpen) return onOpen(); if (embed) setPlay(true); else if (c.url) window.open(c.url, "_blank", "noopener"); }}
       className={cn(box, "group/p block", fit && thumb && "!absolute inset-0 size-full bg-transparent")} style={fit && thumb ? undefined : sz(thumb ? ratio : 16 / 9)} aria-label={embed ? "Смотреть" : "Открыть"}>
       {thumb ? <img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className={cn("absolute inset-0 size-full transition-transform duration-500", fit ? "object-contain" : "object-cover group-hover/p:scale-105")}
-        onError={() => { setBroken(true); if (c.url && c.provider !== "youtube") refresh(c.id, c.url); }} />
+        onError={() => { setBroken(c.thumb || "-"); if (c.url && c.provider !== "youtube") refresh(c.id, c.url); }} />
         : <div className="absolute inset-0 grid place-items-center" style={{ background: `linear-gradient(135deg, ${PROVIDER[c.provider]?.color}55, transparent)` }}><Brand p={c.provider} size={36} /></div>}
       {embed && (
         <span className="absolute inset-0 grid place-items-center bg-black/10 transition-colors group-hover/p:bg-black/25">
@@ -877,6 +886,8 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
                 {db.stashes.map(s => <option key={s.id} value={s.id}>{s.id === c.stash ? "Стэш: " : "→ "}{s.name || "Без названия"}</option>)}
               </select>
             )}
+            {c.url && <button type="button" onClick={() => refresh(c.id, c.url, true)} title="Заново скачать превью, название и описание" aria-label="Обновить превью"
+              className="grid size-9 place-items-center rounded-lg border text-muted-foreground hover:bg-accent hover:text-foreground"><RefreshCwIcon className={cn("size-4", c.loading && "animate-spin")} /></button>}
             {mediaCount(c) > 0 && <button type="button" onClick={() => saveCard(c)} title={mediaCount(c) > 1 ? "Скачать все картинки и видео" : "Скачать"}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"><DownloadIcon className="size-4" />{mediaCount(c) > 1 ? "Все " + mediaCount(c) : "Скачать"}</button>}
             <button type="button" onClick={async () => { if (await confirmAction({ title: "Удалить карточку?" })) { setOpen(null); delClip(c); } }}
