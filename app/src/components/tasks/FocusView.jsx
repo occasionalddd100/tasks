@@ -242,7 +242,7 @@ function Group({ id, title, icon: Icon, color, n, children, onAdd, withDate, add
   const adding = addingProp ?? addingOwn, setAdding = setAddingProp ?? setAddingOwn;
   const shown = open || adding;
   return (
-    <section className="shrink-0 overflow-hidden rounded-xl border border-border/70 bg-card/50">
+    <section className="shrink-0 overflow-hidden rounded-xl border border-border/70 bg-card/50 max-md:rounded-none max-md:border-0 max-md:bg-transparent">
       <div className="group/h flex h-10 items-center transition-colors hover:bg-accent/40">
         <button type="button" onClick={() => setOpen(!shown)} aria-expanded={shown} className="flex h-full min-w-0 flex-1 items-center gap-2.5 pl-3 text-left">
           <span className="grid size-6 shrink-0 place-items-center rounded-md" style={{ background: `color-mix(in oklab, transparent 84%, ${color})` }}><Icon className="size-3.5" style={{ color }} /></span>
@@ -257,7 +257,7 @@ function Group({ id, title, icon: Icon, color, n, children, onAdd, withDate, add
       </div>
       <AnimatePresence initial={false}>
         {shown && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden border-t border-border/50 px-1 py-1">
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden border-t border-border/50 px-1 py-1 max-md:border-0 max-md:px-0">
             {adding && <AddLine placeholder={"Новая задача в «" + title + "»"} withDate={withDate} onAdd={onAdd} onClose={() => setAdding(false)} />}
             {children}
           </motion.div>
