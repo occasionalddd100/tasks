@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "rm -rf ../assets && vite build"
+    "build": "vite build"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
