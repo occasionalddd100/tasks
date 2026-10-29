@@ -97,7 +97,7 @@ export default function FocusView() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={e => setDragId(e.active.id)} onDragCancel={() => setDragId(null)} onDragEnd={onDragEnd}>
-    <div className={cn(VIEW, "max-w-3xl")}>
+    <div className={cn(VIEW, "max-w-3xl max-md:px-2")}>
       {phone && slot && createPortal(<div className="flex items-center gap-1.5 [&_button]:h-8 [&_button]:text-xs">{actions}</div>, slot)}
       {!phone && <header className="flex items-center gap-2">
         <div className="flex-1"><TagMenu items={menu} title={shownTag ? tagName(shownTag) : "Задачи"} onPick={pick} /></div>
@@ -215,7 +215,7 @@ function WorkList({ list }) {
   const groups = WORK_GROUPS.map(g => ({ ...g, tasks: list.filter(t => groupOf(t, now, tomorrow) === g.k) })).filter(g => g.tasks.length || g.k === adding);
   const empty = WORK_GROUPS.filter(g => g.add && !groups.some(x => x.k === g.k));
   return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 max-md:gap-1">
         {groups.map(g => (
           <Group key={g.k} id={"work:" + g.k} title={g.l} icon={g.icon} color={g.c} n={g.tasks.length}
             onAdd={g.add} withDate={g.k === "planned"} adding={adding === g.k} setAdding={v => setAdding(v ? g.k : null)}>
@@ -274,7 +274,7 @@ function TagBunch({ id, tag, tasks }) {
   );
 }
 
-// one foldable block, the same look everywhere: coloured edge and tint, title, count, chevron (remembered per block)
+// one foldable block, the same look everywhere (on the phone: no frame, a thin line under it, a soft tint while open): coloured edge and tint, title, count, chevron (remembered per block)
 const FOLD = "folded";
 const loadFold = () => { try { return new Set(JSON.parse(localStorage.getItem(FOLD) || "[]")); } catch { return new Set(); } };
 function Group({ id, title, icon: Icon, color, n, children, onAdd, withDate, adding: addingProp, setAdding: setAddingProp }) {
@@ -284,7 +284,8 @@ function Group({ id, title, icon: Icon, color, n, children, onAdd, withDate, add
   const adding = addingProp ?? addingOwn, setAdding = setAddingProp ?? setAddingOwn;
   const shown = open || adding;
   return (
-    <section className="shrink-0 overflow-hidden rounded-xl border border-border/70 bg-card/50 max-md:rounded-none max-md:border-0 max-md:bg-transparent">
+    <section className={cn("shrink-0 overflow-hidden rounded-xl border border-border/70 bg-card/50 transition-colors max-md:rounded-none max-md:border-x-0 max-md:border-t-0 max-md:bg-transparent",
+      shown && "max-md:rounded-xl max-md:border-transparent max-md:bg-accent/50")}>
       <div className="group/h flex h-10 items-center transition-colors hover:bg-accent/40">
         <button type="button" onClick={() => setOpen(!shown)} aria-expanded={shown} className="flex h-full min-w-0 flex-1 items-center gap-2.5 pl-3 text-left">
           <span className="grid size-6 shrink-0 place-items-center rounded-md" style={{ background: `color-mix(in oklab, transparent 84%, ${color})` }}><Icon className="size-3.5" style={{ color }} /></span>
@@ -299,7 +300,7 @@ function Group({ id, title, icon: Icon, color, n, children, onAdd, withDate, add
       </div>
       <AnimatePresence initial={false}>
         {shown && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden border-t border-border/50 px-1 py-1 max-md:border-0 max-md:px-0">
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden border-t border-border/50 px-1 py-1 max-md:border-0 max-md:px-1">
             {adding && <AddLine placeholder={"Новая задача в «" + title + "»"} withDate={withDate} onAdd={onAdd} onClose={() => setAdding(false)} />}
             {children}
           </motion.div>

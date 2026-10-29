@@ -52,7 +52,8 @@ export default function MobileNav({ onMenu, onSearch, onAdd, diary, tasks, short
             onPointerUp={onHold ? () => clearTimeout(hold.current) : undefined} onPointerLeave={onHold ? () => clearTimeout(hold.current) : undefined}
             onContextMenu={onHold ? e => e.preventDefault() : undefined}
             className={cn("relative flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors", active ? "text-foreground" : "text-muted-foreground")}>
-            {active && <motion.span layoutId="navpill" className="absolute top-2 h-8 w-14 rounded-full bg-accent" transition={{ type: "spring", stiffness: 500, damping: 35 }} />}
+            {/* the pill grows in place under the icon (no sliding across the other buttons) */}
+            {active && <motion.span initial={{ opacity: 0, scaleX: 0.6 }} animate={{ opacity: 1, scaleX: 1 }} transition={{ duration: 0.18, ease: "easeOut" }} className="absolute top-2 h-8 w-16 rounded-full bg-accent" />}
             <span className="relative">
               <Icon className="size-5" />
               {badge > 0 && <span className="absolute -top-1.5 -right-2.5 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--ink)] px-1 text-[10px] font-bold text-white">{badge}</span>}
