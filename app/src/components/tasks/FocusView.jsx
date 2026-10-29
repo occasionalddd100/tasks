@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import * as Pop from "@radix-ui/react-popover";
 import { useDb, update, add } from "@/lib/db";
 import { openList, toBucket } from "@/lib/focus";
+import { timeOf } from "@/lib/reminders";
 import { exText, exAt } from "@/lib/done";
 import Bucket from "@/components/tasks/Bucket";
 import { tagsOf, tagOfTask } from "@/lib/tags";
@@ -103,6 +104,8 @@ export default function FocusView() {
         {actions}
       </header>}
 
+      {!shownTag && <NextUp />}
+
       {shownTag
         ? <TagList cat={shownTag === NONE ? drafts?.id : shownTag} tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
         : <section className="flex flex-col gap-1">
@@ -122,6 +125,45 @@ export default function FocusView() {
       </DragOverlay>
     </div>
     </DndContext>
+  );
+}
+
+// what is next by the clock: time left to the nearest timed task, and the two after it. One thin line;
+// ✕ hides it until another task becomes the nearest one
+function NextUp() {
+  const db = useDb();
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const i = setInterval(() => setTick(x => x + 1), 30e3); return () => clearInterval(i); }, []);
+  const [hidden, setHiddenRaw] = useState(() => { try { return localStorage.getItem("nextUpHidden") || ""; } catch { return ""; } });
+  const hide = k => { setHiddenRaw(k); try { localStorage.setItem("nextUpHidden", k); } catch {} };
+  const now = Date.now(), day = today();
+  const next = useMemo(() => openList(db).map(t => {
+    const time = timeOf(t); if (!time) return null;
+    const at = new Date((t.due || day) + "T" + time).getTime();
+    return at > now - 15 * 60e3 && at < now + 2 * 864e5 ? { t, at, time } : null;
+  }).filter(Boolean).sort((a, b) => a.at - b.at).slice(0, 3), [db.tasks, tick, day]);
+  if (!next.length) return null;
+  const first = next[0], key = first.t.id + "@" + first.at;
+  if (hidden === key) return null;
+  const left = ms => {
+    if (ms <= 0) return "сейчас";
+    const m = Math.round(ms / 60e3), h = Math.floor(m / 60);
+    return "через " + (h ? h + " ч" + (m % 60 ? " " + (m % 60) + " мин" : "") : m + " мин");
+  };
+  return (
+    <div className="flex h-9 items-center gap-2 rounded-full bg-violet-500/10 pr-1 pl-3 text-sm">
+      <AlarmClockIcon className="size-4 shrink-0 text-violet-500" />
+      <button type="button" onClick={() => openTask(first.t.id)} className="flex min-w-0 flex-1 items-baseline gap-1.5 text-left">
+        <span className="shrink-0 font-semibold tabular-nums">{left(first.at - now)}</span>
+        <span className="min-w-0 truncate text-muted-foreground">{first.t.text}</span>
+      </button>
+      {next.slice(1).map(x => (
+        <button key={x.t.id} type="button" onClick={() => openTask(x.t.id)} title={x.t.text}
+          className="shrink-0 rounded-full bg-background/60 px-2 py-0.5 text-xs text-muted-foreground tabular-nums max-sm:last:hidden">{x.at - now > 864e5 - 0 && x.t.due !== day ? dueLabel(x.t.due) + " " : ""}{x.time}</button>
+      ))}
+      <button type="button" onClick={() => hide(key)} aria-label="Скрыть" title="Скрыть до следующей задачи"
+        className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-background/60"><XIcon className="size-3.5" /></button>
+    </div>
   );
 }
 

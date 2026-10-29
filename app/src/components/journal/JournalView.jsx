@@ -93,10 +93,10 @@ export default function JournalView({ mode = "timeline" }) {
         style={{ filter: "blur(64px)", WebkitFilter: "blur(64px)" }} animate={{ backgroundColor: todayMood?.color || "#64748b", opacity: todayMood ? 0.18 : 0.08 }} transition={{ duration: 0.8 }} />
       {desk ? <>
         {/* computer: one screen. The day's feed in the middle, and on the side the calendar, today's hours (as on the phone) and the streak */}
-        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Таймлайн</h1>
+        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Дневник</h1>
         <PillTabs>{TABS.filter(x => x.k !== "days").map(({ k, label, icon: Icon }) => <PillTab key={k} on={shownTab === k} onClick={() => setTab(k)}><Icon className="size-4" />{label}</PillTab>)}</PillTabs>
         {shownTab === "stats" ? <Stats info={info} items={items} mine={mine} streak={streak} />
-          : <DiaryDesk info={info} onPick={pick} burst={bursts.fire} side={<DayTimeline vertical />} />}
+          : <DiaryDesk info={info} onPick={pick} burst={bursts.fire} />}
       </> : mode === "timeline" ? <>
         <h1 className="text-3xl font-bold tracking-tight max-md:hidden md:text-4xl">Таймлайн</h1>
         <DayTimeline />

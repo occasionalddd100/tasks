@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { freshReload } from "@/lib/reload";
-import { ArrowLeftIcon, BookOpenIcon, HashIcon, CrosshairIcon, GanttChartIcon, ListTodoIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, RotateCwIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { ArrowLeftIcon, BookOpenIcon, HashIcon, CrosshairIcon, ListTodoIcon, FileTextIcon, FolderPlusIcon, InboxIcon, LayoutGridIcon, ListChecksIcon, UserRoundIcon, SettingsIcon, LogOutIcon, MenuIcon, RotateCwIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { sb, useDb } from "@/lib/db";
 import { newNote, newFolder, newProject, newStash } from "@/lib/notes";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,7 @@ import { ItemIcon } from "@/components/IconPicker";
 import { PinOffIcon } from "lucide-react";
 import { ProjectView } from "@/components/tasks/ProjectViews";
 import FocusView from "@/components/tasks/FocusView";
-import { focusOpen } from "@/lib/focus";
+import { nowList } from "@/lib/focus";
 import JournalView from "@/components/journal/JournalView";
 import { QuickAddHost, openQuickAdd } from "@/components/tasks/QuickAdd";
 import { TaskSheetHost } from "@/components/tasks/TaskSheet";
@@ -67,7 +67,7 @@ const Loading = () => <div className="flex flex-1 items-center justify-center p-
 const readHash = () => {
   const m = location.hash.match(/^#(note|project|stash)=([\w-]+)/);
   if (m) return { [m[1]]: m[2] };
-  if (location.hash === "#journal") return { journal: true };
+  if (location.hash === "#journal") return { focus: true }; // the timeline is gone: its old links open the tasks
   if (location.hash === "#focus") return { focus: true };
   if (location.hash === "#zen") return { focus: true, zen: true };
   if (location.hash === "#personal") return { personal: true };
@@ -122,7 +122,7 @@ export default function Shell() {
 
   const go = v => {
     setMenu(false);
-    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : v.zen ? "#zen" : v.focus ? "#focus" : v.personal ? "#personal" : v.diary ? "#diary" : "#journal";
+    const hash = v.note ? "#note=" + v.note : v.project ? "#project=" + v.project : v.stash ? "#stash=" + v.stash : v.zen ? "#zen" : v.focus ? "#focus" : v.personal ? "#personal" : v.diary ? "#diary" : "#focus";
     if (location.hash !== hash) { history.pushState(null, "", hash || location.pathname + location.search); navDepth.current++; }
     setView(v);
   };
@@ -133,11 +133,10 @@ export default function Shell() {
   const personal = !!project && project === mine?.id;
   const stash = view.stash || null;
   const shown = view.note ? db.notes.find(n => n.id === view.note) : project ? db.projects.find(b => b.id === project) : stash ? db.stashes.find(b => b.id === stash) : null;
-  const focus = !view.note && !project && !stash && !!view.focus;
-  const diary = !view.note && !project && !stash && !focus && !!view.diary;
-  const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : focus ? "Задачи" : diary ? "Дневник" : "Таймлайн";
-  const journal = !view.note && !project && !stash && !focus && !diary;
-  const sidebar = <Sidebar view={{ ...view, project, focus, personal, journal, diary }} go={go} email={db.email} search={menu === "search"} />;
+  const diary = !view.note && !project && !stash && !!view.diary;
+  const focus = !view.note && !project && !stash && !diary;
+  const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : focus ? "Задачи" : "Дневник";
+  const sidebar = <Sidebar view={{ ...view, project, focus, personal, diary }} go={go} email={db.email} search={menu === "search"} />;
 
   return (
     <MotionConfig reducedMotion={look.motion === "off" ? "always" : "user"}>
@@ -160,20 +159,19 @@ export default function Shell() {
             onClick={() => { if (db.pending > 0 && !confirm("Есть неотправленные изменения, они могут потеряться. Всё равно обновить?")) return; freshReload("manual" + Date.now()); }}><RotateCwIcon /></Button>
         </div>
         {db.error && <p className="m-4 rounded-md border border-destructive/40 p-3 text-sm text-destructive">Нет связи с базой: {db.error}. Обнови страницу.</p>}
-        <motion.div key={view.note || project || stash || (focus ? "focus" : diary ? "diary" : "journal")} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+        <motion.div key={view.note || project || stash || (focus ? "focus" : "diary")} className="flex flex-1 flex-col" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
           {view.note
             ? <NoteGuard key={view.note}><Suspense fallback={<Loading />}><NoteView id={view.note} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
             : project ? <ProjectView id={project} fresh={view.fresh} go={go} />
             : stash ? <NoteGuard key={stash}><Suspense fallback={<Loading />}><StashView id={stash} fresh={view.fresh} go={go} /></Suspense></NoteGuard>
             : view.personal && !mine ? <Loading />
             : focus ? <FocusView go={go} />
-            : <JournalView mode={diary ? "diary" : "timeline"} />}
+            : <JournalView mode="diary" />}
         </motion.div>
       </main>
       <MobileNav onMenu={() => setMenu("menu")} onSearch={() => setMenu("search")} onAdd={() => openQuickAdd()}
-        journal={{ onClick: () => go({ journal: true }), active: journal }}
         diary={{ onClick: () => go({ diary: true }), active: diary }}
-        tasks={{ onClick: () => go({ focus: true }), active: focus, badge: focusOpen(db) }} />
+        tasks={{ onClick: () => go({ focus: true }), active: focus, badge: nowList(db).length }} />
       <TagWheelHost />
       <TagEditorHost />
       <Celebrate />
@@ -213,9 +211,8 @@ function Sidebar({ view, go, email, search }) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="p-2">
         {[
-          { k: "focus", label: "Задачи", icon: ListTodoIcon, n: focusOpen(db), on: view.focus },
-          { k: "journal", label: "Таймлайн", icon: GanttChartIcon, on: view.journal },
-          { k: "diary", label: "Дневник", icon: BookOpenIcon, on: view.diary, cls: "lg:hidden" }, // on a computer the diary lives inside «Таймлайн»
+          { k: "focus", label: "Задачи", icon: ListTodoIcon, n: nowList(db).length, on: focus },
+          { k: "diary", label: "Дневник", icon: BookOpenIcon, on: view.diary },
         ].map(({ k, label, icon: Icon, n, on, run, cls }) => (
           <button key={k} type="button" onClick={() => (run ? run() : go({ [k]: true }))}
             className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", on && "bg-accent", cls)}>

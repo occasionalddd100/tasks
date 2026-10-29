@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { motion } from "motion/react";
-import { GanttChartIcon, ListTodoIcon, MenuIcon, NotebookPenIcon, PlusIcon } from "lucide-react";
+import { ListTodoIcon, MenuIcon, NotebookPenIcon, PlusIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // phone bottom bar shared by every view: a view puts its own buttons there with useNavItems,
@@ -20,18 +20,17 @@ export function useTasksTap(fn) {
   useEffect(() => { again = fn; againSubs.forEach(f => f()); return () => { again = null; againSubs.forEach(f => f()); }; });
 }
 
-// the default bar: Таймлайн · Дневник · ＋ (new task) · Задачи · Меню
-export default function MobileNav({ onMenu, onSearch, onAdd, journal, diary, tasks }) {
+// the default bar: Дневник · ＋ (new task) · Задачи · Меню
+export default function MobileNav({ onMenu, onSearch, onAdd, diary, tasks }) {
   const own = useSyncExternalStore(f => (subs.add(f), () => subs.delete(f)), () => items);
   const tap = useSyncExternalStore(f => (againSubs.add(f), () => againSubs.delete(f)), () => again);
   const list = own || [
-    { k: "journal", label: "Таймлайн", icon: GanttChartIcon, ...journal },
     { k: "diary", label: "Дневник", icon: NotebookPenIcon, ...diary },
     { k: "add", label: "Добавить", icon: PlusIcon, onClick: onAdd, accent: true },
     { k: "tasks", label: "Задачи", icon: ListTodoIcon, ...tasks, onClick: tasks?.active && tap ? tap : tasks?.onClick },
   ];
-  // views may list "journal" / "search" without a handler: those go to the shell
-  const builtin = { journal: journal?.onClick, search: onSearch, add: onAdd };
+  // views may list "journal" / "search" without a handler: those go to the shell (the journal is the diary now)
+  const builtin = { journal: diary?.onClick, search: onSearch, add: onAdd };
   const all = [...list.map(x => x.onClick ? x : { ...x, onClick: builtin[x.k] }), { k: "menu", label: "Меню", icon: MenuIcon, onClick: onMenu }];
   return (
     <nav style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
