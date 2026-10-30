@@ -97,7 +97,7 @@ export default function FocusView() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={e => setDragId(e.active.id)} onDragCancel={() => setDragId(null)} onDragEnd={onDragEnd}>
-    <div className={cn(VIEW, "max-w-3xl max-md:px-2")}>
+    <div className={cn(VIEW, "max-w-3xl max-md:px-2 lg:max-w-[1600px]")}>
       {phone && slot && createPortal(<div className="flex items-center gap-1.5 [&_button]:h-8 [&_button]:text-xs">{actions}</div>, slot)}
       {!phone && <header className="flex items-center gap-2">
         <div className="flex-1"><TagMenu items={menu} title={shownTag ? tagName(shownTag) : "Задачи"} onPick={pick} /></div>
@@ -148,6 +148,7 @@ function NextUp() {
   const left = ms => {
     if (ms <= 0) return "сейчас";
     const m = Math.round(ms / 60e3), h = Math.floor(m / 60);
+    if (h >= 24) return "через " + Math.floor(h / 24) + " д" + (h % 24 ? " " + (h % 24) + " ч" : "");
     return "через " + (h ? h + " ч" + (m % 60 ? " " + (m % 60) + " мин" : "") : m + " мин");
   };
   return (
@@ -200,11 +201,13 @@ function TagMenu({ items, title, onPick }) {
 function WorkList({ list }) {
   const db = useDb();
   // two or more tasks of one tag in a group fold together under the tag, where the first of them stood
+  // computer: every tag is its own column (untagged ones too), so a group spreads sideways
+  const wide = useMedia("(min-width: 1024px)");
   const bunch = tasks => {
     const out = [], at = new Map();
     for (const t of tasks) {
-      const tag = tagOfTask(db, t);
-      if (!tag || tasks.filter(x => tagOfTask(db, x)?.id === tag.id).length < 2) { out.push({ tasks: [t] }); continue; }
+      const tag = tagOfTask(db, t) || (wide ? NO_TAG : null);
+      if (!tag || (!wide && tasks.filter(x => tagOfTask(db, x)?.id === tag.id).length < 2)) { out.push({ tasks: [t] }); continue; }
       if (!at.has(tag.id)) { at.set(tag.id, out.length); out.push({ tag, tasks: [] }); }
       out[at.get(tag.id)].tasks.push(t);
     }
@@ -219,7 +222,9 @@ function WorkList({ list }) {
         {groups.map(g => (
           <Group key={g.k} id={"work:" + g.k} title={g.l} icon={g.icon} color={g.c} n={g.tasks.length}
             onAdd={g.add} withDate={g.k === "planned"} adding={adding === g.k} setAdding={v => setAdding(v ? g.k : null)}>
-            <ul>{bunch(g.tasks).map(b => b.tag ? <TagBunch key={b.tag.id} id={g.k + ":" + b.tag.id} tag={b.tag} tasks={b.tasks} /> : <WorkItem key={b.tasks[0].id} t={b.tasks[0]} />)}</ul>
+            <ul className={cn(wide && "grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] items-start gap-2 p-1")}>
+              {bunch(g.tasks).map(b => b.tag ? <TagBunch key={b.tag.id} id={g.k + ":" + b.tag.id} tag={b.tag} tasks={b.tasks} column={wide} /> : <WorkItem key={b.tasks[0].id} t={b.tasks[0]} />)}
+            </ul>
           </Group>
         ))}
         {/* groups with nothing in them yet: one quiet row of ＋ to start one */}
@@ -258,18 +263,19 @@ export function groupOf(t, now, tomorrow) {
 }
 
 // tasks of one tag inside a group: a row with the tag and count that folds them (remembered per group and tag)
-function TagBunch({ id, tag, tasks }) {
+const NO_TAG = { id: "\u0000none", name: "Без тега" };
+function TagBunch({ id, tag, tasks, column }) {
   const [open, setOpenRaw] = useState(() => !loadFold().has("bunch:" + id));
   const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); v ? f.delete("bunch:" + id) : f.add("bunch:" + id); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
   return (
-    <li>
+    <li className={cn(column && "min-w-0 rounded-lg border border-border/60 bg-background/40 p-1")}>
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}
         className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-left text-sm text-muted-foreground hover:bg-accent/50">
         <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />
-        <TagMark t={tag} /><span className="font-medium text-foreground">{tag.name}</span>
+        {tag === NO_TAG ? <InboxIcon className="size-3.5" /> : <TagMark t={tag} />}<span className="truncate font-medium text-foreground">{tag.name}</span>
         <span className="text-xs tabular-nums">{tasks.length}</span>
       </button>
-      {open && <ul className="ml-3 border-l pl-1">{tasks.map(t => <WorkItem key={t.id} t={t} />)}</ul>}
+      {open && <ul className={column ? "" : "ml-3 border-l pl-1"}>{tasks.map(t => <WorkItem key={t.id} t={t} noTag={column} />)}</ul>}
     </li>
   );
 }
@@ -330,7 +336,7 @@ function AddLine({ placeholder, onAdd, onClose, withDate, className }) {
   );
 }
 
-function WorkItem({ t }) {
+function WorkItem({ t, noTag }) {
   const db = useDb();
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);
   const tag = tagOfTask(db, t), cat = db.cats.find(c => c.id === t.cat), board = db.boards.find(b => b.id === cat?.board);
@@ -344,7 +350,7 @@ function WorkItem({ t }) {
       {tag && <span className="absolute inset-y-2.5 left-0.5 w-[3px] rounded-full opacity-80" style={{ background: tag.color }} />}
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
         <div className="group/w relative">
-          <TaskRow t={t} onAddSub={() => setSub(true)} sub={name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={t.done ? undefined : { ref: setActivatorNodeRef, ...attributes, ...listeners }} />
+          <TaskRow t={t} onAddSub={() => setSub(true)} sub={!noTag && name && (tag?.emoji ? tag.emoji + " " : "#") + name} grip={t.done ? undefined : { ref: setActivatorNodeRef, ...attributes, ...listeners }} />
           {!t.done && <div className="absolute top-1/2 right-11 flex -translate-y-1/2 gap-0.5 rounded-md bg-background/80 opacity-0 transition-opacity group-hover/w:opacity-100 focus-within:opacity-100 max-md:hidden">
             <PrioBtn t={t} />
             <button type="button" onClick={() => setSub(true)} title="Добавить подзадачу" aria-label={"Подзадача к: " + t.text}
