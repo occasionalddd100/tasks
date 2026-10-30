@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as Pop from "@radix-ui/react-popover";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useDragControls } from "motion/react";
 import {
   ClipboardPasteIcon, CheckIcon, DownloadIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, ImageIcon, LinkIcon, Loader2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, PlusIcon,
   SearchIcon, StickyNoteIcon, ArrowUpIcon, ChevronUpIcon, TagIcon, Trash2Icon, XIcon, LayoutGridIcon, ArrowRightLeftIcon, FileTextIcon,
@@ -20,7 +20,7 @@ import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh, needs
 import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
 import { PaletteIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PicsEditor, PicImg, Carousel, PicsOverlay, own as ownPic, saveCard, mediaCount } from "@/components/stash/Pics";
+import { PicsEditor, PicImg, Carousel, PicsOverlay, own as ownPic, saveCard, mediaCount, viewPics, gallery, isViewerOpen } from "@/components/stash/Pics";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ActionsDropdown, ActionsContext } from "@/components/ui/actions";
 import { confirmAction } from "@/components/Confirm";
@@ -583,7 +583,9 @@ function ClipTags({ c, allTags }) {
         {shown.map(t => (
           <ActionsContext key={t} items={tagActions(t, getDb().clips.filter(x => x.stash === c.stash), tagEditor)}>
           <button type="button" onClick={() => toggle(t)} aria-pressed={tags.includes(t)}
-            style={hue(t)} className={cn("tag inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition-colors", tags.includes(t) ? "on" : "opacity-70 hover:opacity-100")}>#{t}</button>
+            style={hue(t)} className={cn("tag inline-flex h-8 items-center gap-1 rounded-full px-3 text-[13px] font-medium transition-colors",
+              tags.includes(t) ? "on shadow-sm" : "border border-dashed border-current/50 bg-transparent! opacity-60 hover:opacity-100")}>
+            {tags.includes(t) ? <CheckIcon className="size-3.5" strokeWidth={3} /> : <PlusIcon className="size-3" />}{t}</button>
           </ActionsContext>
         ))}
       </div>
@@ -809,30 +811,48 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
   const db = useDb();
   const c = db.clips.find(x => x.id === id);
   const [noteOpen, setNoteOpen] = useState(false);
-  useEffect(() => { setNoteOpen(!!c?.note); }, [id]);
+  // phone: the picture takes the screen, the rest is a sheet pulled up from the bottom (down: browse the pictures, up: work with the card)
+  const [phone] = useState(() => matchMedia("(max-width: 767px)").matches);
+  const [up, setUp] = useState(false);
+  const drag = useDragControls();
+  useEffect(() => { setNoteOpen(!!c?.note); setUp(false); }, [id]);
   if (!c) return <Dialog open={false} onOpenChange={() => setOpen(null)} />;
   const save = f => update("clips", c.id, f);
   const media = (c.provider !== "note" && c.provider !== "link") || !!c.thumb || c.pics?.length > 0;
   const own = (c.provider !== "note" && c.provider !== "link") || !!c.thumb;
   const mediaRatio = c.vertical ? 9 / 16 : c.w && c.h ? Math.max(0.5, Math.min(2.2, c.w / c.h)) : 16 / 9;
+  const sheet = phone && media;
+  const PEEK = 136, low = Math.max(0, innerHeight * 0.88 - PEEK); // how far the sheet sits down when it is lowered
+  // a tap on a picture opens it full screen (the video slide plays in place)
+  const cover = (c.pics || []).filter(p => p.path === c.cover), rest = (c.pics || []).filter(p => p.path !== c.cover);
+  const paths = [...cover.map(p => p.path), ...(own ? [ownPic(c)[0]?.path ?? null] : []), ...rest.map(p => p.path)];
+  const zoom = path => { const k = gallery(c).findIndex(g => g.path === path); if (path && k >= 0) viewPics(c, k); };
+  // the full-screen viewer lives outside the dialog: touching it must not close the card
+  const keep = e => { if (isViewerOpen()) e.preventDefault(); };
 
   return (
     <Dialog open={!!id} onOpenChange={o => !o && setOpen(null)}>
-      <DialogContent onOpenAutoFocus={e => e.preventDefault()} className={cn("thin-scroll overscroll-contain outline-none focus:outline-none focus-visible:ring-0 max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[var(--sab)]",
-        media && "md:h-[88dvh] md:max-w-[min(92vw,80rem)] md:grid-cols-[minmax(0,1fr)_24rem] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden")}>
+      <DialogContent onOpenAutoFocus={e => e.preventDefault()} onPointerDownOutside={keep} onInteractOutside={keep} onFocusOutside={keep} onEscapeKeyDown={keep}
+        className={cn("thin-scroll overscroll-contain outline-none focus:outline-none focus-visible:ring-0 max-h-[94dvh] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto p-0 sm:max-w-3xl max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-none max-sm:rounded-t-2xl max-sm:pb-[var(--sab)]",
+        media && "md:h-[88dvh] md:max-w-[min(92vw,80rem)] md:grid-cols-[minmax(0,1fr)_24rem] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden",
+        sheet && "h-dvh max-h-dvh overflow-hidden rounded-none bg-black max-sm:rounded-none max-sm:pb-0")}>
         <DialogTitle className="sr-only">{c.title || "Карточка"}</DialogTitle>
         {/* computer: the picture on the left at full height, everything else in a column on the right; phone: picture capped so the rest is in reach */}
-        {media && <div className="relative flex h-[var(--mh)] items-center justify-center overflow-hidden bg-black/90 [container-type:size] max-md:rounded-t-2xl md:h-full md:rounded-l-lg"
-          style={{ "--mh": `min(48dvh, ${100 / mediaRatio}vw)` }}>
+        {media && <div className={cn("relative flex h-[var(--mh)] items-center justify-center overflow-hidden bg-black/90 [container-type:size] max-md:rounded-t-2xl md:h-full md:rounded-l-lg",
+            sheet && "absolute inset-x-0 top-0 pt-[var(--sat)] max-md:rounded-none")}
+          style={{ "--mh": sheet ? `calc(100dvh - ${PEEK}px)` : `min(48dvh, ${100 / mediaRatio}vw)` }}>
           {c.pics?.length > 0
-            ? <Carousel keys className="size-full" slideClass="flex items-center justify-center [container-type:size]"
+            ? <Carousel keys className="size-full" slideClass="flex items-center justify-center [container-type:size]" onTap={k => zoom(paths[k])}
                 slides={[
                   ...c.pics.filter(p => p.path === c.cover).map(p => <PicImg key={p.path} p={p} fit />), // the chosen cover comes first
                   ...(own ? [<Preview key="m" c={c} autoplay={false} fit />] : []),
                   ...c.pics.filter(p => p.path !== c.cover).map(p => <PicImg key={p.path} p={p} fit />)]} />
-            : <Preview key={c.id} c={c} autoplay={c.provider !== "x"} fit />}
+            : <div className="contents" onClick={() => own && zoom(ownPic(c)[0]?.path)}><Preview key={c.id} c={c} autoplay={c.provider !== "x"} fit /></div>}
+          {sheet && <button type="button" onClick={() => setOpen(null)} aria-label="Закрыть"
+            className="absolute top-[calc(var(--sat)+0.5rem)] left-2 grid size-9 place-items-center rounded-full bg-black/50 text-white"><XIcon className="size-5" /></button>}
         </div>}
-        <div className="thin-scroll flex min-h-0 flex-col gap-4 p-5 md:overflow-y-auto">
+        <Sheet on={sheet} up={up} setUp={setUp} low={low} drag={drag}>
+        <div className={cn("thin-scroll flex min-h-0 flex-col gap-4 p-5 md:overflow-y-auto", sheet && "flex-1 pt-1", sheet && (up ? "overflow-y-auto" : "overflow-hidden"))}>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Brand p={c.provider} /><span className="truncate">{c.author ? "@" + c.author.replace(/^@/, "") : c.host || PROVIDER[c.provider]?.name}</span>
             {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex shrink-0 items-center gap-1 hover:text-foreground">оригинал<ExternalLinkIcon className="size-3.5" /></a>}
@@ -894,8 +914,26 @@ function ClipDialog({ id, setOpen, tabs, allTags, moveTo }) {
               className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-destructive hover:bg-destructive/10"><Trash2Icon className="size-4" />Удалить</button>
           </div>
         </div>
+        </Sheet>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// phone: the card's details in a sheet over the picture; drag the grip (or tap it) to lower or raise it
+function Sheet({ on, up, setUp, low, drag, children }) {
+  if (!on) return children;
+  return (
+    <motion.div className="absolute inset-x-0 bottom-0 flex h-[88dvh] flex-col rounded-t-2xl border-t bg-background pb-[var(--sab)] shadow-[0_-8px_30px_rgba(0,0,0,.35)]"
+      initial={false} animate={{ y: up ? 0 : low }} transition={{ type: "spring", bounce: 0.1, duration: 0.35 }}
+      drag="y" dragListener={false} dragControls={drag} dragConstraints={{ top: 0, bottom: low }} dragElastic={0.08} dragMomentum={false}
+      onDragEnd={(e, i) => setUp(i.velocity.y < -300 || (i.velocity.y < 300 && i.offset.y < -40) ? true : i.velocity.y > 300 || i.offset.y > 40 ? false : up)}>
+      <button type="button" onPointerDown={e => drag.start(e)} onClick={() => setUp(!up)} aria-label={up ? "Опустить" : "Поднять"}
+        className="flex h-7 w-full shrink-0 touch-none items-center justify-center">
+        <span className="h-1.5 w-10 rounded-full bg-muted-foreground/40" />
+      </button>
+      {children}
+    </motion.div>
   );
 }
 

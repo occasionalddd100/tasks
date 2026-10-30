@@ -25,6 +25,7 @@ export const saveCard = async c => saveMedia([
 
 // the viewer is mounted once in the shell; anything can open it with a list of pictures ({ path } in storage, or { src })
 let openViewer = () => {}, viewerOpen = false;
+export const isViewerOpen = () => viewerOpen;
 // the viewer shows the chosen cover first; `at` is an index in gallery(c)
 const coverFirst = c => { const g = gallery(c), k = g.findIndex(p => p.path === c.cover); return k > 0 ? [g[k], ...g.slice(0, k), ...g.slice(k + 1)] : g; };
 export const viewPics = (c, at = 0) => { const g = gallery(c), list = coverFirst(c); openViewer({ list, at: Math.max(0, list.indexOf(g[at])) }); };
@@ -217,7 +218,7 @@ export function PicsViewer() {
     <AnimatePresence>
       {st && list.length > 0 && (
         <motion.div key="v" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}
-          className="fixed inset-0 z-[100] flex flex-col bg-black/92" style={{ backdropFilter: "blur(6px)" }}>
+          className="fixed inset-0 z-[100] flex flex-col bg-black/92" style={{ backdropFilter: "blur(6px)", pointerEvents: "auto" /* over an open card, whose dialog turns pointer events off outside it */ }}>
           <div className="flex items-center gap-1 p-3 pt-[calc(0.75rem+var(--sat))] text-sm text-white/80" onClick={e => e.stopPropagation()}>
             <span className="tabular-nums">{at + 1} / {list.length}</span>
             <span className="ml-auto" />
@@ -230,7 +231,7 @@ export function PicsViewer() {
                 initial={{ x: dir * 300, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -dir * 300, opacity: 0 }} transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
                 drag={list.length > 1 ? "x" : false} dragConstraints={{ left: 0, right: 0 }} dragElastic={0.6}
                 onDragEnd={(e, i) => { if (i.offset.x < -60 || i.velocity.x < -400) go(1); else if (i.offset.x > 60 || i.velocity.x > 400) go(-1); }}
-                onClick={e => e.stopPropagation()}>
+                onClick={e => e.stopPropagation()} style={{ touchAction: "none" }}>
                 <Slide p={list[at]} />
               </motion.div>
             </AnimatePresence>
