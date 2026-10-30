@@ -222,7 +222,7 @@ function WorkList({ list }) {
         {groups.map(g => (
           <Group key={g.k} id={"work:" + g.k} title={g.l} icon={g.icon} color={g.c} n={g.tasks.length}
             onAdd={g.add} withDate={g.k === "planned"} adding={adding === g.k} setAdding={v => setAdding(v ? g.k : null)}>
-            <ul className={cn(wide && "grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] items-start gap-2 p-1")}>
+            <ul className={cn(wide && "grid grid-flow-row-dense grid-cols-[repeat(auto-fit,minmax(17rem,1fr))] gap-2 p-1")}>
               {bunch(g.tasks).map(b => b.tag ? <TagBunch key={b.tag.id} id={g.k + ":" + b.tag.id} tag={b.tag} tasks={b.tasks} column={wide} /> : <WorkItem key={b.tasks[0].id} t={b.tasks[0]} />)}
             </ul>
           </Group>
@@ -268,14 +268,17 @@ function TagBunch({ id, tag, tasks, column }) {
   const [open, setOpenRaw] = useState(() => !loadFold().has("bunch:" + id));
   const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); v ? f.delete("bunch:" + id) : f.add("bunch:" + id); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
   return (
-    <li className={cn(column && "min-w-0 rounded-lg border border-border/60 bg-background/40 p-1")}>
+    // computer: a card tinted with the tag's colour; the cards of a row stretch to one height and fill the width,
+    // a big tag takes two columns and lays its tasks out in two
+    <li className={cn(column && "min-w-0 rounded-lg border p-1", column && tasks.length >= 4 && "col-span-2")}
+      style={column && tag.color ? { background: `color-mix(in oklab, var(--card) 92%, ${tag.color})`, borderColor: `color-mix(in oklab, var(--border) 60%, ${tag.color})` } : undefined}>
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}
         className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-left text-sm text-muted-foreground hover:bg-accent/50">
         <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />
         {tag === NO_TAG ? <InboxIcon className="size-3.5" /> : <TagMark t={tag} />}<span className="truncate font-medium text-foreground">{tag.name}</span>
         <span className="text-xs tabular-nums">{tasks.length}</span>
       </button>
-      {open && <ul className={column ? "" : "ml-3 border-l pl-1"}>{tasks.map(t => <WorkItem key={t.id} t={t} noTag={column} />)}</ul>}
+      {open && <ul className={column ? (tasks.length >= 4 ? "columns-2 gap-2 [&>li]:break-inside-avoid" : "") : "ml-3 border-l pl-1"}>{tasks.map(t => <WorkItem key={t.id} t={t} noTag={column} />)}</ul>}
     </li>
   );
 }
