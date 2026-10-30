@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { DatabaseIcon, HardDriveIcon, Loader2Icon, MonitorIcon, MoonIcon, PaletteIcon, RefreshCwIcon, SunIcon, Trash2Icon } from "lucide-react";
+import { DatabaseIcon, HardDriveIcon, Loader2Icon, MonitorIcon, MoonIcon, PaletteIcon, RefreshCwIcon, SparklesIcon, SunIcon, Trash2Icon } from "lucide-react";
+import { openTour } from "@/components/Tour";
 import { toast } from "sonner";
 import { rpc, useDb } from "@/lib/db";
 import { ACCENTS, setAppearance, useAppearance } from "@/lib/appearance";
@@ -75,6 +76,10 @@ function Look() {
       <Row label="Размер текста"><Seg value={a.scale} onChange={scale => setAppearance({ scale })} options={[[90, "Мельче"], [100, "Обычный"], [110, "Крупнее"], [120, "Крупный"]]} /></Row>
       <Row label="Ширина боковой панели" hint="На компьютере"><Seg value={a.sidebar} onChange={sidebar => setAppearance({ sidebar })} options={[["narrow", "Узкая"], ["normal", "Обычная"], ["wide", "Широкая"]]} /></Row>
       <Row label="Анимации" hint="Влетающие карточки, переходы, конфетти"><Seg value={a.motion} onChange={motion => setAppearance({ motion })} options={[["on", "Включены"], ["off", "Выключены"]]} /></Row>
+      <Row label="Обучение" hint="Короткий обзор: задачи, круговое меню, стэши, фокус и дневник">
+        <button type="button" onClick={() => { close(); setTimeout(openTour, 200); }}
+          className="inline-flex h-9 items-center gap-1.5 self-start rounded-lg border px-3 text-sm font-medium hover:bg-accent"><SparklesIcon className="size-4" />Показать обучение</button>
+      </Row>
     </div>
   );
 }
