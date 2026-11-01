@@ -66,3 +66,27 @@ async function checkUpdate() {
     if (n > Number(build) && apk) toast("Вышла новая версия приложения", { duration: 15000, action: { label: "Скачать", onClick: () => window.open(apk, "_system") } });
   } catch {}
 }
+
+// Settings → «Проверить уведомления»: asks for permission if needed, sends a test in 5 seconds
+// and says when the next real reminder is due
+export async function testNotify() {
+  const next = plan(getDb())[0];
+  const when = next ? `Следующее напоминание: ${next.at.toLocaleString("ru-RU", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} — ${next.title}` : "Ближайших напоминаний нет";
+  const title = "Проверка: уведомления работают ✓", body = "Так будут приходить напоминания о задачах";
+  if (isApp) {
+    if (!LN) ({ LocalNotifications: LN } = await import("@capacitor/local-notifications"));
+    const perm = await LN.requestPermissions().catch(() => ({ display: "denied" }));
+    if (perm.display !== "granted") return toast.error("Уведомления запрещены. Разреши их для «Задачи» в настройках Android.");
+    await LN.schedule({ notifications: [{ id: 99999, title, body, channelId: CH_NOW, schedule: { at: new Date(Date.now() + 5000), allowWhileIdle: true } }] });
+    return toast("Через 5 секунд придёт проверочное уведомление. " + when, { duration: 8000 });
+  }
+  if (!("Notification" in window)) return toast.error("Этот браузер не умеет показывать уведомления.");
+  const p = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+  if (p !== "granted") return toast.error("Уведомления запрещены. Разреши их для сайта в настройках браузера (значок замка у адреса).");
+  setTimeout(async () => {
+    const reg = window.__TAURI_INTERNALS__ ? null : await navigator.serviceWorker?.getRegistration?.().catch(() => null);
+    const opts = { body, tag: "test", icon: "./icons/icon-192.png" };
+    if (reg?.showNotification) reg.showNotification(title, opts); else new Notification(title, opts);
+  }, 5000);
+  toast("Через 5 секунд придёт проверочное уведомление. Напоминания приходят, пока сайт или приложение открыты. " + when, { duration: 8000 });
+}

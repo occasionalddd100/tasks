@@ -385,11 +385,20 @@ function TuiTag({ id, tag, tasks, showDate }) {
 }
 
 const shortDue = t => t.due ? dueLabel(t.due).replace(/^(\S+) (\d+\.\d+)$/, "$2") + (t.time ? " " + t.time : "") : "";
+// a task's subtasks fold under it (remembered per task)
+function useSubFold(id) {
+  const k = "sub:" + id;
+  const [folded, setF] = useState(() => loadFold().has(k));
+  const toggle = () => { const v = !folded; setF(v); try { const f = loadFold(); v ? f.add(k) : f.delete(k); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
+  return [folded, toggle];
+}
+
 function TuiRow({ t, depth = 0, showDate }) {
   const db = useDb();
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({ id: t.id, disabled: t.done });
   const picked = useSelection().has(t.id);
+  const [folded, toggleFold] = useSubFold(t.id);
   const late = t.due && !t.done && t.due < today();
   const done = v => update("tasks", t.id, v ? MOVES.done() : { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false });
   const stop = e => e.stopPropagation();
@@ -404,6 +413,8 @@ function TuiRow({ t, depth = 0, showDate }) {
           picked && "bg-primary/15 ring-1 ring-primary/40 ring-inset hover:bg-primary/20", isDragging && "opacity-30", t.done && "text-muted-foreground line-through", "text-base")}
         style={depth ? { paddingLeft: 8 + depth * 20 } : undefined}>
         {depth > 0 && <span className="-ml-3 font-mono text-xs text-muted-foreground/50">└</span>}
+        {kids.length > 0 && <button type="button" onClick={e => { stop(e); toggleFold(); }} onPointerDown={stop} aria-label={folded ? "Показать подзадачи" : "Свернуть подзадачи"}
+          className="-mx-1 mt-0.5 grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"><ChevronRightIcon className={cn("size-3.5 transition-transform", !folded && "rotate-90")} /></button>}
         <Checkbox className="mt-0.5 size-[18px]" checked={!!t.done} onClick={stop} onPointerDown={stop} onCheckedChange={v => done(!!v)} aria-label={t.text} />
         <span className="min-w-0 flex-1 break-words">{t.text}</span>
         {kids.length > 0 && <span className="mt-0.5 font-mono text-[13px] text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
@@ -415,7 +426,7 @@ function TuiRow({ t, depth = 0, showDate }) {
         </span>}
         {(showDate || t.time) && t.due && <span className={cn("mt-0.5 shrink-0 font-mono text-[13px] tabular-nums", late ? "text-red-500" : "text-muted-foreground")}>{showDate ? shortDue(t) : t.time}</span>}
       </div>
-      {kids.length > 0 && <ul>{kids.map(k => <TuiRow key={k.id} t={k} depth={depth + 1} />)}</ul>}
+      {kids.length > 0 && !folded && <ul>{kids.map(k => <TuiRow key={k.id} t={k} depth={depth + 1} />)}</ul>}
     </li>
   );
 }
@@ -637,10 +648,14 @@ function useMedia(q) {
 
 // a task's subtasks under it, and the line to add one
 function SubTasks({ t, kids, adding, setAdding }) {
+  const [folded, toggleFold] = useSubFold(t.id);
   if (!kids.length && !adding) return null;
+  const open = !folded || adding;
   return (
     <ul className="mb-1 ml-9 border-l pl-2" aria-label={"Подзадачи: " + t.text}>
-      {kids.map(k => <li key={k.id}><TaskRow t={k} /></li>)}
+      {kids.length > 0 && <li><button type="button" onClick={toggleFold} className="flex h-7 items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />Подзадачи {kids.filter(k => k.done).length}/{kids.length}</button></li>}
+      {open && kids.map(k => <li key={k.id}><TaskRow t={k} /></li>)}
       {adding && <li><AddLine placeholder="Подзадача, Enter — ещё одна" className="px-0"
         onAdd={v => add("tasks", { text: v, cat: t.cat, parent: t.id, order: nextOrder(kids), done: false })} onClose={() => setAdding(false)} /></li>}
     </ul>
