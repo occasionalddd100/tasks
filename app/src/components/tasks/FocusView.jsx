@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
-import { CrosshairIcon, FlameIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon, CornerDownRightIcon, FileTextIcon, PanelLeftCloseIcon } from "lucide-react";
+import { CrosshairIcon, FlameIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon, CornerDownRightIcon, FileTextIcon, ChevronLeftIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import * as Pop from "@radix-ui/react-popover";
 import { useDb, update, add } from "@/lib/db";
@@ -20,7 +20,7 @@ import TaskRow from "@/components/tasks/TaskRow";
 import { useFresh, setAmbient, addTask } from "@/components/tasks/QuickAdd";
 import { TagMark } from "@/components/tasks/TagMark";
 import { openTask } from "@/components/tasks/TaskSheet";
-import { openWheel } from "@/components/tasks/TagWheel";
+import { openTaskMenu } from "@/components/tasks/TaskMenu";
 import { Fan, fanMax } from "@/components/Fan";
 import { useTasksTap } from "@/components/MobileNav";
 import { Habits, useJournal } from "@/components/tasks/ProjectViews";
@@ -39,6 +39,7 @@ export default function FocusView() {
   const setFilter = v => { lastTag = v; store.set(v); setFilterRaw(v); };
   const [fan, setFan] = useState(false);
   const phone = !useMedia("(min-width: 768px)");
+  const wide = useMedia("(min-width: 1024px)");
   const [slot, setSlot] = useState(null);
   useEffect(() => setSlot(document.getElementById("topbar-slot")), []);
   const actions = <>
@@ -106,7 +107,7 @@ export default function FocusView() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={e => setDragId(e.active.id)} onDragCancel={() => setDragId(null)} onDragEnd={onDragEnd}>
-    <div className={cn(VIEW, "max-w-3xl max-md:px-2 lg:max-w-[1600px]")}>
+    <div className={cn(VIEW, "max-w-3xl max-md:px-2 lg:max-w-none lg:gap-2 lg:px-2 lg:pt-2 lg:pb-2")}>
       {phone && slot && createPortal(<div className="flex items-center gap-1.5 [&_button]:h-8 [&_button]:text-xs">{actions}</div>, slot)}
       {!phone && <header className="flex items-center gap-2">
         <div className="flex-1"><TagMenu items={menu} title={shownTag ? tagName(shownTag) : "Задачи"} onPick={pick} /></div>
@@ -115,7 +116,9 @@ export default function FocusView() {
 
       {!shownTag && <NextUp />}
 
-      {shownTag
+      {shownTag && wide
+        ? <section className="flex flex-col gap-1"><WorkList list={list.filter(t => (t.cat === drafts?.id ? NONE : t.cat) === shownTag)} /></section>
+        : shownTag
         ? <TagList cat={shownTag === NONE ? drafts?.id : shownTag} tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
         : <section className="flex flex-col gap-1">
             {list.length === 0
@@ -254,22 +257,48 @@ function WorkList({ list }) {
    (empty ones too), each column scrolls on its own; folding a block never moves the others. ───── */
 // today is the focus column (wide, tinted); any other column folds into a thin strip, remembered
 const COLS = [{ id: "focus", ks: ["urgent", "today", "done"] }, { id: "late", ks: ["late"] }, { id: "tomorrow", ks: ["tomorrow"] }, { id: "planned", ks: ["planned"] }, { id: "free", ks: ["free"] }];
-const HIDE = "tuiHidden";
+const HIDE = "tuiHidden", WIDTH = "tuiWidth";
 const loadHidden = () => { try { return new Set(JSON.parse(localStorage.getItem(HIDE) || "[]")); } catch { return new Set(); } };
+const loadWidth = () => { try { return JSON.parse(localStorage.getItem(WIDTH) || "{}") || {}; } catch { return {}; } };
 function TuiBoard({ list }) {
   const now = today(), tmr = addDays(1);
   const [hidden, setHiddenRaw] = useState(loadHidden);
   const toggle = id => { const h = new Set(hidden); h.has(id) ? h.delete(id) : h.add(id); setHiddenRaw(h); try { localStorage.setItem(HIDE, JSON.stringify([...h])); } catch {} };
+  // widths are kept as relative weights; dragging the line between two columns moves width from one to the other
+  const [width, setWidth] = useState(loadWidth);
+  const box = useRef(null);
   const of = k => list.filter(t => groupOf(t, now, tmr) === k);
-  const tpl = COLS.map(c => c.id === "focus" ? "minmax(0,1.7fr)" : hidden.has(c.id) ? "2.25rem" : "minmax(0,1fr)").join(" ");
+  const shown = COLS.filter(c => c.id === "focus" || !hidden.has(c.id));
+  const tpl = COLS.map(c => shown.includes(c) ? `minmax(0,${width[c.id] || (c.id === "focus" ? 1.7 : 1)}fr)` : "2.25rem").join(" ");
+  const resize = (e, c) => {
+    const next = shown[shown.indexOf(c) + 1]; if (!next) return;
+    e.preventDefault();
+    const cols = [...box.current.children], px = {};
+    COLS.forEach((x, i) => { px[x.id] = cols[i].getBoundingClientRect().width; });
+    const x0 = e.clientX, a0 = px[c.id], b0 = px[next.id];
+    let last = width;
+    const move = ev => {
+      const d = Math.max(160 - a0, Math.min(b0 - 160, ev.clientX - x0));
+      last = Object.fromEntries(shown.map(x => [x.id, +((x === c ? a0 + d : x === next ? b0 - d : px[x.id]) / 100).toFixed(3)]));
+      setWidth(last);
+    };
+    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); document.body.style.cursor = ""; try { localStorage.setItem(WIDTH, JSON.stringify(last)); } catch {} };
+    addEventListener("pointermove", move); addEventListener("pointerup", up); document.body.style.cursor = "col-resize";
+  };
+  const reset = () => { setWidth({}); try { localStorage.removeItem(WIDTH); } catch {} };
   return (
-    <div className="grid overflow-hidden rounded-lg border bg-card/30" style={{ gridTemplateColumns: tpl, height: "calc(100dvh - 11rem)", minHeight: 420 }}>
+    <div ref={box} className="grid overflow-hidden rounded-md border bg-card/30" style={{ gridTemplateColumns: tpl, height: "calc(100dvh - 7.25rem)", minHeight: 420 }}>
       {COLS.map(c => {
-        if (c.id !== "focus" && hidden.has(c.id)) return <TuiStrip key={c.id} g={WORK_GROUPS.find(x => x.k === c.ks[0])} n={of(c.ks[0]).length} onOpen={() => toggle(c.id)} />;
+        if (!shown.includes(c)) return <TuiStrip key={c.id} g={WORK_GROUPS.find(x => x.k === c.ks[0])} n={of(c.ks[0]).length} onOpen={() => toggle(c.id)} />;
+        const last = shown[shown.length - 1] === c;
         return (
-          <div key={c.id} className={cn("thin-scroll flex min-h-0 min-w-0 flex-col overflow-y-auto border-l first:border-l-0", c.id === "focus" && "bg-amber-500/[0.04]")}>
-            {c.ks.filter(k => k !== "urgent" || of(k).length).map((k, i) => <TuiBlock key={k} g={WORK_GROUPS.find(x => x.k === k)} tasks={of(k)} grow={k !== "done" && k !== "urgent"} focus={c.id === "focus"}
-              onHide={c.id !== "focus" && i === 0 ? () => toggle(c.id) : null} />)}
+          <div key={c.id} className="relative flex min-h-0 min-w-0 flex-col border-l first:border-l-0">
+            <div className={cn("thin-scroll flex min-h-0 flex-1 flex-col overflow-y-auto", c.id === "focus" && "bg-amber-500/[0.04]")}>
+              {c.ks.filter(k => k !== "urgent" || of(k).length).map((k, i) => <TuiBlock key={k} g={WORK_GROUPS.find(x => x.k === k)} tasks={of(k)} grow={k !== "done" && k !== "urgent"} focus={c.id === "focus"}
+                onHide={c.id !== "focus" && i === 0 ? () => toggle(c.id) : null} />)}
+            </div>
+            {!last && <div onPointerDown={e => resize(e, c)} onDoubleClick={reset} title="Тяни, чтобы поменять ширину. Двойной клик — сбросить"
+              className="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize hover:bg-primary/30" />}
           </div>
         );
       })}
@@ -292,7 +321,8 @@ function TuiStrip({ g, n, onOpen }) {
 function TuiBlock({ g, tasks, grow, focus, onHide }) {
   const db = useDb();
   const key = "tui:" + g.k;
-  const [open, setOpenRaw] = useState(() => !loadFold().has(key) && g.k !== "done" || loadFold().has(key + ":open"));
+  const [openRaw, setOpenRaw] = useState(() => !loadFold().has(key) && g.k !== "done" || loadFold().has(key + ":open"));
+  const open = openRaw || !!onHide;
   const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); f.delete(key); f.delete(key + ":open"); if (g.k === "done" ? v : !v) f.add(g.k === "done" ? key + ":open" : key); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
   const [adding, setAdding] = useState(false);
   const { setNodeRef, isOver } = useDroppable({ id: "drop:" + g.k, disabled: g.k === "late" });
@@ -305,21 +335,19 @@ function TuiBlock({ g, tasks, grow, focus, onHide }) {
   const showDate = g.k === "late" || g.k === "planned" || g.k === "urgent" || g.k === "done";
   return (
     <section ref={setNodeRef} className={cn("flex flex-col border-b last:border-b-0 transition-colors", grow && open && "flex-1", isOver && "bg-primary/10")}>
-      <div className="group/h sticky top-0 z-[1] flex h-8 shrink-0 items-center gap-1.5 border-b bg-background/95 px-2 font-mono text-[13px] font-semibold tracking-wide uppercase backdrop-blur">
-        <button type="button" onClick={() => setOpen(!open)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-          <ChevronRightIcon className={cn("size-3 text-muted-foreground transition-transform", open && "rotate-90")} />
+      <div className="group/h sticky top-0 z-[1] flex h-10 shrink-0 items-center gap-2 border-b bg-background/95 px-2.5 font-mono text-[13px] font-semibold tracking-wide uppercase backdrop-blur">
+        <button type="button" onClick={() => onHide ? onHide() : setOpen(!open)} title={onHide ? "Свернуть колонку" : undefined} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+          {onHide ? <ChevronLeftIcon className="size-3 text-muted-foreground" /> : <ChevronRightIcon className={cn("size-3 text-muted-foreground transition-transform", open && "rotate-90")} />}
           <g.icon className="size-4 shrink-0" style={{ color: g.c }} />
           <span className="truncate" style={{ color: g.c }}>{g.l}</span>
           <span className="text-muted-foreground tabular-nums">[{tasks.length}]</span>
         </button>
         {g.add && <button type="button" onClick={() => { setOpen(true); setAdding(true); }} title={"Добавить в «" + g.l + "»"} aria-label={"Добавить в «" + g.l + "»"}
           className="grid size-6 place-items-center rounded text-muted-foreground opacity-0 group-hover/h:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100"><PlusIcon className="size-3.5" /></button>}
-        {onHide && <button type="button" onClick={onHide} title="Свернуть колонку" aria-label="Свернуть колонку"
-          className="grid size-6 place-items-center rounded text-muted-foreground opacity-0 group-hover/h:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100"><PanelLeftCloseIcon className="size-3.5" /></button>}
       </div>
-      {open && <div className="py-0.5">
+      {open && <div className="py-1">
         {adding && <AddLine placeholder={"Новая задача в «" + g.l + "»"} withDate={g.k === "planned"} onAdd={g.add} onClose={() => setAdding(false)} className="py-0.5" />}
-        {!tasks.length && !adding && <p className="px-2 py-1 font-mono text-xs text-muted-foreground/60">{g.k === "late" ? "— чисто —" : "— пусто, перетащи сюда —"}</p>}
+        {!tasks.length && !adding && <p className="px-3 py-1.5 font-mono text-xs text-muted-foreground/60">{g.k === "late" ? "— чисто —" : "— пусто, перетащи сюда —"}</p>}
         {parts.map(p => <TuiTag key={p.tag?.id || "none"} id={g.k + ":" + (p.tag?.id || "none")} tag={p.tag} tasks={p.tasks} showDate={showDate} big={focus && g.k === "today"} />)}
       </div>}
     </section>
@@ -331,7 +359,7 @@ function TuiTag({ id, tag, tasks, showDate, big }) {
   const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); v ? f.delete("tuitag:" + id) : f.add("tuitag:" + id); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
   return (
     <div>
-      {tag && <button type="button" onClick={() => setOpen(!open)} className="flex h-6 w-full items-center gap-1.5 px-2 font-mono text-xs text-muted-foreground hover:text-foreground">
+      {tag && <button type="button" onClick={() => setOpen(!open)} className="flex h-7 w-full items-center gap-1.5 px-2.5 font-mono text-xs text-muted-foreground hover:text-foreground">
         <ChevronRightIcon className={cn("size-3 transition-transform", open && "rotate-90")} />
         <span className="size-1.5 shrink-0 rounded-full" style={{ background: tag.color }} />
         {tag.emoji && <span className="text-xs leading-none">{tag.emoji}</span>}<span className="truncate">{tag.name}</span><span className="tabular-nums opacity-70">{tasks.length}</span>
@@ -356,10 +384,10 @@ function TuiRow({ t, depth = 0, showDate, big }) {
       <div ref={setNodeRef} {...listeners} {...attributes} role="button" tabIndex={0} title={t.text}
         onClick={e => { if (e.shiftKey || e.ctrlKey || e.metaKey || selActive()) toggleSel(t.id); else openTask(t.id); }}
         onKeyDown={e => e.key === "Enter" && openTask(t.id)}
-        onContextMenu={e => { e.preventDefault(); openWheel(t, e.clientX, e.clientY, true); }}
-        className={cn("group/r relative flex min-h-8 cursor-default items-start gap-2 rounded-sm px-2 py-1.5 leading-snug outline-none select-none hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring",
-          picked && "bg-primary/15 ring-1 ring-primary/40 ring-inset hover:bg-primary/20", isDragging && "opacity-30", t.done && "text-muted-foreground line-through", big ? "text-[15px]" : "text-sm")}
-        style={depth ? { paddingLeft: 8 + depth * 16 } : undefined}>
+        onContextMenu={e => { e.preventDefault(); openTaskMenu(t, e.clientX, e.clientY); }}
+        className={cn("group/r relative mx-1 flex min-h-9 cursor-default items-start gap-2.5 rounded px-2 py-2 leading-snug outline-none select-none hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring",
+          picked && "bg-primary/15 ring-1 ring-primary/40 ring-inset hover:bg-primary/20", isDragging && "opacity-30", t.done && "text-muted-foreground line-through", "text-[15px]")}
+        style={depth ? { paddingLeft: 8 + depth * 20 } : undefined}>
         {depth > 0 && <span className="-ml-3 font-mono text-xs text-muted-foreground/50">└</span>}
         <Checkbox className="mt-0.5 size-4" checked={!!t.done} onClick={stop} onPointerDown={stop} onCheckedChange={v => done(!!v)} aria-label={t.text} />
         <span className="min-w-0 flex-1 break-words">{t.text}</span>

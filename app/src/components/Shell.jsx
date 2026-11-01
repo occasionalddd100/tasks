@@ -34,6 +34,7 @@ import JournalView from "@/components/journal/JournalView";
 import { QuickAddHost, openQuickAdd } from "@/components/tasks/QuickAdd";
 import { TaskSheetHost } from "@/components/tasks/TaskSheet";
 import { TagWheelHost } from "@/components/tasks/TagWheel";
+import { TaskMenuHost } from "@/components/tasks/TaskMenu";
 import { TagEditorHost, openTagEditor } from "@/components/tasks/TagEditor";
 import { Celebrate } from "@/components/tasks/Celebrate";
 import { ensurePersonal, personalOf, draftTasks } from "@/lib/personal";
@@ -178,6 +179,7 @@ export default function Shell() {
         tasks={{ onClick: () => go({ focus: true }), active: focus, badge: nowList(db).length }} shortcut={shortcut} />
       <ShortcutPicker />
       <TagWheelHost />
+      <TaskMenuHost />
       <TagEditorHost />
       <Celebrate />
       <QuickAddHost onOpenDrafts={() => go({ personal: true })} />
