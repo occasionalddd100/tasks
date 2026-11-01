@@ -24,7 +24,7 @@ import ProfileDialog from "@/components/ProfileDialog";
 import { loadMe, useMe } from "@/lib/people";
 import { importFiles, fromDrop } from "@/lib/importMd";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
-import NotesTree, { IconBtn, CreateMenu, itemName, usePins, togglePin } from "@/components/notes/NotesTree";
+import NotesTree, { IconBtn, CreateMenu, itemName, usePins, togglePin, fileItems } from "@/components/notes/NotesTree";
 import { ItemIcon } from "@/components/IconPicker";
 import { PinOffIcon, PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
 import { ProjectView } from "@/components/tasks/ProjectViews";
@@ -145,6 +145,17 @@ export default function Shell() {
   // computer: the sidebar folds into a thin rail (Ctrl+B or the button at its bottom), remembered
   const [folded, setFolded] = useState(() => { try { return localStorage.getItem("sideFolded") === "1"; } catch { return false; } });
   const fold = v => { setFolded(v); try { localStorage.setItem("sideFolded", v ? "1" : ""); } catch {} };
+  // its width: drag the right edge (remembered)
+  const [sideW, setSideW] = useState(() => { try { return +localStorage.getItem("sideW") || 256; } catch { return 256; } });
+  const [dragW, setDragW] = useState(false);
+  const setSide = w => { setSideW(w); try { localStorage.setItem("sideW", String(w)); } catch {} };
+  const resizeSide = e => {
+    e.preventDefault(); setDragW(true);
+    const x0 = e.clientX, w0 = sideW; let w = w0;
+    const move = ev => { w = Math.round(Math.min(440, Math.max(200, w0 + ev.clientX - x0))); setSideW(w); };
+    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); document.body.style.cursor = ""; setDragW(false); setSide(w); };
+    addEventListener("pointermove", move); addEventListener("pointerup", up); document.body.style.cursor = "col-resize";
+  };
   useEffect(() => {
     const k = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b" && !e.target.closest?.("input,textarea,[contenteditable=true]")) { e.preventDefault(); setFolded(f => { try { localStorage.setItem("sideFolded", f ? "" : "1"); } catch {} return !f; }); } };
     addEventListener("keydown", k); return () => removeEventListener("keydown", k);
@@ -153,13 +164,20 @@ export default function Shell() {
   return (
     <MotionConfig reducedMotion={look.motion === "off" ? "always" : "user"}>
     <div className="flex h-dvh overflow-hidden">
-      {folded
-        ? <aside className="hidden w-12 shrink-0 flex-col items-center gap-1 border-r bg-sidebar py-2 md:flex">
-            <button type="button" onClick={() => fold(false)} title="Развернуть панель (Ctrl+B)" aria-label="Развернуть панель" className="grid size-9 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><PanelLeftOpenIcon className="size-4" /></button>
-            <button type="button" onClick={() => go({ focus: true })} title="Задачи" aria-label="Задачи" className={cn("grid size-9 place-items-center rounded-md hover:bg-accent", focus && "bg-accent")}><ListTodoIcon className="size-4" /></button>
-            <button type="button" onClick={() => go({ diary: true })} title="Дневник" aria-label="Дневник" className={cn("grid size-9 place-items-center rounded-md hover:bg-accent", diary && "bg-accent")}><BookOpenIcon className="size-4" /></button>
-          </aside>
-        : <aside className={cn("hidden shrink-0 border-r bg-sidebar md:flex md:flex-col", { narrow: "w-56", normal: "w-64", wide: "w-80" }[look.sidebar] || "w-64")}>{sidebar}</aside>}
+      <motion.aside initial={false} animate={{ width: folded ? 48 : sideW }} transition={dragW ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 40 }}
+        className="relative hidden shrink-0 overflow-hidden border-r bg-sidebar md:flex md:flex-col">
+        <AnimatePresence initial={false} mode="popLayout">
+          {folded
+            ? <motion.div key="rail" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex w-12 flex-col items-center gap-1 py-2">
+                <button type="button" onClick={() => fold(false)} title="Развернуть панель (Ctrl+B)" aria-label="Развернуть панель" className="grid size-9 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><PanelLeftOpenIcon className="size-4" /></button>
+                <button type="button" onClick={() => go({ focus: true })} title="Задачи" aria-label="Задачи" className={cn("grid size-9 place-items-center rounded-md hover:bg-accent", focus && "bg-accent")}><ListTodoIcon className="size-4" /></button>
+                <button type="button" onClick={() => go({ diary: true })} title="Дневник" aria-label="Дневник" className={cn("grid size-9 place-items-center rounded-md hover:bg-accent", diary && "bg-accent")}><BookOpenIcon className="size-4" /></button>
+              </motion.div>
+            : <motion.div key="side" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex h-full min-h-0 flex-col" style={{ width: sideW }}>{sidebar}</motion.div>}
+        </AnimatePresence>
+        {!folded && <div onPointerDown={resizeSide} onDoubleClick={() => setSide(256)} title="Тяни, чтобы поменять ширину. Двойной клик — сбросить"
+          className="absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize hover:bg-primary/30" />}
+      </motion.aside>
       <Sheet open={!!menu} onOpenChange={o => setMenu(o ? "menu" : false)}><SheetContent>{sidebar}</SheetContent></Sheet>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto max-md:pb-[calc(4rem+var(--sab))]">
@@ -253,7 +271,7 @@ function Sidebar({ view, go, email, search, onFold }) {
           const on = view[kind] === pid;
           const Fallback = kind === "note" ? FileTextIcon : kind === "stash" ? LayoutGridIcon : ListChecksIcon;
           return (
-            <ActionsContext key={k} items={[{ label: "Открепить", icon: PinOffIcon, onSelect: () => togglePin(k) }]}>
+            <ActionsContext key={k} items={[{ label: "Открепить", icon: PinOffIcon, onSelect: () => togglePin(k) }, ...fileItems({ x: { ...x, kind }, folders: db.folders, after: () => on && go({ focus: true }) }).filter(Boolean)]}>
               <button type="button" onClick={() => go({ [kind]: pid })}
                 className={cn("flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent", on && "bg-accent")}>
                 <ItemIcon x={x} fallback={Fallback} className={!x.color && !x.icon?.startsWith("e:") ? "text-foreground" : undefined} /><span className="truncate">{itemName({ ...x, kind })}</span>

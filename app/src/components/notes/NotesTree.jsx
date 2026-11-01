@@ -82,7 +82,7 @@ export default function NotesTree({ view, go, query }) {
     const key = coll + ":" + x.id, folder = coll === "folders";
     return {
       draggable: isMine(x),
-      onDragStart: e => { dragged.current = { coll, id: x.id }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", key); setTimeout(() => setDragging(true)); },
+      onDragStart: e => { e.stopPropagation(); /* a file inside a folder: the folder must not take over the drag */ dragged.current = { coll, id: x.id }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", key); setTimeout(() => setDragging(true)); },
       onDragEnd: () => { dragged.current = null; setOver(null); setDragging(false); },
       onDragOver: e => {
         if (!dragged.current) return;
@@ -279,7 +279,7 @@ export function fileItems({ x, folders, after, onShare }) {
   const coll = COLL[x.kind], project = x.kind === "project";
   const sharedRoot = (project || x.kind === "stash") && !isMine(x);
   return [
-    (project || x.kind === "stash") && onShare && { label: isMine(x) ? "Поделиться" : "Участники", icon: UsersIcon, onSelect: onShare },
+    (project || x.kind === "stash") && onShare && { label: isMine(x) ? "Поделиться" : "Участники", icon: UsersIcon, onSelect: () => setTimeout(onShare) },
     { label: "Иконка и цвет", icon: PaletteIcon, onSelect: () => setTimeout(() => pickIcon(coll, x)) },
     moveItem(folders, x.folder, folder => update(coll, x.id, { folder })),
     !sharedRoot && { sep: true },

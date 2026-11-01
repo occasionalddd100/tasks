@@ -75,7 +75,6 @@ function Look() {
         </div>
       </Row>
       <Row label="Размер текста"><Seg value={a.scale} onChange={scale => setAppearance({ scale })} options={[[90, "Мельче"], [100, "Обычный"], [110, "Крупнее"], [120, "Крупный"]]} /></Row>
-      <Row label="Ширина боковой панели" hint="На компьютере"><Seg value={a.sidebar} onChange={sidebar => setAppearance({ sidebar })} options={[["narrow", "Узкая"], ["normal", "Обычная"], ["wide", "Широкая"]]} /></Row>
       <Row label="Анимации" hint="Влетающие карточки, переходы, конфетти"><Seg value={a.motion} onChange={motion => setAppearance({ motion })} options={[["on", "Включены"], ["off", "Выключены"]]} /></Row>
       <Row label="Уведомления" hint="Пришлёт проверочное уведомление через 5 секунд и покажет ближайшее напоминание">
         <button type="button" onClick={() => testNotify()}

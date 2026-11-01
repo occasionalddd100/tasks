@@ -75,7 +75,6 @@ export default function JournalView({ mode = "timeline" }) {
     return n;
   }, [items, mine]);
   const deadline = Math.ceil((new Date("2026-10-31T23:59:00+03:00") - new Date()) / 864e5);
-  const todayMood = moodOf(mine.get(today())?.mood);
 
   const pick = (date, edit = false) => setOpen({ date, edit });
   // the lower part (diary, days, totals) is one block with its own tabs; the top is the day itself
@@ -88,9 +87,6 @@ export default function JournalView({ mode = "timeline" }) {
   if (!db.ready) return <div className="p-8 text-sm text-muted-foreground">Загружаю…</div>;
   return (
     <div className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-3 px-4 pt-3 pb-8 md:px-3 md:pt-3 md:pb-8">
-      {/* soft glow tinted by today's mood */}
-      <motion.div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[42rem] max-w-full -translate-x-1/2 rounded-full"
-        style={{ filter: "blur(64px)", WebkitFilter: "blur(64px)" }} animate={{ backgroundColor: todayMood?.color || "#64748b", opacity: todayMood ? 0.18 : 0.08 }} transition={{ duration: 0.8 }} />
       {desk ? <>
         {/* computer: one screen. The day's feed in the middle, and on the side the calendar, today's hours (as on the phone) and the streak */}
         <h1 className="text-xl font-bold tracking-tight md:text-2xl">Дневник</h1>

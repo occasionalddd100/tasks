@@ -85,6 +85,14 @@ export default function StashView({ id, fresh, go }) {
   const isPhone = typeof matchMedia !== "undefined" && matchMedia("(max-width: 767px)").matches;
   const [sharing, setSharing] = useState(false);
   const [adding, setAdding] = useState(false);
+  // N on a computer adds to the stash (instead of a new task)
+  useEffect(() => {
+    const k = e => {
+      if (e.key.toLowerCase() !== "n" && e.key.toLowerCase() !== "т" || e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.("input,textarea,[contenteditable=true]") || document.querySelector("[role=dialog]")) return;
+      e.preventDefault(); e.stopImmediatePropagation(); setAdding(true);
+    };
+    window.addEventListener("keydown", k, true); return () => window.removeEventListener("keydown", k, true);
+  }, []);
   const searchRef = useRef(null), addRef = useRef(null);
   const focus = r => { scrollTop(); setTimeout(() => r.current?.focus(), 250); };
   useNavItems([
@@ -131,7 +139,7 @@ export default function StashView({ id, fresh, go }) {
       <BoardsFan open={fan} setOpen={setFan} tabs={tabs} cur={cur} setTab={setTab} counts={t => all.filter(c => c.tab === t).length} total={all.length}
         onAdd={addTab} onMore={() => setBoards(true)} anchor={isPhone ? "navRight" : dockAnchor || "dock"} />
       <TagsFan open={tagsOpen} setOpen={setTagsOpen} onEdit={() => setTagEdit("")} tagCounts={tagCounts} tags={tags} setTags={setTags} unseen={unseen} setUnseen={setUnseen} anchor={isPhone ? "navLeft" : dockAnchor || "dock"} />
-      <Dock board={cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски"} fan={fan} setFan={setFan} tagsOpen={tagsOpen} setTagsOpen={setTagsOpen} nTags={tags.length + (unseen ? 1 : 0)} setAnchor={setDockAnchor} />
+      <Dock onAdd={() => { setFan(false); setTagsOpen(false); setAdding(true); }} board={cur === ALL ? "Все доски" : tabs.find(t => t.id === cur)?.name || "Доски"} fan={fan} setFan={setFan} tagsOpen={tagsOpen} setTagsOpen={setTagsOpen} nTags={tags.length + (unseen ? 1 : 0)} setAnchor={setDockAnchor} />
       <UpButton className="fixed right-4 z-30 md:hidden bottom-[calc(5rem+var(--sab))]" />
       <BoardsSheet open={boards} setOpen={setBoards} tabs={tabs} cur={cur} setTab={t => { setTab(t); setBoards(false); }} counts={t => all.filter(c => c.tab === t).length} total={all.length} onAdd={addTab} onRename={renameTab} />
 
@@ -299,7 +307,7 @@ function AddLine({ stash, tab, inputRef }) {
   }, [stash, tab]);
 
   return (
-    <div data-addline className={cn("relative flex max-md:hidden items-center gap-2 rounded-2xl border bg-card p-1.5 pl-4 shadow-sm transition-all focus-within:ring-2 focus-within:ring-ring/40", over && "scale-[1.01] ring-2 ring-primary/60")}>
+    <div data-addline className={cn("relative hidden items-center gap-2 rounded-2xl border bg-card p-1.5 pl-4 shadow-sm transition-all focus-within:ring-2 focus-within:ring-ring/40", over && "scale-[1.01] ring-2 ring-primary/60")}>
       <LinkIcon className="size-4 shrink-0 text-muted-foreground" />
       <input ref={inputRef} value={v} onChange={e => setV(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()}
         placeholder={over ? "Отпускай, добавлю картинку" : "Вставь ссылку или текст"} aria-label="Добавить в стэш"
@@ -441,6 +449,7 @@ function Card({ c, level, board, onOpen, drag, onTag, tabs, moveTo, allTags }) {
   const items = [
           { label: "Открыть", icon: PencilIcon, onSelect: onOpen },
           c.url && { label: "Открыть оригинал", icon: ExternalLinkIcon, onSelect: () => window.open(c.url, "_blank", "noopener") },
+          { label: "Скопировать", icon: CopyIcon, onSelect: () => copyClip(c) },
           c.url && { label: "Обновить превью", icon: RefreshCwIcon, onSelect: () => refresh(c.id, c.url, true) },
           mediaCount(c) > 0 && { label: mediaCount(c) > 1 ? "Скачать всё (" + mediaCount(c) + ")" : "Скачать", icon: DownloadIcon, onSelect: () => saveCard(c) },
           tabs.length > 1 && { label: "На доску", icon: ArrowRightLeftIcon, sub: tabs.map(t => ({ label: t.name, disabled: t.id === c.tab, onSelect: () => moveTo(t.id) })) },
@@ -1041,13 +1050,31 @@ function TagsFan({ open, setOpen, onEdit, tagCounts, tags, setTags, unseen, setU
 function useScrolledDown() {
   const [down, setDown] = useState(false);
   useEffect(() => {
-    const on = e => { const el = e.target === document ? document.scrollingElement : e.target; setDown((el?.scrollTop || 0) > 700); };
+    const on = e => { const el = e.target === document ? document.scrollingElement : e.target; setDown((el?.scrollTop || 0) > 400); };
     document.addEventListener("scroll", on, true); return () => document.removeEventListener("scroll", on, true);
   }, []);
   return down;
 }
 
 const glass = { backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" };
+// «Скопировать» on a card: its link, else its text; a picture-only card copies the picture
+async function copyClip(c) {
+  const text = c.url || c.text || c.note || c.title || c.desc || "";
+  const pic = !c.url && !c.text && gallery(c)[0];
+  try {
+    if (pic?.src) {
+      const img = await createImageBitmap(await (await fetch(pic.src)).blob());
+      const cv = document.createElement("canvas"); cv.width = img.width; cv.height = img.height; cv.getContext("2d").drawImage(img, 0, 0);
+      const blob = await new Promise(res => cv.toBlob(res, "image/png"));
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      return toast.success("Картинка скопирована");
+    }
+    if (!text) return toast("Тут нечего копировать");
+    await navigator.clipboard.writeText(text);
+    toast.success(c.url ? "Ссылка скопирована" : "Скопировано");
+  } catch { toast.error("Не получилось скопировать"); }
+}
+
 function UpButton({ className }) {
   const down = useScrolledDown();
   return (
@@ -1080,7 +1107,7 @@ const fanFrom = (el, side) => {
   const r = el.getBoundingClientRect(), bottom = innerHeight - r.top + 12;
   return side === "left" ? { right: innerWidth - r.right, bottom } : { left: r.left, bottom };
 };
-function Dock({ board, fan, setFan, tagsOpen, setTagsOpen, nTags, setAnchor }) {
+function Dock({ board, fan, setFan, tagsOpen, setTagsOpen, nTags, setAnchor, onAdd }) {
   const x = useMainCenter();
   return (
     <div className="fixed bottom-6 z-40 flex -translate-x-1/2 items-center gap-2 max-md:hidden" style={{ left: x ?? "50%" }}>
@@ -1096,6 +1123,8 @@ function Dock({ board, fan, setFan, tagsOpen, setTagsOpen, nTags, setAnchor }) {
           <Columns3Icon className="size-[18px] shrink-0 opacity-70" /><span className="truncate">{board}</span>
           <ChevronUpIcon className={cn("size-4 shrink-0 opacity-60 transition-transform", fan && "rotate-180")} />
         </button>
+        <button type="button" onClick={onAdd} aria-label="Добавить" title="Добавить (N)"
+          className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-transform hover:scale-105"><PlusIcon className="size-5" /></button>
       </div>
     </div>
   );
