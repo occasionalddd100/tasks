@@ -12,7 +12,7 @@ export function ConfirmHost() {
   const close = ok => { s?.resolve(ok); setS(null); };
   return (
     <Dialog open={!!s} onOpenChange={o => !o && close(false)}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{s?.title}</DialogTitle>
           {s?.description && <DialogDescription>{s.description}</DialogDescription>}

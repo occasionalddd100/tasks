@@ -81,7 +81,7 @@ export function IconPickerHost() {
   return (
     <Dialog open={!!cur} onOpenChange={o => !o && set(null)}>
       {cur && (
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg lg:max-w-xl">
           <DialogTitle className="truncate pr-6">Иконка и цвет{cur.name ? ` · ${cur.name}` : ""}</DialogTitle>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => save({ color: "" })} aria-label="Без цвета"

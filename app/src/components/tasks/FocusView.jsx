@@ -409,6 +409,9 @@ function TuiRow({ t, depth = 0, showDate }) {
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({ id: t.id, disabled: t.done });
   const picked = useSelection().has(t.id);
   const [folded, toggleFold] = useSubFold(t.id);
+  const [adding, setAdding] = useState(false);
+  // «Подзадача» in the right-click menu asks this row to open its input
+  useEffect(() => { const f = e => e.detail === t.id && setAdding(true); addEventListener("tui-addsub", f); return () => removeEventListener("tui-addsub", f); }, [t.id]);
   const late = t.due && !t.done && t.due < today();
   const done = v => update("tasks", t.id, v ? MOVES.done() : { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false });
   const stop = e => e.stopPropagation();
@@ -433,10 +436,13 @@ function TuiRow({ t, depth = 0, showDate }) {
         {!t.done && !t.parent && <span className="absolute top-1 right-1 hidden gap-0.5 rounded border bg-popover p-0.5 shadow-sm group-hover/r:flex">
           <button type="button" onClick={e => { stop(e); moveTasks([t.id], "today"); }} onPointerDown={stop} title="На сегодня" aria-label="На сегодня" className={quick}><SunIcon className="size-3.5" /></button>
           <button type="button" onClick={e => { stop(e); moveTasks([t.id], "tomorrow"); }} onPointerDown={stop} title="На завтра" aria-label="На завтра" className={quick}><SunriseIcon className="size-3.5" /></button>
+          <button type="button" onClick={e => { stop(e); setAdding(true); }} onPointerDown={stop} title="Добавить подзадачу" aria-label="Добавить подзадачу" className={quick}><CornerDownRightIcon className="size-3.5" /></button>
         </span>}
         {(showDate || t.time) && t.due && <span className={cn("mt-0.5 shrink-0 font-mono text-[13px] tabular-nums", late ? "text-red-500" : "text-muted-foreground")}>{showDate ? shortDue(t) : t.time}</span>}
       </div>
-      {kids.length > 0 && !folded && <ul>{kids.map(k => <TuiRow key={k.id} t={k} depth={depth + 1} />)}</ul>}
+      {kids.length > 0 && (!folded || adding) && <ul>{kids.map(k => <TuiRow key={k.id} t={k} depth={depth + 1} />)}</ul>}
+      {adding && <div className="mr-1 ml-10"><AddLine placeholder="Подзадача, Enter — ещё одна, Esc — закрыть" className="px-0"
+        onAdd={v => add("tasks", { text: v, cat: t.cat, parent: t.id, order: nextOrder(kids), done: false })} onClose={() => setAdding(false)} /></div>}
     </li>
   );
 }

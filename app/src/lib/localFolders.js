@@ -131,3 +131,13 @@ export async function fileUrl(c) {
     files.set(key, { url }); return { url };
   } catch { return { state: "gone" }; }
 }
+
+// take a connected folder off the stash: the files on disk stay; cards already sent to the stash stay too
+export async function removeFolder(stash, id) {
+  const s = getDb().stashes.find(x => x.id === stash);
+  await update("stashes", stash, { sources: (s?.sources || []).filter(x => x.id !== id) });
+  handles.delete(id); files.delete(id);
+  await tx(STORE, "readwrite", st => st.delete(id)).catch(() => {});
+  await tx(TAGS, "readwrite", st => st.delete(id)).catch(() => {});
+  ping();
+}

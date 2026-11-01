@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { CalendarIcon, CheckIcon, ChevronRightIcon, FlameIcon, InboxIcon, PencilIcon, SquareCheckIcon, SunIcon, SunriseIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import { CalendarIcon, CheckIcon, CornerDownRightIcon, ChevronRightIcon, FlameIcon, InboxIcon, PencilIcon, SquareCheckIcon, SunIcon, SunriseIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { useDb, update } from "@/lib/db";
 import { getSel, isSelected, toggleSel, clearSel, moveTasks } from "@/lib/select";
 import { today, addDays } from "@/lib/tasks";
@@ -46,6 +46,7 @@ export function TaskMenuHost() {
     !many && { l: "Открыть", i: PencilIcon, k: "Enter", run: () => { close(); openTask(t.id); } },
     t.done ? { l: "Вернуть в работу", i: UndoIcon, run: run(() => tasks.forEach(x => update("tasks", x.id, { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false }))) }
       : { l: many ? `Готово (${ids.length})` : "Готово", i: CheckIcon, run: run(() => moveTasks(ids, "done")) },
+    !many && !t.done && !t.parent && { l: "Добавить подзадачу", i: CornerDownRightIcon, run: () => { close(); dispatchEvent(new CustomEvent("tui-addsub", { detail: t.id })); } },
     "-",
     !t.done && { l: "На сегодня", i: SunIcon, on: t.due === now, run: run(() => moveTasks(ids, "today")) },
     !t.done && { l: "На завтра", i: SunriseIcon, on: t.due === tmr, run: run(() => moveTasks(ids, "tomorrow")) },
@@ -62,7 +63,7 @@ export function TaskMenuHost() {
 
   return (
     <div className="fixed inset-0 z-[70]" onPointerDown={e => e.target === e.currentTarget && close()} onContextMenu={e => { e.preventDefault(); close(); }}>
-      <div ref={box} role="menu" className="absolute w-60 rounded-md border bg-popover p-1 text-popover-foreground shadow-xl animate-[menu-in_100ms_ease-out]"
+      <div ref={box} role="menu" className="absolute w-64 lg:w-72 rounded-md border bg-popover p-1 text-popover-foreground shadow-xl animate-[menu-in_100ms_ease-out]"
         style={{ left: pos?.x ?? s.x, top: pos?.y ?? s.y, visibility: pos ? "visible" : "hidden" }}>
         <p className="truncate px-2 pt-1 pb-1.5 font-mono text-xs text-muted-foreground">{many ? `Выбрано: ${ids.length}` : t.text}</p>
         {items.map((it, n) => it === "-" ? <div key={n} className="-mx-1 my-1 h-px bg-border" /> : (

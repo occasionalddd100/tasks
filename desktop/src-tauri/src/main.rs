@@ -9,6 +9,8 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_window_state::StateFlags;
 
+mod update;
+
 fn show(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
@@ -76,9 +78,11 @@ fn main() {
             let autostart = CheckMenuItem::with_id(app, "auto", "Запускать при входе в Windows", true, auto, None::<&str>)?;
             let reload = MenuItem::with_id(app, "reload", "Обновить страницу", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
+            let build = app.package_info().version.patch;
+            let version = MenuItem::with_id(app, "version", format!("Версия {build}, обновляется сама"), false, None::<&str>)?;
             let sep1 = PredefinedMenuItem::separator(app)?;
             let sep2 = PredefinedMenuItem::separator(app)?;
-            let menu = Menu::with_items(app, &[&open, &hotkey, &sep1, &autostart, &reload, &sep2, &quit])?;
+            let menu = Menu::with_items(app, &[&open, &hotkey, &sep1, &autostart, &reload, &version, &sep2, &quit])?;
             let auto_item = autostart.clone();
 
             TrayIconBuilder::with_id("tray")
@@ -108,6 +112,10 @@ fn main() {
                     }
                 })
                 .build(app)?;
+
+            // updates: a newer desktop-N release is put in quietly while the window is away
+            let handle = app.handle().clone();
+            std::thread::spawn(move || update::watch(handle, build));
 
             if !std::env::args().any(|a| a == "--hidden") {
                 show(app.handle());

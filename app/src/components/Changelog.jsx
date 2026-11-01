@@ -23,7 +23,7 @@ export function ChangelogHost() {
   useEffect(() => force(x => x + 1), [shown]);
   return (
     <Dialog open={shown} onOpenChange={o => !o && close()}>
-      <DialogContent className="flex max-h-[85dvh] flex-col gap-3 overflow-hidden p-5 sm:max-w-lg">
+      <DialogContent className="flex max-h-[85dvh] flex-col gap-3 overflow-hidden p-5 sm:max-w-2xl lg:max-w-3xl">
         <DialogTitle className="text-base">Что нового</DialogTitle>
         <div className="thin-scroll -mx-1 flex min-h-0 flex-col gap-5 overflow-y-auto px-1 pb-1">
           {CHANGELOG.map((v, i) => (
@@ -32,7 +32,7 @@ export function ChangelogHost() {
                 {v.title}<span className="text-xs font-normal text-muted-foreground">{v.date}</span>
                 {i === 0 && <span className="rounded bg-primary px-1.5 text-[10px] font-semibold tracking-wide text-primary-foreground uppercase">новое</span>}
               </h3>
-              <ul className="flex flex-col gap-1 text-sm leading-snug">
+              <ul className="flex flex-col gap-1 text-[15px] leading-snug">
                 {v.items.map(x => <li key={x} className="flex gap-2"><span className="text-muted-foreground">•</span><span>{x}</span></li>)}
               </ul>
             </section>

@@ -11,7 +11,7 @@ import { VIEW, ViewHeader, PillTab, PillTabs } from "@/components/ViewHeader";
 import { ItemIcon } from "@/components/IconPicker";
 import { useNavItems, scrollTop } from "@/components/MobileNav";
 import { Fan } from "@/components/Fan";
-import { canUseFolders, addFolder, access, allow, fileUrl, useFolders } from "@/lib/localFolders";
+import { canUseFolders, addFolder, removeFolder, access, allow, fileUrl, useFolders } from "@/lib/localFolders";
 const FolderPortal = lazy(() => import("@/components/stash/FolderPortal"));
 import { isMine } from "@/lib/db";
 import { toast } from "sonner";
@@ -963,6 +963,11 @@ function Sources({ stash, tab }) {
     const root = (list[0].webkitRelativePath || "").split("/")[0] || "Папка";
     setOpen({ id: "mem:" + root, name: root, mem: list });
   };
+  // the folder leaves the stash; nothing is deleted on the disk
+  const dropFolder = async s => {
+    if (!(await confirmAction({ title: `Отключить папку «${s.name}»?`, description: "Файлы на диске не удаляются. Карточки, уже отправленные в стэш, останутся.", confirmLabel: "Отключить" }))) return;
+    await removeFolder(stash.id, s.id); toast("Папка отключена");
+  };
   const connect = async () => {
     if (!canUseFolders) return pick.current?.click();
     try { setBusy(true); const r = await addFolder(stash.id, tab); setOpen({ id: r.id, name: r.name }); }
@@ -974,12 +979,18 @@ function Sources({ stash, tab }) {
       {list.map(s => {
         const st = states[s.id];
         return (
-          <button key={s.id} type="button" onClick={() => setOpen(s)} className="inline-flex h-7 items-center gap-1.5 rounded-md border font-mono bg-card px-2.5 text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+          <ActionsContext key={s.id} items={[{ label: "Открыть", icon: FolderOpenIcon, onSelect: () => setOpen(s) }, { label: "Отключить папку", icon: Trash2Icon, variant: "destructive", onSelect: () => dropFolder(s) }]}>
+          <span className="group/f inline-flex h-7 items-center rounded-md border bg-card font-mono text-muted-foreground hover:border-foreground/30">
+          <button type="button" onClick={() => setOpen(s)} className="inline-flex h-full items-center gap-1.5 pr-1.5 pl-2.5 hover:text-foreground"
             title={st === "missing" ? "Папка подключена на другом устройстве" : "Открыть папку: смотреть файлы и отправлять выбранные в стэш"}>
             <FolderOpenIcon className="size-3.5" />{s.name}
             {st === "prompt" && <LockIcon className="size-3" />}
             {st === "missing" && <span className="opacity-70">на другом устройстве</span>}
           </button>
+          <button type="button" onClick={() => dropFolder(s)} title="Отключить папку" aria-label={"Отключить папку " + s.name}
+            className="grid h-full w-6 place-items-center rounded-r-md border-l text-muted-foreground/70 hover:bg-destructive/10 hover:text-destructive"><XIcon className="size-3" /></button>
+          </span>
+          </ActionsContext>
         );
       })}
       <input ref={pick} type="file" webkitdirectory="" multiple className="hidden" onChange={e => browseOnce(e.target.files)} onClick={e => { e.currentTarget.value = ""; }} />
