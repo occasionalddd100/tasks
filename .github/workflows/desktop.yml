@@ -16,13 +16,14 @@ jobs:
     defaults:
       run:
         working-directory: desktop
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - run: npx electron-builder --win --publish never -c.extraMetadata.version=1.0.${{ github.run_number }}
+      - run: npx electron-builder --win --publish never --config.extraMetadata.version=1.0.${{ github.run_number }}
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-${{ github.run_number }}
