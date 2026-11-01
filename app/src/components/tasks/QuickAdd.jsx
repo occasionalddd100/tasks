@@ -20,9 +20,13 @@ export const setAmbient = a => { ambient = a; };
 const setOpen = (v, tag) => { open = v; if (v) { preset = tag ?? ambient?.tag ?? null; } subs.forEach(f => f()); };
 export const openQuickAdd = tag => setOpen(true, typeof tag === "string" ? tag : null);
 
+// the same text sent twice within a moment is one task (a double Enter, a keyboard that sends Enter twice, a double tap)
+let lastAdd = { text: "", at: 0 };
 export async function addTask(raw, { tag, day, due, time } = {}) {
   const tags = tagsOf(getDb()), p = parseTag(raw, tags);
   const text = p.text; if (!text) return null;
+  if (text === lastAdd.text && Date.now() - lastAdd.at < 2000) return null;
+  lastAdd = { text, at: Date.now() };
   const tagId = p.tag?.id ?? tag ?? null;
   let cat = targetCat(tagId);
   if (!cat) { await ensurePersonal(); cat = targetCat(tagId); }
@@ -53,7 +57,7 @@ export function Composer({ autoFocus, defaultTag = null, onAdded, className }) {
   const cur = typed?.id ?? tag;
   const submit = async e => {
     e?.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() || e?.repeat) return;
     // "Уже сделал": no task, just a line on today's timeline
     const r = did ? (addDone(text), { text: text.trim(), did: true }) : await addTask(text, { tag: cur, due, time: due ? time : "" });
     if (r) { onAdded?.(r); setText(""); setDue(""); setTime(""); ref.current?.focus(); }

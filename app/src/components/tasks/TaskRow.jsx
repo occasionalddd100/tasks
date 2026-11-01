@@ -2,10 +2,11 @@ import { toast } from "sonner";
 import { createContext, useContext, useRef, useState, useSyncExternalStore } from "react";
 import {
   AlarmClockIcon, AlarmClockOffIcon, ArchiveIcon, CalendarIcon, CalendarXIcon, ChevronRightIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlameIcon,
-  GripVerticalIcon, FolderInputIcon, UserIcon, UserXIcon, PencilIcon, Trash2Icon, CheckIcon, CopyIcon, HashIcon,
+  GripVerticalIcon, FolderInputIcon, UserIcon, UserXIcon, PencilIcon, Trash2Icon, CheckIcon, CopyIcon, HashIcon, SunIcon, SunriseIcon, SquareCheckIcon,
 } from "lucide-react";
 import { getDb, update, updateMany, remove } from "@/lib/db";
-import { today, dueLabel, stale } from "@/lib/tasks";
+import { today, dueLabel, stale, addDays } from "@/lib/tasks";
+import { useSelection, toggleSel, selActive, moveTasks } from "@/lib/select";
 import { renderMd } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -122,6 +123,10 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub }) {
 
   const items = [
     { label: "Открыть", icon: PencilIcon, hint: "двойной клик", onSelect: () => setTimeout(() => setSheet(true)) },
+    !t.done && { label: "На сегодня", icon: SunIcon, active: t.due === today(), onSelect: () => moveTasks([t.id], "today") },
+    !t.done && { label: "На завтра", icon: SunriseIcon, active: t.due === addDays(1), onSelect: () => moveTasks([t.id], "tomorrow") },
+    !t.done && t.due && { label: "Без срока", icon: CalendarXIcon, onSelect: () => moveTasks([t.id], "free") },
+    !t.done && { label: "Выбрать", icon: SquareCheckIcon, hint: "Shift+клик", onSelect: () => toggleSel(t.id) },
     canHide && { label: "Скрыть в выполненные", icon: EyeOffIcon, onSelect: () => hideTask(t) },
     { label: hasBody ? "Открыть заметку" : "Добавить заметку", icon: FileTextIcon, onSelect: () => setNoteOpen(true) },
     onAddSub && { label: "Добавить подзадачу", icon: CornerDownRightIcon, onSelect: onAddSub },
@@ -179,13 +184,16 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub }) {
   // no side swipes: a hold still opens the tag wheel
   const swipe = useSwipe(null, null, (x, y) => openWheel(t, x, y), false);
   const tapOpen = phone && !overlay;
+  const picked = useSelection().has(t.id);
+  // Shift/Ctrl-click picks the task (several at once); while something is picked on the phone, a tap picks too
+  const pick = e => { if (overlay) return; if (e.shiftKey || e.ctrlKey || e.metaKey || (phone && selActive() && !e.target.closest("[role=checkbox]"))) { e.preventDefault(); e.stopPropagation(); toggleSel(t.id); } };
   const row = (
-    <div {...(tapOpen ? swipe.handlers : {})}
+    <div {...(tapOpen ? swipe.handlers : {})} onClickCapture={pick}
       onClick={tapOpen ? e => { if (!swipe.held.current && !e.target.closest("button,[role=checkbox],input,label,a")) setSheet(true); } : undefined}
       onContextMenu={tapOpen ? e => e.preventDefault() : undefined}
       style={swipe.dx ? { transform: `translateX(${swipe.dx}px)` } : undefined}
       className={cn("group/task relative flex items-start gap-1 rounded-md py-1.5 pr-1 md:py-1 transition-colors hover:bg-accent/50 data-[state=open]:bg-accent/70",
-        swipe.dx ? "bg-background" : "transition-transform", tapOpen && "touch-pan-y select-none [-webkit-touch-callout:none]",
+        swipe.dx ? "bg-background" : "transition-transform", tapOpen && "touch-pan-y select-none [-webkit-touch-callout:none]", picked && "bg-primary/15 ring-1 ring-primary/40",
         urgent && "before:absolute before:top-2 before:bottom-2 before:-left-0.5 before:w-0.5 before:rounded-full before:bg-red-500")}>
       {grip ? (
         <button {...grip} ref={grip.ref} aria-label={"Перетащить: " + t.text}

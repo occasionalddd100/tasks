@@ -1,6 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArchiveIcon, CheckIcon, FlameIcon, SunIcon, SunriseIcon } from "lucide-react";
+import { ArchiveIcon, CheckIcon, FlameIcon, SquareCheckIcon, SunIcon, SunriseIcon } from "lucide-react";
+import { toggleSel } from "@/lib/select";
 import { useDb, getDb, update } from "@/lib/db";
 import { toBucket } from "@/lib/focus";
 import { today, addDays } from "@/lib/tasks";
@@ -40,6 +41,7 @@ export function TagWheelHost() {
       { id: "\u0000tmr", name: "Завтра", glyph: <SunriseIcon className="size-5" />, on: t.due === tmr, run: () => update("tasks", t.id, t.due === tmr ? { due: "", time: "" } : { due: tmr }) },
       { id: "\u0000prio", name: urgent ? "Без приоритета" : "Приоритет", glyph: <FlameIcon className="size-5" />, on: urgent, run: () => update("tasks", t.id, { prio: urgent ? "" : "urgent" }) },
       { id: "\u0000pail", name: "В ведёрко", glyph: <ArchiveIcon className="size-5" />, run: () => toBucket(t) },
+      { id: "\u0000pick", name: "Выбрать", glyph: <SquareCheckIcon className="size-5" />, run: () => toggleSel(t.id) },
     ].filter(a => !t.done || a.id === "\u0000pail");
     // keep the whole outer ring on screen
     cx = Math.min(innerWidth - R - 40, Math.max(R + 40, s.x)); cy = Math.min(innerHeight - R - 56, Math.max(R + 70, s.y));

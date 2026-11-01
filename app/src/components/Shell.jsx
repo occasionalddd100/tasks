@@ -13,6 +13,7 @@ import MobileNav from "@/components/MobileNav";
 import { useShortcut, ShortcutPicker } from "@/components/NavShortcut";
 import { SettingsHost, openSettings } from "@/components/Settings";
 import { TourHost } from "@/components/Tour";
+import SelectionBar from "@/components/tasks/SelectionBar";
 import { PicsViewer } from "@/components/stash/Pics";
 import ShareInbox from "@/components/stash/ShareInbox";
 const ZenView = lazy(() => import("@/components/tasks/ZenView"));
@@ -184,6 +185,7 @@ export default function Shell() {
       <ConfirmHost />
       <SettingsHost />
       <TourHost />
+      <SelectionBar />
       <ShareInbox go={go} />
       <PicsViewer />
       <AnimatePresence>{view.zen && <Suspense fallback={null}><ZenView onClose={() => go({ focus: true })} /></Suspense>}</AnimatePresence>
