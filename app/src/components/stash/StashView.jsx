@@ -17,7 +17,7 @@ import { isMine } from "@/lib/db";
 import { toast } from "sonner";
 import { useDb, getDb, update, updateMany, remove } from "@/lib/db";
 import { addLink, addText, addPhoto, embedUrl, linksIn, PROVIDER, refresh, needsPreview } from "@/lib/stash";
-import { uploadPhoto, usePhotoUrl, deletePhoto } from "@/lib/photos";
+import { uploadPhoto, usePhotoUrl, deletePhoto, photoUrl } from "@/lib/photos";
 import { PaletteIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PicsEditor, PicImg, Carousel, PicsOverlay, own as ownPic, saveCard, mediaCount, viewPics, gallery, isViewerOpen } from "@/components/stash/Pics";
@@ -1062,13 +1062,15 @@ async function copyClip(c) {
   const text = c.url || c.text || c.note || c.title || c.desc || "";
   const pic = !c.url && !c.text && gallery(c)[0];
   try {
-    if (pic?.src) {
-      const img = await createImageBitmap(await (await fetch(pic.src)).blob());
+    const src = pic && (pic.src || await photoUrl(pic.path));
+    if (src) {
+      const img = await createImageBitmap(await (await fetch(src)).blob());
       const cv = document.createElement("canvas"); cv.width = img.width; cv.height = img.height; cv.getContext("2d").drawImage(img, 0, 0);
       const blob = await new Promise(res => cv.toBlob(res, "image/png"));
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       return toast.success("Картинка скопирована");
     }
+    if (!text && c.video) { await navigator.clipboard.writeText(c.video); return toast.success("Ссылка на видео скопирована"); }
     if (!text) return toast("Тут нечего копировать");
     await navigator.clipboard.writeText(text);
     toast.success(c.url ? "Ссылка скопирована" : "Скопировано");

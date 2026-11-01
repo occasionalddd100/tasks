@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
-import { CrosshairIcon, FlameIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon, CornerDownRightIcon, FileTextIcon, ChevronLeftIcon } from "lucide-react";
+import { CrosshairIcon, FlameIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon, CornerDownRightIcon, FileTextIcon, ListChecksIcon, ChevronLeftIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import * as Pop from "@radix-ui/react-popover";
 import { useDb, update, add } from "@/lib/db";
-import { openList, toBucket } from "@/lib/focus";
+import { openList, labelOf } from "@/lib/focus";
 import { useSelection, toggleSel, selActive, isSelected, getSel, clearSel, moveTasks, MOVES } from "@/lib/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { timeOf } from "@/lib/reminders";
@@ -59,7 +59,7 @@ export default function FocusView() {
     [db.tasks, db.me, db.cats, drafts?.id, tags.map(t => t.id).join()]);
   const list = useMemo(() => {
     const mine = new Set([drafts?.id, ...tags.map(t => t.id)]);
-    const done = db.tasks.filter(t => t.done && t.doneOn === now && !t.hidden && !t.parent && mine.has(t.cat) && (t.doneBy || t._owner) === db.me)
+    const done = db.tasks.filter(t => t.done && t.doneOn === now && !t.hidden && !t.parent && (mine.has(t.cat) || labelOf(db, t)?.project) && (t.doneBy || t._owner) === db.me)
       .sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || ""));
     return [...rest, ...done];
   }, [rest, db.tasks, now]);
@@ -68,7 +68,14 @@ export default function FocusView() {
     for (const t of rest) by.get(t.cat === drafts?.id ? NONE : t.cat)?.push(t);
     return by;
   }, [rest, tags.map(t => t.id).join(), drafts?.id]);
-  const shownTag = filter && (filter === NONE || tags.some(t => t.id === filter)) ? filter : null;
+  // projects whose tasks are on the home screen: they can be picked like tags
+  const projects = useMemo(() => {
+    const m = new Map();
+    for (const t of rest) { const l = labelOf(db, t); if (l?.project) { if (!m.has(l.id)) m.set(l.id, { ...l, n: 0 }); m.get(l.id).n++; } }
+    return [...m.values()];
+  }, [rest, db.projects, db.boards]);
+  const byProject = id => t => labelOf(db, t)?.id === id;
+  const shownTag = filter && (filter === NONE || tags.some(t => t.id === filter) || projects.some(p => p.id === filter)) ? filter : null;
   // a task just added from ＋ must be seen: drop a filter that would hide it
   const freshId = useFresh(), fresh = db.tasks.find(t => t.id === freshId);
   useEffect(() => {
@@ -78,13 +85,14 @@ export default function FocusView() {
   }, [fresh?.id]);
   // ＋ adds to what's on screen: the picked tag
   useEffect(() => { setAmbient({ tag: shownTag && shownTag !== NONE ? shownTag : null }); return () => setAmbient(null); }, [shownTag]);
-  const tagName = id => id === NONE ? "Без тега" : tags.find(t => t.id === id)?.name;
+  const tagName = id => id === NONE ? "Без тега" : tags.find(t => t.id === id)?.name || projects.find(p => p.id === id)?.name;
 
   const menu = [
     { id: ALL, name: "Все", n: rest.length, on: !shownTag, glyph: <ListTodoIcon className="size-5" /> },
     groups.get(NONE)?.length && { id: NONE, name: "Без тега", n: groups.get(NONE).length, on: shownTag === NONE, glyph: <InboxIcon className="size-5" /> },
     ...tags.map(t => ({ id: t.id, name: t.name, n: groups.get(t.id)?.length || 0, on: shownTag === t.id, tag: t,
       glyph: t.emoji ? <span className="text-xl leading-none">{t.emoji}</span> : <span className="text-base font-semibold" style={t.color ? { color: t.color } : undefined}>{(t.name.trim()[0] || "#").toUpperCase()}</span> })),
+    ...projects.map(p => ({ id: p.id, name: p.name, n: p.n, on: shownTag === p.id, tag: p, project: true, glyph: <ListChecksIcon className="size-5" style={{ color: p.color }} /> })),
   ].filter(Boolean);
   const pick = id => { if (id === EDIT) { openTagEditor(); return; } setFilter(id === ALL ? null : id); jump(); };
 
@@ -117,7 +125,9 @@ export default function FocusView() {
 
       {!shownTag && <NextUp />}
 
-      {shownTag && wide
+      {shownTag?.startsWith("p:")
+        ? <section className="flex flex-col gap-1"><WorkList list={list.filter(byProject(shownTag))} /></section>
+        : shownTag && wide
         ? <section className="flex flex-col gap-1"><WorkList list={list.filter(t => (t.cat === drafts?.id ? NONE : t.cat) === shownTag)} /></section>
         : shownTag
         ? <TagList cat={shownTag === NONE ? drafts?.id : shownTag} tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
@@ -189,7 +199,7 @@ function TagTabs({ items, onPick }) {
         <button key={it.id} type="button" onClick={() => onPick(it.id)}
           className={cn("flex h-9 shrink-0 items-center gap-1.5 border-r px-3 whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground",
             it.on && "bg-accent font-semibold text-foreground shadow-[inset_0_-2px_0_var(--primary)]")}>
-          {it.id === ALL ? <ListTodoIcon className="size-3.5" /> : it.id === NONE ? <InboxIcon className="size-3.5" />
+          {it.id === ALL ? <ListTodoIcon className="size-3.5" /> : it.id === NONE ? <InboxIcon className="size-3.5" /> : it.project ? <ListChecksIcon className="size-3.5" style={{ color: it.tag.color }} />
             : it.tag?.emoji ? <span className="text-sm leading-none">{it.tag.emoji}</span> : <span className="size-2 rounded-full" style={{ background: it.tag?.color || "currentColor" }} />}
           <span>{it.name}</span>
           {it.n > 0 && <span className="tabular-nums opacity-60">{it.n}</span>}
@@ -236,8 +246,8 @@ function WorkList({ list, habits }) {
   const bunch = tasks => {
     const out = [], at = new Map();
     for (const t of tasks) {
-      const tag = tagOfTask(db, t);
-      if (!tag || tasks.filter(x => tagOfTask(db, x)?.id === tag.id).length < 2) { out.push({ tasks: [t] }); continue; }
+      const tag = labelOf(db, t);
+      if (!tag || tasks.filter(x => labelOf(db, x)?.id === tag.id).length < 2) { out.push({ tasks: [t] }); continue; }
       if (!at.has(tag.id)) { at.set(tag.id, out.length); out.push({ tag, tasks: [] }); }
       out[at.get(tag.id)].tasks.push(t);
     }
@@ -343,7 +353,7 @@ function TuiBlock({ g, tasks, grow, bare }) {
   // tasks of one tag stay together under a thin label; untagged ones first
   const parts = useMemo(() => {
     const m = new Map();
-    for (const t of tasks) { const tag = tagOfTask(db, t), id = tag?.id || ""; if (!m.has(id)) m.set(id, { tag, tasks: [] }); m.get(id).tasks.push(t); }
+    for (const t of tasks) { const tag = labelOf(db, t), id = tag?.id || ""; if (!m.has(id)) m.set(id, { tag, tasks: [] }); m.get(id).tasks.push(t); }
     return [...m.values()].sort((a, b) => (a.tag ? 1 : 0) - (b.tag ? 1 : 0));
   }, [tasks, db.cats]);
   const showDate = g.k === "late" || g.k === "planned" || g.k === "urgent" || g.k === "done";

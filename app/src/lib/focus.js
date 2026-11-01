@@ -5,9 +5,25 @@ import { today } from "@/lib/tasks";
 
 // My open tasks of «Личное» (its tags and drafts): top level, not put aside, not someone else's.
 // The home screen splits them by when (overdue, priority, today, tomorrow, planned, no date).
+// Tasks of other projects (kanban boards) join in when they have a date or a priority and are mine
+// (given to me, or nobody's and made by me).
 export function openList(db) {
   const mine = new Set([draftsOf(db)?.id, ...tagsOf(db).map(t => t.id)]);
-  return db.tasks.filter(t => mine.has(t.cat) && !t.done && !t.hidden && !t.parent && t.text?.trim() && (!t.assignee || t.assignee === db.me));
+  return db.tasks.filter(t => !t.done && !t.hidden && !t.parent && t.text?.trim() && (mine.has(t.cat)
+    ? (!t.assignee || t.assignee === db.me)
+    : (t.due || t.prio === "urgent" || t.prio === "today") && (t.assignee ? t.assignee === db.me : (t._owner || db.me) === db.me) && !!projectOf(db, t)));
+}
+// the project (kanban board) a task lives in
+export function projectOf(db, t) {
+  const c = db.cats.find(x => x.id === t.cat), b = c && db.boards.find(x => x.id === c.board);
+  return b && db.projects.find(x => x.id === b.project) || null;
+}
+// what a task is grouped under on the home screen: its tag, or for a project's task the project
+export function labelOf(db, t) {
+  const tag = tagsOf(db).find(x => x.id === t.cat); if (tag) return tag;
+  if (t.cat === draftsOf(db)?.id) return null;
+  const p = projectOf(db, t);
+  return p && !p.personal ? { id: "p:" + p.id, name: p.name || "Без названия", color: p.color || "#64748b", project: true } : null;
 }
 // what is on for today: overdue, due today, urgent
 export const isNow = (t, now = today()) => (t.due && t.due <= now) || t.prio === "urgent" || t.prio === "today";
