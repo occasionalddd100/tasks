@@ -132,11 +132,11 @@ export default function Board({ board, hideDrafts }) {
 
   return (
     <People.Provider value={people}><Kids.Provider value={kids}><Fresh.Provider value={fresh}><Stacked.Provider value>
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 md:gap-2">
       <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
         <SortableContext items={catList.map(c => C + c.id)} strategy={horizontalListSortingStrategy}>
           {/* kanban: columns side by side, scrolled sideways; on the phone one column fills the screen and snaps */}
-          <div className="-mx-4 flex snap-x snap-mandatory items-start gap-3 overflow-x-auto px-4 pb-3 md:-mx-8 md:snap-none md:px-8 [scrollbar-width:thin]">
+          <div className="-mx-4 flex snap-x snap-mandatory items-start gap-3 overflow-x-auto px-4 pb-3 md:mx-0 md:snap-none md:items-stretch md:gap-2 md:px-0 md:pb-2 [scrollbar-width:thin]">
             {catList.map(c => <CatCard key={c.id} cat={c} ids={shown[c.id] || []} taskById={taskById} />)}
             <NewCat board={board} cats={cats} />
           </div>
@@ -147,7 +147,7 @@ export default function Board({ board, hideDrafts }) {
         </DragOverlay>
       </DndContext>
       {archive.length > 0 && <DoneCard tasks={archive} cats={cats} />}
-      <p className="text-xs text-muted-foreground">Тяни за ⋮⋮, чтобы переставить задачу или колонку. <span className="max-md:hidden">Нажми на текст, чтобы изменить. Правая кнопка мыши открывает меню: фокус, срочно, дата, заметка.</span><span className="md:hidden">Нажми на задачу, чтобы открыть её. Смахни вправо, чтобы закрыть, влево, чтобы положить в фокус.</span></p>
+      <p className="text-xs text-muted-foreground md:hidden">Тяни за ⋮⋮, чтобы переставить задачу или колонку. <span className="max-md:hidden">Нажми на текст, чтобы изменить. Правая кнопка мыши открывает меню: фокус, срочно, дата, заметка.</span><span className="md:hidden">Нажми на задачу, чтобы открыть её. Смахни вправо, чтобы закрыть, влево, чтобы положить в фокус.</span></p>
     </div>
     </Stacked.Provider></Fresh.Provider></Kids.Provider></People.Provider>
   );
@@ -239,29 +239,32 @@ function CatCard({ cat, ids, taskById }) {
 
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn("shrink-0 snap-start transition-[width] duration-200", cat.collapsed ? "w-12" : "w-[calc(100vw-3rem)] max-w-80 md:w-72", isDragging && "z-10 opacity-40")}>
-      <section style={tint(cat.color)} className={cn("group/cat flex max-h-[calc(100dvh-14rem)] flex-col rounded-xl border bg-muted/40 transition-colors [background-color:var(--tint-bg,color-mix(in_oklab,var(--muted)_45%,transparent))] [border-color:var(--tint-bd,transparent)]", cat.drafts && "border-dashed border-primary/40")}>
+      className={cn("shrink-0 snap-start transition-[width] duration-200", cat.collapsed ? "w-12" : "w-[calc(100vw-3rem)] max-w-80 md:w-80 md:max-w-none lg:w-[22rem]", isDragging && "z-10 opacity-40")}>
+      {/* phone: a soft card; computer: a plain bordered panel like the task board, as tall as the screen */}
+      <section style={tint(cat.color)} className={cn("group/cat flex max-h-[calc(100dvh-14rem)] flex-col rounded-xl border bg-muted/40 transition-colors [background-color:var(--tint-bg,color-mix(in_oklab,var(--muted)_45%,transparent))] [border-color:var(--tint-bd,transparent)]",
+        "md:h-[calc(100dvh-11rem)] md:max-h-none md:rounded-md md:border-border md:bg-background md:[background-color:var(--background)]", cat.drafts && "border-dashed border-primary/40 md:border-primary/40")}>
         <ActionsContext items={items}>
           {cat.collapsed ? (
             // folded column: a narrow strip with the name running down it; tap to open
             <button type="button" onClick={toggle} aria-expanded={false} aria-label={"Развернуть " + cat.name}
-              className="flex min-h-40 w-full flex-col items-center gap-2 rounded-xl py-3 text-muted-foreground hover:text-foreground">
+              className="flex min-h-40 w-full flex-col items-center gap-2 rounded-xl py-3 text-muted-foreground hover:text-foreground md:h-full md:rounded-md">
               <ChevronDownIcon className="size-4 -rotate-90" />
               {cat.color && <span className="size-2.5 rounded-full" style={{ background: "var(--tint)" }} aria-hidden />}
-              <span className="text-sm font-semibold text-foreground [writing-mode:vertical-rl]">{cat.name}</span>
+              <span className="text-sm font-semibold text-foreground [writing-mode:vertical-rl] md:font-mono md:tracking-wide md:uppercase">{cat.name}</span>
               {tasks.length > 0 && <span className="text-xs tabular-nums">{tasks.filter(t => !t.done).length}</span>}
             </button>
           ) : (
-          <header className="flex items-center gap-1 px-2 pt-2 pb-1.5">
+          <header className="flex items-center gap-1 px-2 pt-2 pb-1.5 md:h-11 md:shrink-0 md:border-b md:py-0">
             <button ref={setActivatorNodeRef} {...attributes} {...listeners} aria-label={"Перетащить колонку " + cat.name}
               className="grid h-7 w-5 shrink-0 cursor-grab touch-none place-items-center rounded text-muted-foreground/60 hover:text-foreground active:cursor-grabbing">
               <GripVerticalIcon className="size-4" />
             </button>
             {renaming
               ? <InlineInput value={cat.name} onDone={name => { setRenaming(false); if (name && name !== cat.name) update("cats", cat.id, { name }); }} className="h-7 text-[15px] font-semibold" />
-              : <>{cat.color && <span className="size-2.5 shrink-0 rounded-full" style={{ background: "var(--tint)" }} aria-hidden />}<h2 className="min-w-0 cursor-text truncate text-[15px] font-semibold" onClick={() => setRenaming(true)} title="Переименовать">{cat.name}</h2></>}
+              : <>{cat.color && <span className="size-2.5 shrink-0 rounded-full" style={{ background: "var(--tint)" }} aria-hidden />}<h2 className="min-w-0 cursor-text truncate text-[15px] font-semibold md:font-mono md:text-sm md:tracking-wide md:uppercase" style={cat.color ? { color: "var(--tint)" } : undefined} onClick={() => setRenaming(true)} title="Переименовать">{cat.name}</h2></>}
             {tasks.length > 0 && <span title={`${tasks.filter(t => t.done).length} из ${tasks.length} сделано`}
-              className="shrink-0 rounded-full bg-foreground/[.06] px-2 py-px text-xs font-medium text-muted-foreground tabular-nums">{tasks.filter(t => !t.done).length || "✓"}</span>}
+              className="shrink-0 rounded-full bg-foreground/[.06] px-2 py-px text-xs font-medium text-muted-foreground tabular-nums md:bg-transparent md:px-0 md:font-mono md:text-sm">
+              <span className="max-md:hidden">[</span>{tasks.filter(t => !t.done).length || "✓"}<span className="max-md:hidden">]</span></span>}
             <div className="ml-auto flex shrink-0 items-center">
               <Button variant="ghost" size="iconSm" className="text-muted-foreground" aria-label={"Добавить задачу в " + cat.name} onClick={addHere}><PlusIcon className="size-4" /></Button>
               <ActionsDropdown align="end" items={items} trigger={
@@ -273,12 +276,12 @@ function CatCard({ cat, ids, taskById }) {
         </ActionsContext>
         {!cat.collapsed && <>
           <SortableContext items={ids.map(id => T + id)} strategy={verticalListSortingStrategy}>
-            <ul ref={dropRef} className="flex min-h-10 flex-col gap-1.5 overflow-y-auto px-2 pb-1">
+            <ul ref={dropRef} className="thin-scroll flex min-h-10 flex-col gap-1.5 overflow-y-auto px-2 pb-1 md:flex-1 md:gap-0 md:px-1 md:pt-1">
               {tasks.map(t => <SortableTask key={t.id} t={t} card />)}
             </ul>
           </SortableContext>
-          <form onSubmit={addTask} className="px-2 pt-1 pb-2">
-            <Input ref={input} value={text} onChange={e => setText(e.target.value)} placeholder="+ задача" className="h-9 border-dashed bg-transparent shadow-none" aria-label={"Новая задача в " + cat.name} />
+          <form onSubmit={addTask} className="px-2 pt-1 pb-2 md:border-t md:p-1">
+            <Input ref={input} value={text} onChange={e => setText(e.target.value)} placeholder="+ задача" className="h-9 border-dashed bg-transparent shadow-none md:h-10 md:border-0 md:font-mono md:text-[13px] md:focus-visible:ring-0" aria-label={"Новая задача в " + cat.name} />
           </form>
         </>}
       </section>
@@ -290,7 +293,7 @@ function SortableTask({ t, card }) {
   const hasKids = useContext(Kids).has(t.id);
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: T + t.id });
   return (
-    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} data-kids={hasKids || undefined} className={cn("relative", card && "rounded-lg border bg-card px-1 shadow-xs", isDragging && "z-10 opacity-30")}>
+    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} data-kids={hasKids || undefined} className={cn("relative", card && "rounded-lg border bg-card px-1 shadow-xs md:rounded md:border-transparent md:bg-transparent md:shadow-none md:hover:bg-accent/60", isDragging && "z-10 opacity-30")}>
       <TaskNode t={t} grip={{ ref: setActivatorNodeRef, ...attributes, ...listeners }} />
     </li>
   );
@@ -371,13 +374,13 @@ function NewCat({ board, cats }) {
     add("cats", { name: n, board: board.id, order: nextOrder(cats) });
   };
   return (
-    <div className="w-[calc(100vw-3rem)] max-w-80 shrink-0 snap-start md:w-72">
+    <div className="w-[calc(100vw-3rem)] max-w-80 shrink-0 snap-start md:w-64">
       {open
         ? <form onSubmit={submit} className="flex gap-2 rounded-xl bg-muted/40 p-2">
             <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Название колонки" onKeyDown={e => e.key === "Escape" && setOpen(false)} onBlur={() => !name.trim() && setOpen(false)} />
             <Button>Создать</Button>
           </form>
-        : <button type="button" onClick={() => setOpen(true)} className="flex h-12 w-full items-center gap-2 rounded-xl border border-dashed px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground">
+        : <button type="button" onClick={() => setOpen(true)} className="flex h-12 w-full items-center gap-2 rounded-xl border border-dashed px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground md:h-11 md:rounded-md md:font-mono md:text-[13px]">
             <PlusIcon className="size-4" />{cats.length ? "Новая колонка" : "Создай первую колонку"}
           </button>}
     </div>
