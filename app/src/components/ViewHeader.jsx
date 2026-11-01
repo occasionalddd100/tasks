@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import { cn } from "@/lib/utils";
+import { cn, wheelX } from "@/lib/utils";
 
 // one look for the top of every view (project, stash, …): icon, editable title, actions on the right, then pill tabs
 export const VIEW = "mx-auto flex w-full max-w-[1600px] flex-col gap-3 px-4 pt-3 pb-8 md:px-3 md:pt-3 md:pb-8";
@@ -29,7 +29,7 @@ export const PillTab = forwardRef(function PillTab({ on, drop, children, classNa
 // sticky: on a phone the tabs stay pinned under the top bar, on a blurred strip
 const BLUR = { backdropFilter: "blur(14px) saturate(1.6)", WebkitBackdropFilter: "blur(14px) saturate(1.6)" };
 export const PillTabs = ({ children, sticky }) => (
-  <div role="tablist" style={sticky ? BLUR : undefined}
+  <div ref={wheelX} role="tablist" style={sticky ? BLUR : undefined}
     className={cn("-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-1 md:mx-0 md:w-fit md:max-w-full md:gap-0 md:rounded-md md:border md:px-0 md:pb-0 [scrollbar-width:none]",
       sticky && "max-md:sticky max-md:top-[var(--bar)] max-md:z-10 max-md:border-b max-md:bg-background/80 max-md:py-1.5")}>{children}</div>
 );

@@ -13,7 +13,7 @@ import { exText, exAt } from "@/lib/done";
 
 import { tagsOf, tagOfTask } from "@/lib/tags";
 import { draftsOf } from "@/lib/personal";
-import { cn } from "@/lib/utils";
+import { cn, wheelX } from "@/lib/utils";
 import { stale, byOrder, today, dueLabel, dayDiff, plural, addDays, nextOrder } from "@/lib/tasks";
 import { VIEW } from "@/components/ViewHeader";
 import TaskRow from "@/components/tasks/TaskRow";
@@ -184,7 +184,7 @@ function NextUp() {
 // wide computer: the tags are tabs in place of the title
 function TagTabs({ items, onPick }) {
   return (
-    <nav className="thin-scroll flex min-w-0 items-stretch overflow-x-auto rounded-md border font-mono text-[13px]">
+    <nav ref={wheelX} className="thin-scroll flex min-w-0 items-stretch overflow-x-auto rounded-md border font-mono text-[13px]">
       {items.map(it => (
         <button key={it.id} type="button" onClick={() => onPick(it.id)}
           className={cn("flex h-9 shrink-0 items-center gap-1.5 border-r px-3 whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground",
