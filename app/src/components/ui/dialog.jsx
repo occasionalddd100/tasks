@@ -21,7 +21,9 @@ function DialogContent({ className, children, ...props }) {
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-[fade-in_150ms_ease-out]" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid data-[state=open]:animate-[dialog-in_180ms_ease-out] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg sm:max-w-lg lg:max-w-xl",
+          "fixed top-[50%] left-[50%] z-50 grid data-[state=open]:animate-[dialog-in_180ms_ease-out] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg sm:max-w-lg",
+          // a dialog that sets its own width keeps it; the rest get roomier on a big screen
+          !/max-w-/.test(className || "") && "lg:max-w-xl",
           className
         )}
         {...props}
