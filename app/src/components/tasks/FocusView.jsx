@@ -282,10 +282,10 @@ function TuiBlock({ g, tasks, grow }) {
   const showDate = g.k === "late" || g.k === "planned" || g.k === "urgent" || g.k === "done";
   return (
     <section ref={setNodeRef} className={cn("flex flex-col border-b last:border-b-0 transition-colors", grow && open && "flex-1", isOver && "bg-primary/10")}>
-      <div className="group/h sticky top-0 z-[1] flex h-8 shrink-0 items-center gap-2 border-b bg-background/95 px-2 font-mono text-[11px] font-semibold tracking-wider uppercase backdrop-blur">
+      <div className="group/h sticky top-0 z-[1] flex h-10 shrink-0 items-center gap-2 border-b bg-background/95 px-2.5 font-mono text-[13px] font-semibold tracking-wider uppercase backdrop-blur">
         <button type="button" onClick={() => setOpen(!open)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
           <ChevronRightIcon className={cn("size-3 text-muted-foreground transition-transform", open && "rotate-90")} />
-          <g.icon className="size-3.5 shrink-0" style={{ color: g.c }} />
+          <g.icon className="size-4 shrink-0" style={{ color: g.c }} />
           <span className="truncate" style={{ color: g.c }}>{g.l}</span>
           <span className="text-muted-foreground tabular-nums">[{tasks.length}]</span>
         </button>
@@ -294,7 +294,7 @@ function TuiBlock({ g, tasks, grow }) {
       </div>
       {open && <div className="py-1">
         {adding && <AddLine placeholder={"Новая задача в «" + g.l + "»"} withDate={g.k === "planned"} onAdd={g.add} onClose={() => setAdding(false)} className="py-0.5" />}
-        {!tasks.length && !adding && <p className="px-3 py-1 font-mono text-[11px] text-muted-foreground/60">{g.k === "late" ? "— чисто —" : "— пусто, перетащи сюда —"}</p>}
+        {!tasks.length && !adding && <p className="px-3 py-1.5 font-mono text-xs text-muted-foreground/60">{g.k === "late" ? "— чисто —" : "— пусто, перетащи сюда —"}</p>}
         {parts.map(p => <TuiTag key={p.tag?.id || "none"} id={g.k + ":" + (p.tag?.id || "none")} tag={p.tag} tasks={p.tasks} showDate={showDate} />)}
       </div>}
     </section>
@@ -306,10 +306,10 @@ function TuiTag({ id, tag, tasks, showDate }) {
   const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); v ? f.delete("tuitag:" + id) : f.add("tuitag:" + id); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
   return (
     <div className="mb-0.5">
-      {tag && <button type="button" onClick={() => setOpen(!open)} className="flex h-6 w-full items-center gap-1.5 px-2 font-mono text-[11px] text-muted-foreground hover:text-foreground">
+      {tag && <button type="button" onClick={() => setOpen(!open)} className="flex h-7 w-full items-center gap-1.5 px-2.5 font-mono text-xs text-muted-foreground hover:text-foreground">
         <ChevronRightIcon className={cn("size-3 transition-transform", open && "rotate-90")} />
         <span className="size-1.5 shrink-0 rounded-full" style={{ background: tag.color }} />
-        {tag.emoji && <span className="text-[11px] leading-none">{tag.emoji}</span>}<span className="truncate">{tag.name}</span><span className="tabular-nums opacity-70">{tasks.length}</span>
+        {tag.emoji && <span className="text-xs leading-none">{tag.emoji}</span>}<span className="truncate">{tag.name}</span><span className="tabular-nums opacity-70">{tasks.length}</span>
       </button>}
       {(open || !tag) && <ul>{tasks.map(t => <TuiRow key={t.id} t={t} showDate={showDate} />)}</ul>}
     </div>
@@ -325,27 +325,27 @@ function TuiRow({ t, depth = 0, showDate }) {
   const late = t.due && !t.done && t.due < today();
   const done = v => update("tasks", t.id, v ? MOVES.done() : { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false });
   const stop = e => e.stopPropagation();
-  const quick = "grid size-5 shrink-0 place-items-center rounded text-muted-foreground opacity-0 group-hover/r:opacity-100 hover:bg-background hover:text-foreground";
+  const quick = "grid size-6 shrink-0 place-items-center rounded text-muted-foreground opacity-0 group-hover/r:opacity-100 hover:bg-background hover:text-foreground";
   return (
     <li>
       <div ref={setNodeRef} {...listeners} {...attributes} role="button" tabIndex={0} title={t.text}
         onClick={e => { if (e.shiftKey || e.ctrlKey || e.metaKey || selActive()) toggleSel(t.id); else openTask(t.id); }}
         onKeyDown={e => e.key === "Enter" && openTask(t.id)}
         onContextMenu={e => { e.preventDefault(); openWheel(t, e.clientX, e.clientY, true); }}
-        className={cn("group/r mx-1 flex h-7 cursor-default items-center gap-2 rounded px-1.5 text-[13px] outline-none select-none hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring",
+        className={cn("group/r mx-1 flex h-9 cursor-default items-center gap-2.5 rounded px-2 text-[15px] outline-none select-none hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring",
           picked && "bg-primary/15 ring-1 ring-primary/40 ring-inset hover:bg-primary/20", isDragging && "opacity-30", t.done && "text-muted-foreground line-through")}
-        style={depth ? { paddingLeft: 6 + depth * 18 } : undefined}>
-        {depth > 0 && <span className="-ml-3 font-mono text-[11px] text-muted-foreground/50">└</span>}
-        <Checkbox className="size-3.5" checked={!!t.done} onClick={stop} onPointerDown={stop} onCheckedChange={v => done(!!v)} aria-label={t.text} />
+        style={depth ? { paddingLeft: 8 + depth * 20 } : undefined}>
+        {depth > 0 && <span className="-ml-3 font-mono text-xs text-muted-foreground/50">└</span>}
+        <Checkbox className="size-4" checked={!!t.done} onClick={stop} onPointerDown={stop} onCheckedChange={v => done(!!v)} aria-label={t.text} />
         <span className="min-w-0 flex-1 truncate">{t.text}</span>
-        {kids.length > 0 && <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
-        {t.body?.trim() && <FileTextIcon className="size-3 shrink-0 text-muted-foreground/70" />}
-        {t.prio === "urgent" && !t.done && <FlameIcon className="size-3 shrink-0 text-red-500" />}
+        {kids.length > 0 && <span className="font-mono text-xs text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
+        {t.body?.trim() && <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground/70" />}
+        {t.prio === "urgent" && !t.done && <FlameIcon className="size-3.5 shrink-0 text-red-500" />}
         {!t.done && !t.parent && <>
-          <button type="button" onClick={e => { stop(e); moveTasks([t.id], "today"); }} onPointerDown={stop} title="На сегодня" aria-label="На сегодня" className={quick}><SunIcon className="size-3" /></button>
-          <button type="button" onClick={e => { stop(e); moveTasks([t.id], "tomorrow"); }} onPointerDown={stop} title="На завтра" aria-label="На завтра" className={quick}><SunriseIcon className="size-3" /></button>
+          <button type="button" onClick={e => { stop(e); moveTasks([t.id], "today"); }} onPointerDown={stop} title="На сегодня" aria-label="На сегодня" className={quick}><SunIcon className="size-3.5" /></button>
+          <button type="button" onClick={e => { stop(e); moveTasks([t.id], "tomorrow"); }} onPointerDown={stop} title="На завтра" aria-label="На завтра" className={quick}><SunriseIcon className="size-3.5" /></button>
         </>}
-        {(showDate || t.time) && t.due && <span className={cn("shrink-0 font-mono text-[11px] tabular-nums", late ? "text-red-500" : "text-muted-foreground")}>{showDate ? shortDue(t) : t.time}</span>}
+        {(showDate || t.time) && t.due && <span className={cn("shrink-0 font-mono text-xs tabular-nums", late ? "text-red-500" : "text-muted-foreground")}>{showDate ? shortDue(t) : t.time}</span>}
       </div>
       {kids.length > 0 && <ul>{kids.map(k => <TuiRow key={k.id} t={k} depth={depth + 1} />)}</ul>}
     </li>

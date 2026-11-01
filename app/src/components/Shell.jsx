@@ -154,7 +154,7 @@ export default function Shell() {
           {shown
             ? <Button variant="ghost" size="icon" aria-label="Назад" onClick={() => navDepth.current > 0 ? history.back() : go({ focus: true })}><ArrowLeftIcon /></Button>
             : <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}><MenuIcon /></Button>}
-          <span className={cn("truncate text-sm font-medium transition-all duration-200", bigTitle && "translate-y-1 opacity-0")}>{title}</span>
+          <span className={cn("truncate font-mono text-sm font-semibold transition-all duration-200", bigTitle && "translate-y-1 opacity-0")}>{title}</span>
           {/* a view can put its own buttons here (tasks: tags, focus, done today) */}
           <div id="topbar-slot" className="ml-auto flex items-center gap-1.5 empty:hidden" />
           {db.pending > 0 && <span className="ml-auto rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400" title="Сохранится, когда появится интернет">не отправлено: {db.pending}</span>}
@@ -248,7 +248,7 @@ function Sidebar({ view, go, email, search }) {
         </button>
       </div>
       <div className="flex h-8 items-center gap-0.5 px-4 pt-2 pb-1">
-        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Доски и заметки</span>
+        <span className="font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase">Доски и заметки</span>
         <span className="ml-auto" />
         <IconBtn label="Поиск" onClick={() => { setSearching(s => !s); setQuery(""); }}>{searching ? <XIcon /> : <SearchIcon />}</IconBtn>
         <CreateMenu onCreate={create} trigger={<IconBtn label="Создать"><PlusIcon /></IconBtn>} />
