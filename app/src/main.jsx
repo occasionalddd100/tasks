@@ -10,6 +10,8 @@ import { freshReload } from "@/lib/reload";
 import { apply as applyAppearance } from "@/lib/appearance";
 applyAppearance();
 
+import { initSmoothScroll } from "@/lib/smoothScroll";
+initSmoothScroll();
 createRoot(document.getElementById("root")).render(<App />);
 
 // PWA: offline shell + "install" offer in the browser (the Android app loads the site itself, so not there)
