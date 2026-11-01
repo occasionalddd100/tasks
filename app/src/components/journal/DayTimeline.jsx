@@ -7,6 +7,7 @@ import { timeOf, plan } from "@/lib/reminders";
 import { isApp } from "@/lib/native";
 import { exText, exAt } from "@/lib/done";
 import { openTask } from "@/components/tasks/TaskSheet";
+import { openTaskMenu } from "@/components/tasks/TaskMenu";
 import { addTask } from "@/components/tasks/QuickAdd";
 import { cn } from "@/lib/utils";
 
@@ -225,7 +226,7 @@ function VStrip({ now, start, end, events, onTick }) {
                 );
                 const done = x.t.done, missed = !done && x.when < now, soon = !done && !missed && x.when - now < H;
                 return (
-                  <Fragment key={x.t.id + x.when}><li className="relative" style={{ marginTop: gap }}>
+                  <Fragment key={x.t.id + x.when}><li className="relative" style={{ marginTop: gap }} onContextMenu={ev => { if (x.t.log) return; ev.preventDefault(); openTaskMenu(x.t, ev.clientX, ev.clientY); }}>
                     <span className={cn("absolute top-3 -left-[1.35rem] size-2.5 rounded-full ring-2 ring-card", done ? "bg-good" : missed ? "bg-destructive" : "bg-muted-foreground")} />
                     <span className={cn("absolute top-2 -left-[4.2rem] w-11 text-right text-xs tabular-nums", missed ? "text-destructive" : "text-muted-foreground")}>{x.time}</span>
                     <div className={cn("flex items-center gap-2.5 rounded-xl border px-2.5 py-2",
@@ -395,6 +396,7 @@ function Pin({ e, now, k, onTick }) {
       {/* stem down to the strip */}
       <span className="absolute left-0 w-px bg-border" style={{ top: 34, height: `calc(var(--pins) - ${e.lane * LANE_H + 34}px + 8px + 1.75rem)` }} />
       <div style={{ marginLeft: -e.shift }} className={cn("relative -translate-x-3 flex h-[38px] items-center gap-1.5 rounded-lg border px-1.5 shadow-xs", tone)}
+        onContextMenu={ev => { if (e.t.log) return; ev.preventDefault(); openTaskMenu(e.t, ev.clientX, ev.clientY); }}
         title={[e, ...e.more].map(x => x.time + " " + x.t.text).join("\n")}>
         {soon && <motion.span className="absolute inset-0 rounded-lg border-2 border-amber-500" animate={{ opacity: [0.9, 0] , scale: [1, 1.08] }} transition={{ duration: 1.4, repeat: Infinity }} />}
         {missed && <motion.span className="absolute inset-0 rounded-lg border-2 border-destructive" animate={{ opacity: [0.8, 0] }} transition={{ duration: 1.2, repeat: Infinity }} />}

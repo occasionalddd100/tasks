@@ -209,7 +209,13 @@ function HabitRow({ h, waiting, onMark, tui }) {
     </li>
   );
   const open = () => setEdit({ text: h.text, every: String(h.every || 1), time: h.time || "" });
+  const menu = [
+    { label: "Изменить", icon: PencilIcon, onSelect: open },
+    { label: waiting ? "Снять отметку" : "Отметить сделанной", icon: Repeat2Icon, onSelect: () => onMark(h, !waiting) },
+    { label: "Удалить", icon: Trash2Icon, variant: "destructive", onSelect: () => remove("habits", h.id) },
+  ];
   return (
+    <ActionsContext items={menu}>
     <li className={cn("group flex min-h-10 items-center gap-2.5 rounded-md px-2 hover:bg-accent/50", waiting && "[&>span:first-of-type]:opacity-55",
       !waiting && "bg-violet-500/10 shadow-[inset_3px_0_0_#8b5cf6] hover:bg-violet-500/15")}>
       <Checkbox className={tui ? "size-[18px]" : undefined} checked={!!waiting} onCheckedChange={v => onMark(h, !!v)} aria-label={h.text} />
@@ -225,6 +231,7 @@ function HabitRow({ h, waiting, onMark, tui }) {
         {armed ? "удалить?" : <XIcon className="size-3.5" />}
       </button>
     </li>
+    </ActionsContext>
   );
 }
 

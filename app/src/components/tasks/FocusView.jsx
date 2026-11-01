@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
 import { CrosshairIcon, FlameIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon, CornerDownRightIcon, FileTextIcon, ListChecksIcon, ChevronLeftIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { ActionsContext } from "@/components/ui/actions";
 import * as Pop from "@radix-ui/react-popover";
 import { useDb, update, add } from "@/lib/db";
 import { openList, labelOf } from "@/lib/focus";
@@ -196,7 +197,8 @@ function TagTabs({ items, onPick }) {
   return (
     <nav ref={wheelX} className="thin-scroll flex min-w-0 items-stretch overflow-x-auto rounded-md border font-mono text-[13px]">
       {items.map(it => (
-        <button key={it.id} type="button" onClick={() => onPick(it.id)}
+        <ActionsContext key={it.id} items={[{ label: "Открыть", icon: it.project ? ListChecksIcon : ListTodoIcon, onSelect: () => onPick(it.id) }, { label: "Править теги", icon: PencilIcon, onSelect: () => openTagEditor() }]}>
+        <button type="button" onClick={() => onPick(it.id)}
           className={cn("flex h-9 shrink-0 items-center gap-1.5 border-r px-3 whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground",
             it.on && "bg-accent font-semibold text-foreground shadow-[inset_0_-2px_0_var(--primary)]")}>
           {it.id === ALL ? <ListTodoIcon className="size-3.5" /> : it.id === NONE ? <InboxIcon className="size-3.5" /> : it.project ? <ListChecksIcon className="size-3.5" style={{ color: it.tag.color }} />
@@ -204,6 +206,7 @@ function TagTabs({ items, onPick }) {
           <span>{it.name}</span>
           {it.n > 0 && <span className="tabular-nums opacity-60">{it.n}</span>}
         </button>
+        </ActionsContext>
       ))}
     </nav>
   );
@@ -372,7 +375,7 @@ function TuiBlock({ g, tasks, grow, bare }) {
   const showDate = g.k === "late" || g.k === "planned" || g.k === "urgent" || g.k === "done";
   return (
     <section ref={setNodeRef} className={cn("flex flex-col border-b last:border-b-0 transition-colors", grow && open && "flex-1", bare && "border-b-0", isOver && "bg-primary/10")}>
-      {!bare && <div className="group/h sticky top-0 z-[1] flex h-11 shrink-0 items-center gap-2 border-b bg-background/95 px-3 font-mono text-sm font-semibold tracking-wide uppercase backdrop-blur">
+      {!bare && <ActionsContext items={[g.add && { label: "Новая задача", icon: PlusIcon, onSelect: () => { setOpen(true); setAdding(true); } }, { label: open ? "Свернуть" : "Развернуть", icon: ChevronRightIcon, onSelect: () => setOpen(!open) }].filter(Boolean)}><div className="group/h sticky top-0 z-[1] flex h-11 shrink-0 items-center gap-2 border-b bg-background/95 px-3 font-mono text-sm font-semibold tracking-wide uppercase backdrop-blur">
         <button type="button" onClick={() => setOpen(!open)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <ChevronRightIcon className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
           <g.icon className="size-4 shrink-0" style={{ color: g.c }} />
@@ -381,7 +384,7 @@ function TuiBlock({ g, tasks, grow, bare }) {
         </button>
         {g.add && <button type="button" onClick={() => { setOpen(true); setAdding(true); }} title={"Добавить в «" + g.l + "»"} aria-label={"Добавить в «" + g.l + "»"}
           className="grid size-7 place-items-center rounded text-muted-foreground opacity-0 group-hover/h:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100"><PlusIcon className="size-4" /></button>}
-      </div>}
+      </div></ActionsContext>}
       <Fold open={open} className={cn(grow && "flex-1")}><div className="py-1">
         {bare && g.add && !adding && <button type="button" onClick={() => setAdding(true)} className="mx-1 flex h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 rounded px-2.5 text-[15px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"><PlusIcon className="size-4" />Новая задача</button>}
         {adding && <AddLine placeholder={"Новая задача в «" + g.l + "»"} withDate={g.k === "planned"} onAdd={g.add} onClose={() => setAdding(false)} className="py-0.5" />}
