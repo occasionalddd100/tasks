@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArchiveIcon, CalendarIcon, CheckIcon, ChevronRightIcon, FlameIcon, InboxIcon, PencilIcon, SquareCheckIcon, SunIcon, SunriseIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import { CalendarIcon, CheckIcon, ChevronRightIcon, FlameIcon, InboxIcon, PencilIcon, SquareCheckIcon, SunIcon, SunriseIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { useDb, update } from "@/lib/db";
-import { toBucket } from "@/lib/focus";
 import { getSel, isSelected, toggleSel, clearSel, moveTasks } from "@/lib/select";
 import { today, addDays } from "@/lib/tasks";
 import { tagsOf, tagOfTask, setTag } from "@/lib/tags";
@@ -56,7 +55,6 @@ export function TaskMenuHost() {
     { l: "Тег", i: TagIcon, tags: true },
     "-",
     { l: isSelected(t.id) ? "Снять выбор" : "Выбрать", i: SquareCheckIcon, k: "Shift+клик", run: () => { toggleSel(t.id); close(); } },
-    { l: "В ведёрко", i: ArchiveIcon, run: run(() => tasks.forEach(toBucket)) },
     !many && { l: "Удалить", i: Trash2Icon, bad: true, run: () => { close(); deleteTask(t); } },
   ].filter(Boolean);
   const side = pos && pos.x + 240 + 220 > innerWidth ? "right-full mr-1" : "left-full ml-1";

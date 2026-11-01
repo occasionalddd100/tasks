@@ -114,14 +114,14 @@ export default function ZenView({ onClose }) {
       {cur && (
         <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 px-4 pb-[max(1.25rem,var(--sab))] md:pb-8">
           {mode === "do" ? <>
-            <Act onClick={actions.pail} icon={ArchiveIcon} hint="↓">В ведёрко</Act>
+            <Act onClick={actions.pail} icon={ArchiveIcon} hint="↓">Без срока</Act>
             <Act onClick={actions.later} icon={ChevronRightIcon} hint="→">Потом</Act>
             <Act onClick={timer.toggle} icon={timer.running ? PauseIcon : TimerIcon} hint="T" on={timer.running}>{timer.active ? timer.label : "25 мин"}</Act>
             <Act onClick={actions.done} icon={CheckIcon} hint="Space" main>Сделал</Act>
           </> : <>
             <Act onClick={actions.today} icon={SunIcon} hint="1" main>Сегодня</Act>
             <Act onClick={actions.tomorrow} icon={SunriseIcon} hint="2">Завтра</Act>
-            <Act onClick={actions.pail} icon={ArchiveIcon} hint="3">В ведёрко</Act>
+            <Act onClick={actions.pail} icon={ArchiveIcon} hint="3">Без срока</Act>
             <Act onClick={actions.later} icon={ChevronRightIcon} hint="→">Пропустить</Act>
             <Act onClick={actions.done} icon={CheckIcon} hint="Enter">Уже сделано</Act>
           </>}

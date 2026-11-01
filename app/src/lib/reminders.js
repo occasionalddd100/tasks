@@ -16,7 +16,7 @@ const shift = (date, n) => { const d = new Date(date + "T12:00:00"); d.setDate(d
 export const nid = s => Math.abs([...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)) || 1;
 const short = (s, n = 60) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
-export function plan({ tasks, cats, boards, me }, now = Date.now(), days = 7) {
+export function plan({ tasks, cats, boards, me, habits = [] }, now = Date.now(), days = 7) {
   const projectOf = t => boards.find(b => b.id === cats.find(c => c.id === t.cat)?.board)?.project || "";
   const mine = t => !t.done && !t.hidden && t.text?.trim() && (t.assignee ? t.assignee === me : t._owner === me);
   const open = tasks.filter(mine);
@@ -52,6 +52,14 @@ export function plan({ tasks, cats, boards, me }, now = Date.now(), days = 7) {
       out.push({ key: "early:" + t.id + ":" + day, at: new Date(when - EARLY * 6e4), title: `Через час, в ${time}: ${short(t.text)}`, body: "Пора собираться", extra });
       out.push({ key: "now:" + t.id + ":" + day, at: when, title: `Пора: ${short(t.text)}`, body: time, extra });
     }
+  }
+  // recurring tasks: on the day they are due next, at their time (or 11:00), and once more at 19:00 if still not done
+  for (const h of habits) {
+    if (!h.text?.trim()) continue;
+    const next = h.lastDone ? shift(h.lastDone, h.every || 1) : today, day = next < today ? today : next;
+    if (h.lastDone === today) continue;
+    out.push({ key: "habit:" + h.id + ":" + day, at: at(day, h.time || "11:00"), title: "🔁 " + short(h.text), body: "Повторяющаяся задача", extra: {} });
+    out.push({ key: "habit2:" + h.id + ":" + day, at: at(day, "19:00"), title: "🔁 Ещё не сделано: " + short(h.text, 50), body: "Повторяющаяся задача", extra: {} });
   }
   out.push(...nudges(open, tasks, me, today, now));
   return out.filter(x => x.at.getTime() > now).sort((a, b) => a.at - b.at);

@@ -1,8 +1,6 @@
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArchiveIcon, CalendarXIcon, CheckIcon, FlameIcon, SunIcon, SunriseIcon, XIcon } from "lucide-react";
-import { getDb } from "@/lib/db";
-import { toBucket } from "@/lib/focus";
+import { CalendarXIcon, CheckIcon, FlameIcon, SunIcon, SunriseIcon, XIcon } from "lucide-react";
 import { useSelection, clearSel, moveTasks } from "@/lib/select";
 
 // what to do with every picked task at once; Esc (or ✕) lets them go
@@ -13,7 +11,7 @@ export default function SelectionBar() {
     const on = e => { if (e.key === "Escape") clearSel(); };
     window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
   }, [n]);
-  const act = k => { k === "pail" ? getDb().tasks.filter(t => sel.has(t.id)).forEach(toBucket) : moveTasks(ids, k); clearSel(); };
+  const act = k => { moveTasks(ids, k); clearSel(); };
   const btn = "flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-sm font-medium hover:bg-white/10 max-sm:flex-col max-sm:h-12 max-sm:gap-0.5 max-sm:px-1.5 max-sm:text-[10px]";
   return (
     <AnimatePresence>
@@ -26,7 +24,7 @@ export default function SelectionBar() {
           <button type="button" onClick={() => act("tomorrow")} className={btn}><SunriseIcon className="size-4 text-sky-400" />Завтра</button>
           <button type="button" onClick={() => act("free")} className={btn}><CalendarXIcon className="size-4" />Без срока</button>
           <button type="button" onClick={() => act("urgent")} className={btn}><FlameIcon className="size-4 text-red-400" />Приоритет</button>
-          <button type="button" onClick={() => act("pail")} className={btn}><ArchiveIcon className="size-4" />Ведёрко</button>
+          
           <button type="button" onClick={clearSel} aria-label="Снять выделение" title="Снять выделение (Esc)" className="grid size-10 shrink-0 place-items-center rounded-xl text-white/60 hover:bg-white/10"><XIcon className="size-4" /></button>
         </motion.div>
       )}

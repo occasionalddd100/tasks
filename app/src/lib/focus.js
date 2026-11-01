@@ -7,7 +7,7 @@ import { today } from "@/lib/tasks";
 // The home screen splits them by when (overdue, priority, today, tomorrow, planned, no date).
 export function openList(db) {
   const mine = new Set([draftsOf(db)?.id, ...tagsOf(db).map(t => t.id)]);
-  return db.tasks.filter(t => mine.has(t.cat) && !t.done && !t.hidden && !t.parent && !inBucket(t) && t.text?.trim() && (!t.assignee || t.assignee === db.me));
+  return db.tasks.filter(t => mine.has(t.cat) && !t.done && !t.hidden && !t.parent && t.text?.trim() && (!t.assignee || t.assignee === db.me));
 }
 // what is on for today: overdue, due today, urgent
 export const isNow = (t, now = today()) => (t.due && t.due <= now) || t.prio === "urgent" || t.prio === "today";
@@ -33,7 +33,8 @@ export function toFocus(t) {
 // Ведёрко: work put aside for later. `parked` is when it went in; like `focus`, it is mine only.
 export const inBucket = t => typeof t?.parked === "number" && !t.done && (t.parkedBy || t._owner) === getDb().me;
 export const bucketList = db => db.tasks.filter(inBucket).sort((a, b) => b.parked - a.parked);
-export const toBucket = t => update("tasks", t.id, { focus: null, focusBy: "", parked: Date.now(), parkedBy: getDb().me });
+// the pail is gone: "put aside" now just takes the date off (the task goes to «Без срока»); old parked tasks show up again
+export const toBucket = t => update("tasks", t.id, { focus: null, focusBy: "", parked: null, parkedBy: "", due: "", time: "", prio: "" });
 export const fromBucket = t => update("tasks", t.id, { parked: null, parkedBy: "" });
 export const fromFocus = t => update("tasks", t.id, { focus: null, focusBy: "" });
 export const nextFocus = () => Math.max(0, ...getDb().tasks.filter(inFocus).map(x => x.focus)) + 1;

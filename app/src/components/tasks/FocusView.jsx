@@ -10,7 +10,7 @@ import { useSelection, toggleSel, selActive, isSelected, getSel, clearSel, moveT
 import { Checkbox } from "@/components/ui/checkbox";
 import { timeOf } from "@/lib/reminders";
 import { exText, exAt } from "@/lib/done";
-import Bucket from "@/components/tasks/Bucket";
+
 import { tagsOf, tagOfTask } from "@/lib/tags";
 import { draftsOf } from "@/lib/personal";
 import { cn } from "@/lib/utils";
@@ -100,7 +100,7 @@ export default function FocusView() {
     if (!over) return;
     const ids = isSelected(active.id) ? [...getSel()] : [active.id];
     if (over.id === "bucket") db.tasks.filter(t => ids.includes(t.id)).forEach(toBucket);
-    else if (String(over.id).startsWith("drop:")) moveTasks(ids, over.id.slice(5));
+    else if (String(over.id).startsWith("drop:")) moveTasks(ids, over.id.split(":")[1]);
     else return;
     if (ids.length > 1) clearSel();
   };
@@ -121,16 +121,15 @@ export default function FocusView() {
         : shownTag
         ? <TagList cat={shownTag === NONE ? drafts?.id : shownTag} tasks={groups.get(shownTag) || []} name={tagName(shownTag)} onClear={() => setFilter(null)} />
         : <section className="flex flex-col gap-1">
-            {list.length === 0
+            {list.length === 0 && !wide
               ? <p className="py-3 text-sm text-muted-foreground">Открытых задач нет. Нажми ＋, чтобы добавить.</p>
-              : <WorkList list={list} />}
+              : <WorkList list={list} habits={db.habits} />}
           </section>}
 
-      {!shownTag && db.habits.length > 0 && <Habits habits={db.habits} />}
+      {!shownTag && !wide && db.habits.length > 0 && <Habits habits={db.habits} />}
 
       <Fan open={fan} setOpen={setFan} items={menu.slice(0, fanMax(1)).concat({ id: EDIT, name: "Править теги", glyph: <PencilIcon className="size-5" /> })} anchor="navRight"
         onPick={t => pick(t.id)} />
-      <Bucket />
       {/* the task you hold follows the finger as a small card; dropped on the pail it just vanishes into it */}
       <DragOverlay dropAnimation={null}>
         {dragged && <div className="max-w-72 cursor-grabbing rounded-xl border bg-card px-3 py-2 text-sm font-medium shadow-2xl" style={{ rotate: "-2deg" }}>{dragged.text}
@@ -229,7 +228,7 @@ function TagMenu({ items, title, onPick }) {
 }
 
 // the tasks split by when (on a computer the blocks flow into several columns with a thin line between them); drag one onto the pail to put it aside; subtasks under their task
-function WorkList({ list }) {
+function WorkList({ list, habits }) {
   const db = useDb();
   const wide = useMedia("(min-width: 1024px)");
   // two or more tasks of one tag in a group fold together under the tag, where the first of them stood
@@ -247,7 +246,7 @@ function WorkList({ list }) {
   const [adding, setAdding] = useState(null);
   const groups = WORK_GROUPS.map(g => ({ ...g, tasks: list.filter(t => groupOf(t, now, tomorrow) === g.k) })).filter(g => g.tasks.length || g.k === adding);
   const empty = WORK_GROUPS.filter(g => g.add && !groups.some(x => x.k === g.k));
-  if (wide) return <TuiBoard list={list} />;
+  if (wide) return <TuiBoard list={list} habits={habits} />;
   return (
       <div className="flex flex-col gap-2 max-md:gap-1 lg:block lg:columns-[22rem] lg:gap-6 lg:[column-rule:1px_solid_var(--border)] lg:[&>*]:mb-3 lg:[&>*]:break-inside-avoid">
         {groups.map(g => (
@@ -273,74 +272,70 @@ function WorkList({ list }) {
 
 /* ───── computer: a static board, like a terminal app. Five fixed columns, every block always in its place
    (empty ones too), each column scrolls on its own; folding a block never moves the others. ───── */
-// today is the focus column (wide, tinted); any other column folds into a thin strip, remembered
-const COLS = [{ id: "focus", ks: ["urgent", "today", "done"] }, { id: "late", ks: ["late"] }, { id: "tomorrow", ks: ["tomorrow"] }, { id: "planned", ks: ["planned"] }, { id: "free", ks: ["free"] }];
-const HIDE = "tuiHidden", WIDTH = "tuiWidth";
-const loadHidden = () => { try { return new Set(JSON.parse(localStorage.getItem(HIDE) || "[]")); } catch { return new Set(); } };
-const loadWidth = () => { try { return JSON.parse(localStorage.getItem(WIDTH) || "{}") || {}; } catch { return {}; } };
-function TuiBoard({ list }) {
+// computer: two panes. Left is now (priority, today, recurring, done); right shows one of the other
+// groups at a time, picked by tabs (drop a task on a tab to move it there). The line between them drags.
+const SIDE = ["late", "tomorrow", "planned", "free"];
+const SPLIT = "tuiSplit", TAB = "tuiTab";
+function TuiBoard({ list, habits }) {
   const now = today(), tmr = addDays(1);
-  const [hidden, setHiddenRaw] = useState(loadHidden);
-  const toggle = id => { const h = new Set(hidden); h.has(id) ? h.delete(id) : h.add(id); setHiddenRaw(h); try { localStorage.setItem(HIDE, JSON.stringify([...h])); } catch {} };
-  // widths are kept as relative weights; dragging the line between two columns moves width from one to the other
-  const [width, setWidth] = useState(loadWidth);
-  const box = useRef(null);
   const of = k => list.filter(t => groupOf(t, now, tmr) === k);
-  const shown = COLS.filter(c => c.id === "focus" || !hidden.has(c.id));
-  const tpl = COLS.map(c => shown.includes(c) ? `minmax(0,${width[c.id] || (c.id === "focus" ? 1.7 : 1)}fr)` : "2.25rem").join(" ");
-  const resize = (e, c) => {
-    const next = shown[shown.indexOf(c) + 1]; if (!next) return;
+  const n = Object.fromEntries(SIDE.map(k => [k, of(k).length]));
+  const [tab, setTabRaw] = useState(() => { try { return localStorage.getItem(TAB) || ""; } catch { return ""; } });
+  const setTab = k => { setTabRaw(k); try { localStorage.setItem(TAB, k); } catch {} };
+  const shown = SIDE.includes(tab) ? tab : n.late ? "late" : "tomorrow";
+  const [split, setSplit] = useState(() => { try { return +localStorage.getItem(SPLIT) || 0.55; } catch { return 0.55; } });
+  const box = useRef(null);
+  const drag = e => {
     e.preventDefault();
-    const cols = [...box.current.children], px = {};
-    COLS.forEach((x, i) => { px[x.id] = cols[i].getBoundingClientRect().width; });
-    const x0 = e.clientX, a0 = px[c.id], b0 = px[next.id];
-    let last = width;
-    const move = ev => {
-      const d = Math.max(160 - a0, Math.min(b0 - 160, ev.clientX - x0));
-      last = Object.fromEntries(shown.map(x => [x.id, +((x === c ? a0 + d : x === next ? b0 - d : px[x.id]) / 100).toFixed(3)]));
-      setWidth(last);
-    };
-    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); document.body.style.cursor = ""; try { localStorage.setItem(WIDTH, JSON.stringify(last)); } catch {} };
+    const r = box.current.getBoundingClientRect(); let v = split;
+    const move = ev => { v = Math.min(0.75, Math.max(0.3, (ev.clientX - r.left) / r.width)); setSplit(v); };
+    const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); document.body.style.cursor = ""; try { localStorage.setItem(SPLIT, String(v)); } catch {} };
     addEventListener("pointermove", move); addEventListener("pointerup", up); document.body.style.cursor = "col-resize";
   };
-  const reset = () => { setWidth({}); try { localStorage.removeItem(WIDTH); } catch {} };
+  const G = k => WORK_GROUPS.find(x => x.k === k);
   return (
-    <div ref={box} className="grid overflow-hidden rounded-md border bg-card/30" style={{ gridTemplateColumns: tpl, height: "calc(100dvh - 7.25rem)", minHeight: 420 }}>
-      {COLS.map(c => {
-        if (!shown.includes(c)) return <TuiStrip key={c.id} g={WORK_GROUPS.find(x => x.k === c.ks[0])} n={of(c.ks[0]).length} onOpen={() => toggle(c.id)} />;
-        const last = shown[shown.length - 1] === c;
-        return (
-          <div key={c.id} className="relative flex min-h-0 min-w-0 flex-col border-l first:border-l-0">
-            <div className={cn("thin-scroll flex min-h-0 flex-1 flex-col overflow-y-auto", c.id === "focus" && "bg-amber-500/[0.04]")}>
-              {c.ks.filter(k => k !== "urgent" || of(k).length).map((k, i) => <TuiBlock key={k} g={WORK_GROUPS.find(x => x.k === k)} tasks={of(k)} grow={k !== "done" && k !== "urgent"} focus={c.id === "focus"}
-                onHide={c.id !== "focus" && i === 0 ? () => toggle(c.id) : null} />)}
-            </div>
-            {!last && <div onPointerDown={e => resize(e, c)} onDoubleClick={reset} title="Тяни, чтобы поменять ширину. Двойной клик — сбросить"
-              className="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize hover:bg-primary/30" />}
-          </div>
-        );
-      })}
+    <div ref={box} className="grid overflow-hidden rounded-md border" style={{ gridTemplateColumns: `minmax(0,${split}fr) minmax(0,${1 - split}fr)`, height: "calc(100dvh - 7.5rem)", minHeight: 460 }}>
+      <div className="relative flex min-h-0 min-w-0 flex-col bg-card">
+        <div className="thin-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {of("urgent").length > 0 && <TuiBlock g={G("urgent")} tasks={of("urgent")} />}
+          <TuiBlock g={G("today")} tasks={of("today")} grow={!habits} />
+          {habits && <div className="flex-1 border-b"><Habits habits={habits} tui /></div>}
+          <TuiBlock g={G("done")} tasks={of("done")} />
+        </div>
+        <div onPointerDown={drag} onDoubleClick={() => { setSplit(0.55); try { localStorage.removeItem(SPLIT); } catch {} }} title="Тяни, чтобы поменять ширину. Двойной клик — сбросить"
+          className="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize hover:bg-primary/30" />
+      </div>
+      <div className="flex min-h-0 min-w-0 flex-col border-l">
+        <nav className="flex shrink-0 items-stretch border-b font-mono text-sm">
+          {SIDE.map(k => <SideTab key={k} g={G(k)} n={n[k]} on={k === shown} onClick={() => setTab(k)} />)}
+        </nav>
+        <div className="thin-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <TuiBlock key={shown} g={G(shown)} tasks={of(shown)} grow bare />
+        </div>
+      </div>
     </div>
   );
 }
 
-function TuiStrip({ g, n, onOpen }) {
-  const { setNodeRef, isOver } = useDroppable({ id: "drop:" + g.k, disabled: g.k === "late" });
+function SideTab({ g, n, on, onClick }) {
+  const { setNodeRef, isOver } = useDroppable({ id: "drop:" + g.k + ":tab", disabled: g.k === "late" });
   return (
-    <button ref={setNodeRef} type="button" onClick={onOpen} title={"Показать «" + g.l + "»"}
-      className={cn("flex min-h-0 flex-col items-center gap-2 border-l py-2 font-mono text-xs font-semibold tracking-wider uppercase hover:bg-accent/50", isOver && "bg-primary/10")}>
+    <button ref={setNodeRef} type="button" onClick={onClick}
+      className={cn("flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 border-r px-2 last:border-r-0 hover:bg-accent/60",
+        on ? "bg-accent font-semibold text-foreground" : "text-muted-foreground", isOver && "bg-primary/15")}
+      style={on ? { boxShadow: `inset 0 -2px 0 ${g.c}` } : undefined}>
       <g.icon className="size-4 shrink-0" style={{ color: g.c }} />
-      <span className="tabular-nums text-muted-foreground">{n}</span>
-      <span className="[writing-mode:vertical-rl]" style={{ color: g.c }}>{g.l}</span>
+      <span className="truncate">{g.l}</span>
+      <span className={cn("tabular-nums", g.k === "late" && n ? "font-semibold text-red-500" : "opacity-60")}>{n}</span>
     </button>
   );
 }
 
-function TuiBlock({ g, tasks, grow, focus, onHide }) {
+function TuiBlock({ g, tasks, grow, bare }) {
   const db = useDb();
   const key = "tui:" + g.k;
   const [openRaw, setOpenRaw] = useState(() => !loadFold().has(key) && g.k !== "done" || loadFold().has(key + ":open"));
-  const open = openRaw || !!onHide;
+  const open = openRaw || !!bare;
   const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); f.delete(key); f.delete(key + ":open"); if (g.k === "done" ? v : !v) f.add(g.k === "done" ? key + ":open" : key); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
   const [adding, setAdding] = useState(false);
   const { setNodeRef, isOver } = useDroppable({ id: "drop:" + g.k, disabled: g.k === "late" });
@@ -352,43 +347,44 @@ function TuiBlock({ g, tasks, grow, focus, onHide }) {
   }, [tasks, db.cats]);
   const showDate = g.k === "late" || g.k === "planned" || g.k === "urgent" || g.k === "done";
   return (
-    <section ref={setNodeRef} className={cn("flex flex-col border-b last:border-b-0 transition-colors", grow && open && "flex-1", isOver && "bg-primary/10")}>
-      <div className="group/h sticky top-0 z-[1] flex h-10 shrink-0 items-center gap-2 border-b bg-background/95 px-2.5 font-mono text-[13px] font-semibold tracking-wide uppercase backdrop-blur">
-        <button type="button" onClick={() => onHide ? onHide() : setOpen(!open)} title={onHide ? "Свернуть колонку" : undefined} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-          {onHide ? <ChevronLeftIcon className="size-3 text-muted-foreground" /> : <ChevronRightIcon className={cn("size-3 text-muted-foreground transition-transform", open && "rotate-90")} />}
+    <section ref={setNodeRef} className={cn("flex flex-col border-b last:border-b-0 transition-colors", grow && open && "flex-1", bare && "border-b-0", isOver && "bg-primary/10")}>
+      {!bare && <div className="group/h sticky top-0 z-[1] flex h-11 shrink-0 items-center gap-2 border-b bg-background/95 px-3 font-mono text-sm font-semibold tracking-wide uppercase backdrop-blur">
+        <button type="button" onClick={() => setOpen(!open)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <ChevronRightIcon className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
           <g.icon className="size-4 shrink-0" style={{ color: g.c }} />
           <span className="truncate" style={{ color: g.c }}>{g.l}</span>
           <span className="text-muted-foreground tabular-nums">[{tasks.length}]</span>
         </button>
         {g.add && <button type="button" onClick={() => { setOpen(true); setAdding(true); }} title={"Добавить в «" + g.l + "»"} aria-label={"Добавить в «" + g.l + "»"}
-          className="grid size-6 place-items-center rounded text-muted-foreground opacity-0 group-hover/h:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100"><PlusIcon className="size-3.5" /></button>}
-      </div>
+          className="grid size-7 place-items-center rounded text-muted-foreground opacity-0 group-hover/h:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100"><PlusIcon className="size-4" /></button>}
+      </div>}
       {open && <div className="py-1">
+        {bare && g.add && !adding && <button type="button" onClick={() => setAdding(true)} className="mx-1 flex h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 rounded px-2.5 text-[15px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"><PlusIcon className="size-4" />Новая задача</button>}
         {adding && <AddLine placeholder={"Новая задача в «" + g.l + "»"} withDate={g.k === "planned"} onAdd={g.add} onClose={() => setAdding(false)} className="py-0.5" />}
-        {!tasks.length && !adding && <p className="px-3 py-1.5 font-mono text-xs text-muted-foreground/60">{g.k === "late" ? "— чисто —" : "— пусто, перетащи сюда —"}</p>}
-        {parts.map(p => <TuiTag key={p.tag?.id || "none"} id={g.k + ":" + (p.tag?.id || "none")} tag={p.tag} tasks={p.tasks} showDate={showDate} big={focus && g.k === "today"} />)}
+        {!tasks.length && !adding && <p className="px-3 py-2 font-mono text-[13px] text-muted-foreground/60">{g.k === "late" ? "— чисто —" : "— пусто, перетащи сюда —"}</p>}
+        {parts.map(p => <TuiTag key={p.tag?.id || "none"} id={g.k + ":" + (p.tag?.id || "none")} tag={p.tag} tasks={p.tasks} showDate={showDate} />)}
       </div>}
     </section>
   );
 }
 
-function TuiTag({ id, tag, tasks, showDate, big }) {
+function TuiTag({ id, tag, tasks, showDate }) {
   const [open, setOpenRaw] = useState(() => !loadFold().has("tuitag:" + id));
   const setOpen = v => { setOpenRaw(v); try { const f = loadFold(); v ? f.delete("tuitag:" + id) : f.add("tuitag:" + id); localStorage.setItem(FOLD, JSON.stringify([...f])); } catch {} };
   return (
     <div>
-      {tag && <button type="button" onClick={() => setOpen(!open)} className="flex h-7 w-full items-center gap-1.5 px-2.5 font-mono text-xs text-muted-foreground hover:text-foreground">
+      {tag && <button type="button" onClick={() => setOpen(!open)} className="flex h-8 w-full items-center gap-1.5 px-3 font-mono text-[13px] text-muted-foreground hover:text-foreground">
         <ChevronRightIcon className={cn("size-3 transition-transform", open && "rotate-90")} />
         <span className="size-1.5 shrink-0 rounded-full" style={{ background: tag.color }} />
         {tag.emoji && <span className="text-xs leading-none">{tag.emoji}</span>}<span className="truncate">{tag.name}</span><span className="tabular-nums opacity-70">{tasks.length}</span>
       </button>}
-      {(open || !tag) && <ul>{tasks.map(t => <TuiRow key={t.id} t={t} showDate={showDate} big={big} />)}</ul>}
+      {(open || !tag) && <ul>{tasks.map(t => <TuiRow key={t.id} t={t} showDate={showDate} />)}</ul>}
     </div>
   );
 }
 
 const shortDue = t => t.due ? dueLabel(t.due).replace(/^(\S+) (\d+\.\d+)$/, "$2") + (t.time ? " " + t.time : "") : "";
-function TuiRow({ t, depth = 0, showDate, big }) {
+function TuiRow({ t, depth = 0, showDate }) {
   const db = useDb();
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({ id: t.id, disabled: t.done });
@@ -403,20 +399,20 @@ function TuiRow({ t, depth = 0, showDate, big }) {
         onClick={e => { if (e.shiftKey || e.ctrlKey || e.metaKey || selActive()) toggleSel(t.id); else openTask(t.id); }}
         onKeyDown={e => e.key === "Enter" && openTask(t.id)}
         onContextMenu={e => { e.preventDefault(); openTaskMenu(t, e.clientX, e.clientY); }}
-        className={cn("group/r relative mx-1 flex min-h-9 cursor-default items-start gap-2.5 rounded px-2 py-2 leading-snug outline-none select-none hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring",
-          picked && "bg-primary/15 ring-1 ring-primary/40 ring-inset hover:bg-primary/20", isDragging && "opacity-30", t.done && "text-muted-foreground line-through", "text-[15px]")}
+        className={cn("group/r relative mx-1 flex min-h-10 cursor-default items-start gap-3 rounded px-2.5 py-2 leading-snug outline-none select-none hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring",
+          picked && "bg-primary/15 ring-1 ring-primary/40 ring-inset hover:bg-primary/20", isDragging && "opacity-30", t.done && "text-muted-foreground line-through", "text-base")}
         style={depth ? { paddingLeft: 8 + depth * 20 } : undefined}>
         {depth > 0 && <span className="-ml-3 font-mono text-xs text-muted-foreground/50">└</span>}
-        <Checkbox className="mt-0.5 size-4" checked={!!t.done} onClick={stop} onPointerDown={stop} onCheckedChange={v => done(!!v)} aria-label={t.text} />
+        <Checkbox className="mt-0.5 size-[18px]" checked={!!t.done} onClick={stop} onPointerDown={stop} onCheckedChange={v => done(!!v)} aria-label={t.text} />
         <span className="min-w-0 flex-1 break-words">{t.text}</span>
-        {kids.length > 0 && <span className="mt-0.5 font-mono text-xs text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
+        {kids.length > 0 && <span className="mt-0.5 font-mono text-[13px] text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
         {t.body?.trim() && <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground/70" />}
         {t.prio === "urgent" && !t.done && <FlameIcon className="size-3.5 shrink-0 text-red-500" />}
         {!t.done && !t.parent && <span className="absolute top-1 right-1 hidden gap-0.5 rounded border bg-popover p-0.5 shadow-sm group-hover/r:flex">
           <button type="button" onClick={e => { stop(e); moveTasks([t.id], "today"); }} onPointerDown={stop} title="На сегодня" aria-label="На сегодня" className={quick}><SunIcon className="size-3.5" /></button>
           <button type="button" onClick={e => { stop(e); moveTasks([t.id], "tomorrow"); }} onPointerDown={stop} title="На завтра" aria-label="На завтра" className={quick}><SunriseIcon className="size-3.5" /></button>
         </span>}
-        {(showDate || t.time) && t.due && <span className={cn("mt-0.5 shrink-0 font-mono text-xs tabular-nums", late ? "text-red-500" : "text-muted-foreground")}>{showDate ? shortDue(t) : t.time}</span>}
+        {(showDate || t.time) && t.due && <span className={cn("mt-0.5 shrink-0 font-mono text-[13px] tabular-nums", late ? "text-red-500" : "text-muted-foreground")}>{showDate ? shortDue(t) : t.time}</span>}
       </div>
       {kids.length > 0 && <ul>{kids.map(k => <TuiRow key={k.id} t={k} depth={depth + 1} />)}</ul>}
     </li>
@@ -427,8 +423,8 @@ function TuiRow({ t, depth = 0, showDate, big }) {
 export const WORK_GROUPS = [
   { k: "late", l: "Просрочено", c: "#ef4444", icon: AlarmClockIcon },
   { k: "urgent", l: "Приоритет", c: "#f97316", icon: FlameIcon, add: async v => { const r = await addTask(v); if (r?.id) update("tasks", r.id, { prio: "urgent" }); } },
-  { k: "today", l: "Сегодня", c: "#f59e0b", icon: SunIcon, add: v => addTask(v, { due: today() }) },
-  { k: "tomorrow", l: "Завтра", c: "#0ea5e9", icon: SunriseIcon, add: v => addTask(v, { due: addDays(1) }) },
+  { k: "today", l: "Сегодня", c: "#3b82f6", icon: SunIcon, add: v => addTask(v, { due: today() }) },
+  { k: "tomorrow", l: "Завтра", c: "#14b8a6", icon: SunriseIcon, add: v => addTask(v, { due: addDays(1) }) },
   { k: "planned", l: "Запланированные", c: "#8b5cf6", icon: CalendarClockIcon, add: (v, date) => addTask(v, { due: date || addDays(2) }) },
   { k: "free", l: "Без срока", c: "#64748b", icon: InboxIcon, add: v => addTask(v) },
   { k: "done", l: "Сделано", c: "#22c55e", icon: CheckIcon },
@@ -535,8 +531,6 @@ function WorkItem({ t }) {
             <PrioBtn t={t} />
             <button type="button" onClick={() => setSub(true)} title="Добавить подзадачу" aria-label={"Подзадача к: " + t.text}
               className="grid size-7 place-items-center rounded-md text-muted-foreground hover:text-foreground"><CornerDownRightIcon className="size-4" /></button>
-            <button type="button" onClick={() => toBucket(t)} title="Отложить в ведёрко" aria-label={"Отложить: " + t.text}
-              className="grid size-7 place-items-center rounded-md text-muted-foreground hover:text-foreground"><ArchiveIcon className="size-4" /></button>
           </div>}
         </div>
         <SubTasks t={t} kids={kids} adding={sub} setAdding={setSub} />

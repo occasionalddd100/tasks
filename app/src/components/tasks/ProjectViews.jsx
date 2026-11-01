@@ -144,7 +144,7 @@ export const Badge = ({ children }) => (
   <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-0.5 text-[13px] font-medium text-muted-foreground tabular-nums [&_b]:font-semibold [&_b]:text-foreground">{children}</span>
 );
 
-export function Habits({ habits }) {
+export function Habits({ habits, tui }) {
   const [showRest, setShowRest] = useState(false);
   const [text, setText] = useState(""), [every, setEvery] = useState("1");
   const list = [...habits].sort(byOrder), now = list.filter(habitDue), rest = list.filter(h => !habitDue(h));
@@ -161,19 +161,24 @@ export function Habits({ habits }) {
   };
 
   return (
-    <section className="m-flat rounded-xl border bg-card p-3 shadow-xs">
-      <h2 className="mb-1 flex items-center gap-2 px-1 text-[15px] font-semibold"><Repeat2Icon className="size-4 text-violet-500" />Повторяющиеся</h2>
-      <ul>
-        {now.map(h => <HabitRow key={h.id} h={h} onMark={mark} />)}
-        {showRest && rest.map(h => <HabitRow key={h.id} h={h} waiting onMark={mark} />)}
+    <section className={tui ? "flex flex-col" : "m-flat rounded-xl border bg-card p-3 shadow-xs"}>
+      {tui
+        ? <div className="sticky top-0 z-[1] flex h-11 shrink-0 items-center gap-2 border-b bg-background/95 px-3 font-mono text-sm font-semibold tracking-wide text-violet-500 uppercase backdrop-blur">
+            <Repeat2Icon className="size-4" />Повторяющиеся<span className="text-muted-foreground tabular-nums">[{now.length}/{list.length}]</span>
+          </div>
+        : <h2 className="mb-1 flex items-center gap-2 px-1 text-[15px] font-semibold"><Repeat2Icon className="size-4 text-violet-500" />Повторяющиеся
+            {now.length > 0 && <span className="rounded bg-violet-500/15 px-1.5 font-mono text-xs text-violet-500">{now.length}</span>}</h2>}
+      <ul className={tui ? "px-1 py-1" : undefined}>
+        {now.map(h => <HabitRow key={h.id} h={h} onMark={mark} tui={tui} />)}
+        {showRest && rest.map(h => <HabitRow key={h.id} h={h} waiting onMark={mark} tui={tui} />)}
       </ul>
-      {!now.length && list.length > 0 && <p className="px-1 py-1 text-sm text-good">На сегодня всё сделано ✓</p>}
+      {!now.length && list.length > 0 && <p className={cn("text-sm text-good", tui ? "px-3 py-1 font-mono text-[13px]" : "px-1 py-1")}>На сегодня всё сделано ✓</p>}
       {rest.length > 0 && (
-        <button type="button" className="px-1 py-1 text-[13px] text-muted-foreground hover:text-foreground" onClick={() => setShowRest(s => !s)}>
+        <button type="button" className={cn("py-1 text-left text-[13px] text-muted-foreground hover:text-foreground", tui ? "px-3 font-mono" : "px-1")} onClick={() => setShowRest(s => !s)}>
           {showRest ? "Скрыть сделанные" : "Ждут следующего раза: " + rest.length}
         </button>
       )}
-      <form onSubmit={submit} className="mt-1 flex gap-2">
+      <form onSubmit={submit} className={cn("mt-1 flex gap-2", tui && "px-2 pb-2")}>
         <Input value={text} onChange={e => setText(e.target.value)} placeholder="+ повторяющаяся задача" className="h-8 border-dashed bg-transparent shadow-none" />
         <select value={every} onChange={e => setEvery(e.target.value)} aria-label="Как часто"
           className="h-8 rounded-md border border-input bg-background px-2 text-sm text-muted-foreground">
@@ -184,15 +189,36 @@ export function Habits({ habits }) {
   );
 }
 
-function HabitRow({ h, waiting, onMark }) {
+// a recurring task that is due stands out (violet bar); click its text or ✎ to change the text, how often and the reminder time
+function HabitRow({ h, waiting, onMark, tui }) {
   const [armed, setArmed] = useState(false);
+  const [edit, setEdit] = useState(null);
   useEffect(() => { if (armed) { const t = setTimeout(() => setArmed(false), 3000); return () => clearTimeout(t); } }, [armed]);
+  const save = () => { const t = edit.text.trim(); if (t) update("habits", h.id, { text: t, every: +edit.every || 1, time: edit.time || "" }); setEdit(null); };
+  if (edit) return (
+    <li className="flex flex-wrap items-center gap-2 rounded-md bg-accent/60 px-2 py-1.5">
+      <Input autoFocus value={edit.text} onChange={e => setEdit({ ...edit, text: e.target.value })} onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEdit(null); }}
+        className="h-8 min-w-40 flex-1" aria-label="Текст" />
+      <select value={edit.every} onChange={e => setEdit({ ...edit, every: e.target.value })} aria-label="Как часто" className="h-8 rounded-md border border-input bg-background px-2 text-sm">
+        {Object.entries({ ...EVERY, ...(EVERY[edit.every] ? {} : { [edit.every]: `каждые ${edit.every} дн.` }) }).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
+      <input type="time" value={edit.time} onChange={e => setEdit({ ...edit, time: e.target.value })} title="Напомнить в это время" aria-label="Время напоминания"
+        className="h-8 rounded-md border border-input bg-background px-2 font-mono text-sm" />
+      <Button size="sm" className="h-8" onClick={save}>Сохранить</Button>
+      <Button size="sm" variant="ghost" className="h-8" onClick={() => setEdit(null)}>Отмена</Button>
+    </li>
+  );
+  const open = () => setEdit({ text: h.text, every: String(h.every || 1), time: h.time || "" });
   return (
-    <li className={cn("group flex min-h-9 items-center gap-2.5 rounded-md px-1 hover:bg-accent/50", waiting && "[&>span:first-of-type]:opacity-55")}>
-      <Checkbox checked={!!waiting} onCheckedChange={v => onMark(h, !!v)} aria-label={h.text} />
-      <span className={cn("min-w-0 flex-1 truncate text-[15px]", waiting && "line-through")}>{h.text}</span>
+    <li className={cn("group flex min-h-10 items-center gap-2.5 rounded-md px-2 hover:bg-accent/50", waiting && "[&>span:first-of-type]:opacity-55",
+      !waiting && "bg-violet-500/10 shadow-[inset_3px_0_0_#8b5cf6] hover:bg-violet-500/15")}>
+      <Checkbox className={tui ? "size-[18px]" : undefined} checked={!!waiting} onCheckedChange={v => onMark(h, !!v)} aria-label={h.text} />
+      <span onClick={open} className={cn("min-w-0 flex-1 cursor-text truncate", tui ? "text-base" : "text-[15px]", waiting && "line-through")}>{h.text}</span>
       <HabitStrip h={h} />
+      {h.time && <span className="shrink-0 font-mono text-xs text-violet-500 tabular-nums">⏰ {h.time}</span>}
       <span className="shrink-0 text-xs text-muted-foreground max-sm:hidden">{EVERY[h.every] || `каждые ${h.every} дн.`}</span>
+      <button type="button" aria-label="Изменить повторяющуюся" title="Изменить" onClick={open}
+        className="rounded px-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground focus:opacity-100 max-md:opacity-60"><PencilIcon className="size-3.5" /></button>
       <button type="button" aria-label="Удалить повторяющуюся"
         onClick={() => armed ? remove("habits", h.id) : setArmed(true)}
         className={cn("rounded px-1.5 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 max-md:opacity-60", armed && "text-destructive opacity-100")}>

@@ -26,7 +26,7 @@ import { importFiles, fromDrop } from "@/lib/importMd";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import NotesTree, { IconBtn, CreateMenu, itemName, usePins, togglePin } from "@/components/notes/NotesTree";
 import { ItemIcon } from "@/components/IconPicker";
-import { PinOffIcon } from "lucide-react";
+import { PinOffIcon, PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
 import { ProjectView } from "@/components/tasks/ProjectViews";
 import FocusView from "@/components/tasks/FocusView";
 import { nowList } from "@/lib/focus";
@@ -141,12 +141,25 @@ export default function Shell() {
   const focus = !view.note && !project && !stash && !diary;
   const title = shown ? itemName({ ...shown, kind: view.note ? "note" : stash ? "stash" : "project" }) : focus ? "Задачи" : "Дневник";
   const shortcut = useShortcut({ note: view.note, stash, project }, go);
-  const sidebar = <Sidebar view={{ ...view, project, focus, personal, diary }} go={go} email={db.email} search={menu === "search"} />;
+  const sidebar = <Sidebar view={{ ...view, project, focus, personal, diary }} go={go} email={db.email} search={menu === "search"} onFold={() => fold(true)} />;
+  // computer: the sidebar folds into a thin rail (Ctrl+B or the button at its bottom), remembered
+  const [folded, setFolded] = useState(() => { try { return localStorage.getItem("sideFolded") === "1"; } catch { return false; } });
+  const fold = v => { setFolded(v); try { localStorage.setItem("sideFolded", v ? "1" : ""); } catch {} };
+  useEffect(() => {
+    const k = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b" && !e.target.closest?.("input,textarea,[contenteditable=true]")) { e.preventDefault(); setFolded(f => { try { localStorage.setItem("sideFolded", f ? "" : "1"); } catch {} return !f; }); } };
+    addEventListener("keydown", k); return () => removeEventListener("keydown", k);
+  }, []);
 
   return (
     <MotionConfig reducedMotion={look.motion === "off" ? "always" : "user"}>
     <div className="flex h-dvh overflow-hidden">
-      <aside className={cn("hidden shrink-0 border-r bg-sidebar md:flex md:flex-col", { narrow: "w-56", normal: "w-64", wide: "w-80" }[look.sidebar] || "w-64")}>{sidebar}</aside>
+      {folded
+        ? <aside className="hidden w-12 shrink-0 flex-col items-center gap-1 border-r bg-sidebar py-2 md:flex">
+            <button type="button" onClick={() => fold(false)} title="Развернуть панель (Ctrl+B)" aria-label="Развернуть панель" className="grid size-9 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><PanelLeftOpenIcon className="size-4" /></button>
+            <button type="button" onClick={() => go({ focus: true })} title="Задачи" aria-label="Задачи" className={cn("grid size-9 place-items-center rounded-md hover:bg-accent", focus && "bg-accent")}><ListTodoIcon className="size-4" /></button>
+            <button type="button" onClick={() => go({ diary: true })} title="Дневник" aria-label="Дневник" className={cn("grid size-9 place-items-center rounded-md hover:bg-accent", diary && "bg-accent")}><BookOpenIcon className="size-4" /></button>
+          </aside>
+        : <aside className={cn("hidden shrink-0 border-r bg-sidebar md:flex md:flex-col", { narrow: "w-56", normal: "w-64", wide: "w-80" }[look.sidebar] || "w-64")}>{sidebar}</aside>}
       <Sheet open={!!menu} onOpenChange={o => setMenu(o ? "menu" : false)}><SheetContent>{sidebar}</SheetContent></Sheet>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto max-md:pb-[calc(4rem+var(--sab))]">
@@ -198,7 +211,7 @@ export default function Shell() {
   );
 }
 
-function Sidebar({ view, go, email, search }) {
+function Sidebar({ view, go, email, search, onFold }) {
   const db = useDb(), me = useMe();
   const [profile, setProfile] = useState(false);
   const [dropping, setDropping] = useState(false);
@@ -220,7 +233,7 @@ function Sidebar({ view, go, email, search }) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="p-2">
         {[
-          { k: "focus", label: "Задачи", icon: ListTodoIcon, n: nowList(db).length, on: focus },
+          { k: "focus", label: "Задачи", icon: ListTodoIcon, n: nowList(db).length, on: view.focus },
           { k: "diary", label: "Дневник", icon: BookOpenIcon, on: view.diary },
         ].map(({ k, label, icon: Icon, n, on, run, cls }) => (
           <button key={k} type="button" onClick={() => (run ? run() : go({ [k]: true }))}
@@ -290,6 +303,7 @@ function Sidebar({ view, go, email, search }) {
           </span>
         </button>
         <ProfileDialog open={profile} onOpenChange={setProfile} />
+        {onFold && <button type="button" onClick={onFold} title="Свернуть панель (Ctrl+B)" aria-label="Свернуть панель" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground max-md:hidden"><PanelLeftCloseIcon className="size-4" /></button>}
         <Button variant="ghost" size="iconSm" className="shrink-0" aria-label="Настройки" title="Настройки" onClick={openSettings}><SettingsIcon /></Button>
         <Button variant="ghost" size="iconSm" className="shrink-0" aria-label="Выйти" title="Выйти" onClick={() => sb.auth.signOut()}><LogOutIcon /></Button>
       </div>
