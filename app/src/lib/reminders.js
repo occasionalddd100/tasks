@@ -95,15 +95,20 @@ function nudges(open, tasks, me, today, now) {
 
 // in an open tab (PWA or browser on the PC): the same plan, shown while the page is open
 let timers = [], lastKey = "";
+const inDesktopApp = () => !!window.__TAURI_INTERNALS__;
+let asked = false;
 export function webReminders(db) {
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (!("Notification" in window)) return;
+  // the desktop app (Tauri) asks once by itself: it is the user's own app, there is no site prompt to click
+  if (Notification.permission === "default" && inDesktopApp() && !asked) { asked = true; Notification.requestPermission().then(() => { lastKey = ""; webReminders(db); }).catch(() => {}); return; }
+  if (Notification.permission !== "granted") return;
   const list = plan(db).filter(x => x.at - Date.now() < 24 * 3600e3);
   const key = list.map(x => x.key + +x.at).join("|");
   if (key === lastKey) return;
   lastKey = key;
   timers.forEach(clearTimeout);
   timers = list.map(x => setTimeout(async () => {
-    const reg = await navigator.serviceWorker?.getRegistration?.().catch(() => null);
+    const reg = inDesktopApp() ? null : await navigator.serviceWorker?.getRegistration?.().catch(() => null);
     const opts = { body: x.body, tag: x.key, icon: "./icons/icon-192.png", data: x.extra };
     if (reg?.showNotification) reg.showNotification(x.title, opts); else new Notification(x.title, opts);
   }, x.at - Date.now()));

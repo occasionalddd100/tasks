@@ -22,14 +22,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
       - run: npm install --no-audit --no-fund
-      - run: npx electron-builder --win --publish never --config.extraMetadata.version=1.0.${{ github.run_number }}
+      - run: npx tauri icon src-tauri/app-icon.png
+      - run: npx tauri build --config '{"version":"1.0.${{ github.run_number }}"}'
+      - run: |
+          mkdir out
+          cp src-tauri/target/release/bundle/nsis/*.exe out/Tasks-Setup.exe
+          cp src-tauri/target/release/tasks.exe out/Tasks-Portable.exe
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-${{ github.run_number }}
           name: Задачи для ПК ${{ github.run_number }}
-          body: "Установщик: Tasks-Setup.exe. Без установки: Tasks-Portable.exe. Ctrl+Space в любом месте открывает и прячет окно."
+          body: "Установщик: Tasks-Setup.exe. Без установки: Tasks-Portable.exe (нужен WebView2, в Windows 10/11 он уже есть). Ctrl+Space в любом месте открывает и прячет окно."
           files: |
-            desktop/dist/Tasks-Setup.exe
-            desktop/dist/Tasks-Portable.exe
+            desktop/out/Tasks-Setup.exe
+            desktop/out/Tasks-Portable.exe
           make_latest: false
