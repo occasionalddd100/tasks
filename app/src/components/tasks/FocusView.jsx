@@ -342,6 +342,19 @@ function SideTab({ g, n, on, onClick }) {
   );
 }
 
+// folding with a short height glide
+const EASE = { duration: 0.18, ease: [0.2, 0, 0, 1] };
+function Fold({ open, children, className }) {
+  return (
+    <AnimatePresence initial={false}>
+      {open && <motion.div key="f" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={EASE}
+        className={cn("overflow-hidden", className)}>{children}</motion.div>}
+    </AnimatePresence>
+  );
+}
+// rows slide in when added and fold away when done, deleted or moved
+const Rows = ({ children }) => <ul><AnimatePresence initial={false}>{children}</AnimatePresence></ul>;
+
 function TuiBlock({ g, tasks, grow, bare }) {
   const db = useDb();
   const key = "tui:" + g.k;
@@ -369,12 +382,12 @@ function TuiBlock({ g, tasks, grow, bare }) {
         {g.add && <button type="button" onClick={() => { setOpen(true); setAdding(true); }} title={"Добавить в «" + g.l + "»"} aria-label={"Добавить в «" + g.l + "»"}
           className="grid size-7 place-items-center rounded text-muted-foreground opacity-0 group-hover/h:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100"><PlusIcon className="size-4" /></button>}
       </div>}
-      {open && <div className="py-1">
+      <Fold open={open} className={cn(grow && "flex-1")}><div className="py-1">
         {bare && g.add && !adding && <button type="button" onClick={() => setAdding(true)} className="mx-1 flex h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 rounded px-2.5 text-[15px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"><PlusIcon className="size-4" />Новая задача</button>}
         {adding && <AddLine placeholder={"Новая задача в «" + g.l + "»"} withDate={g.k === "planned"} onAdd={g.add} onClose={() => setAdding(false)} className="py-0.5" />}
         {!tasks.length && !adding && <p className="px-3 py-2 font-mono text-[13px] text-muted-foreground/60">{g.k === "late" ? "— чисто —" : "— пусто, перетащи сюда —"}</p>}
         {parts.map(p => <TuiTag key={p.tag?.id || "none"} id={g.k + ":" + (p.tag?.id || "none")} tag={p.tag} tasks={p.tasks} showDate={showDate} />)}
-      </div>}
+      </div></Fold>
     </section>
   );
 }
@@ -389,7 +402,7 @@ function TuiTag({ id, tag, tasks, showDate }) {
         <span className="size-1.5 shrink-0 rounded-full" style={{ background: tag.color }} />
         {tag.emoji && <span className="text-xs leading-none">{tag.emoji}</span>}<span className="truncate">{tag.name}</span><span className="tabular-nums opacity-70">{tasks.length}</span>
       </button>}
-      {(open || !tag) && <ul>{tasks.map(t => <TuiRow key={t.id} t={t} showDate={showDate} />)}</ul>}
+      <Fold open={open || !tag}><Rows>{tasks.map(t => <TuiRow key={t.id} t={t} showDate={showDate} />)}</Rows></Fold>
     </div>
   );
 }
@@ -417,7 +430,7 @@ function TuiRow({ t, depth = 0, showDate }) {
   const stop = e => e.stopPropagation();
   const quick = "grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground";
   return (
-    <li>
+    <motion.li initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={EASE} className="overflow-hidden">
       <div ref={setNodeRef} {...listeners} {...attributes} role="button" tabIndex={0} title={t.text}
         onClick={e => { if (e.shiftKey || e.ctrlKey || e.metaKey || selActive()) toggleSel(t.id); else openTask(t.id); }}
         onKeyDown={e => e.key === "Enter" && openTask(t.id)}
@@ -440,10 +453,10 @@ function TuiRow({ t, depth = 0, showDate }) {
         </span>}
         {(showDate || t.time) && t.due && <span className={cn("mt-0.5 shrink-0 font-mono text-[13px] tabular-nums", late ? "text-red-500" : "text-muted-foreground")}>{showDate ? shortDue(t) : t.time}</span>}
       </div>
-      {kids.length > 0 && (!folded || adding) && <ul>{kids.map(k => <TuiRow key={k.id} t={k} depth={depth + 1} />)}</ul>}
+      <Fold open={kids.length > 0 && (!folded || adding)}><Rows>{kids.map(k => <TuiRow key={k.id} t={k} depth={depth + 1} />)}</Rows></Fold>
       {adding && <div className="mr-1 ml-10"><AddLine placeholder="Подзадача, Enter — ещё одна, Esc — закрыть" className="px-0"
         onAdd={v => add("tasks", { text: v, cat: t.cat, parent: t.id, order: nextOrder(kids), done: false })} onClose={() => setAdding(false)} /></div>}
-    </li>
+    </motion.li>
   );
 }
 
