@@ -1,0 +1,34 @@
+name: Desktop app
+
+# The window loads the site live, so a new build is only needed when the wrapper itself changes.
+on:
+  push:
+    branches: [main]
+    paths: ["desktop/**", ".github/workflows/desktop.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npx electron-builder --win --publish never -c.extraMetadata.version=1.0.${{ github.run_number }}
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-${{ github.run_number }}
+          name: Задачи для ПК ${{ github.run_number }}
+          body: "Установщик: Tasks-Setup.exe. Без установки: Tasks-Portable.exe. Ctrl+Space в любом месте открывает и прячет окно."
+          files: |
+            desktop/dist/Tasks-Setup.exe
+            desktop/dist/Tasks-Portable.exe
+          make_latest: false

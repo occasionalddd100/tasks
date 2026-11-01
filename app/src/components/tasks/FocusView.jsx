@@ -21,6 +21,7 @@ import { useFresh, setAmbient, addTask } from "@/components/tasks/QuickAdd";
 import { TagMark } from "@/components/tasks/TagMark";
 import { openTask } from "@/components/tasks/TaskSheet";
 import { openTaskMenu } from "@/components/tasks/TaskMenu";
+import { HiliteField } from "@/components/tasks/Hilite";
 import { Fan, fanMax } from "@/components/Fan";
 import { useTasksTap } from "@/components/MobileNav";
 import { Habits, useJournal } from "@/components/tasks/ProjectViews";
@@ -503,7 +504,7 @@ function AddLine({ placeholder, onAdd, onClose, withDate, className }) {
     <form ref={box} onSubmit={submit} className={cn("flex items-center gap-1.5 px-1.5 py-1", className)}
       onBlur={e => { if (!box.current?.contains(e.relatedTarget) && !text.trim()) setTimeout(onClose, 200); /* after the click that took focus lands */ }}>
       <PlusIcon className="size-4 shrink-0 text-muted-foreground" />
-      <input autoFocus value={text} onChange={e => setText(e.target.value)} placeholder={placeholder} aria-label={placeholder} enterKeyHint="done"
+      <HiliteField autoFocus value={text} onChange={e => setText(e.target.value)} placeholder={placeholder} aria-label={placeholder} enterKeyHint="done"
         onKeyDown={e => e.key === "Escape" && (setText(""), onClose())}
         className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60" />
       {withDate && <input type="date" value={date} min={addDays(2)} onChange={e => setDate(e.target.value)} aria-label="Когда"

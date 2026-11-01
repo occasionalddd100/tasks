@@ -6,6 +6,8 @@ import { add, getDb, useDb } from "@/lib/db";
 import { tagsOf, tagGroups, parseTag, targetCat } from "@/lib/tags";
 import { ensurePersonal } from "@/lib/personal";
 import { today, dueLabel } from "@/lib/tasks";
+import { parseWhen } from "@/lib/when";
+import { HiliteField } from "@/components/tasks/Hilite";
 import { addDone } from "@/lib/done";
 import { TagMark } from "@/components/tasks/TagMark";
 import { useBackClose } from "@/lib/back";
@@ -24,7 +26,10 @@ export const openQuickAdd = tag => setOpen(true, typeof tag === "string" ? tag :
 let lastAdd = { text: "", at: 0 };
 export async function addTask(raw, { tag, day, due, time } = {}) {
   const tags = tagsOf(getDb()), p = parseTag(raw, tags);
-  const text = p.text; if (!text) return null;
+  // date words in the text («завтра», «в пятницу», «12.11», «в 14:30») set the date and leave the text
+  const w = parseWhen(p.text);
+  if (w.due || w.time) { due = w.due || due || today(); time = w.time || time; }
+  const text = w.text; if (!text) return null;
   if (text === lastAdd.text && Date.now() - lastAdd.at < 2000) return null;
   lastAdd = { text, at: Date.now() };
   const tagId = p.tag?.id ?? tag ?? null;
@@ -68,7 +73,7 @@ export function Composer({ autoFocus, defaultTag = null, onAdded, className }) {
   return (
     <form onSubmit={submit} className={cn("flex flex-col gap-2.5", className)}>
       <div className="flex items-end gap-2">
-        <textarea ref={ref} rows={1} value={text} onChange={e => setText(e.target.value)} enterKeyHint="send"
+        <HiliteField multiline ref={ref} rows={1} value={text} onChange={e => setText(e.target.value)} enterKeyHint="send"
           placeholder={did ? "Что сделал?" : "Новая задача… #тег"} aria-label={did ? "Что сделал" : "Новая задача"}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) submit(e); }}
           className="field-sizing-content max-h-48 min-h-14 min-w-0 flex-1 resize-none rounded-2xl border bg-background px-4 py-3.5 text-lg leading-snug outline-none focus:ring-2 focus:ring-ring/40" />

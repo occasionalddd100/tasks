@@ -1,0 +1,27 @@
+{
+  "name": "tasks-desktop",
+  "productName": "Задачи",
+  "version": "1.0.0",
+  "description": "Задачи: окно приложения для компьютера с глобальным Ctrl+Space",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "io.github.occasionalddd100.tasks.desktop",
+    "productName": "Задачи",
+    "files": ["main.js", "icon.png"],
+    "win": {
+      "icon": "icon.png",
+      "target": [{ "target": "nsis", "arch": ["x64"] }, { "target": "portable", "arch": ["x64"] }]
+    },
+    "nsis": { "oneClick": true, "perMachine": false, "artifactName": "Tasks-Setup.${ext}", "shortcutName": "Задачи" },
+    "portable": { "artifactName": "Tasks-Portable.${ext}" }
+  }
+}

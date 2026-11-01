@@ -231,6 +231,10 @@ function Sidebar({ view, go, email, search, onFold }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {onFold && <div className="flex h-10 shrink-0 items-center justify-between border-b pr-1.5 pl-4 max-md:hidden">
+        <span className="font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase">Задачи</span>
+        <button type="button" onClick={onFold} title="Свернуть панель (Ctrl+B)" aria-label="Свернуть панель" className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><PanelLeftCloseIcon className="size-4" /></button>
+      </div>}
       <div className="p-2">
         {[
           { k: "focus", label: "Задачи", icon: ListTodoIcon, n: nowList(db).length, on: view.focus },
@@ -303,7 +307,6 @@ function Sidebar({ view, go, email, search, onFold }) {
           </span>
         </button>
         <ProfileDialog open={profile} onOpenChange={setProfile} />
-        {onFold && <button type="button" onClick={onFold} title="Свернуть панель (Ctrl+B)" aria-label="Свернуть панель" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground max-md:hidden"><PanelLeftCloseIcon className="size-4" /></button>}
         <Button variant="ghost" size="iconSm" className="shrink-0" aria-label="Настройки" title="Настройки" onClick={openSettings}><SettingsIcon /></Button>
         <Button variant="ghost" size="iconSm" className="shrink-0" aria-label="Выйти" title="Выйти" onClick={() => sb.auth.signOut()}><LogOutIcon /></Button>
       </div>
