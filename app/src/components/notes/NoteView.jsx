@@ -76,7 +76,7 @@ export default function NoteView({ id, fresh, go }) {
   const focusEditor = () => editorRef.current?.focus();
 
   return (
-    <div ref={box} className={cn("mx-auto w-full px-4 pt-5 pb-10 transition-[max-width] duration-300 md:px-8 md:pt-8", width === "wide" ? "max-w-6xl" : "max-w-3xl")}>
+    <div ref={box} className={cn("mx-auto w-full px-4 pt-3 pb-10 transition-[max-width] duration-300 md:px-4 md:pt-4", width === "wide" ? "max-w-6xl" : "max-w-3xl")}>
       <LockBanner other={other} />
       <header className="flex items-start gap-2">
         <ItemIcon x={note} fallback={FileTextIcon} className="mt-2 size-6 md:mt-2.5" />

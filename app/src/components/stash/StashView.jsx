@@ -196,7 +196,7 @@ export default function StashView({ id, fresh, go }) {
 
 const Chip = ({ on, onClick, children, ...rest }) => (
   <button type="button" onClick={onClick} {...rest}
-    className={cn("inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-colors", on ? "border-foreground bg-foreground text-background" : "bg-card text-muted-foreground hover:text-foreground")}>
+    className={cn("inline-flex h-7 items-center gap-1 rounded-md border font-mono px-2.5 text-xs font-medium transition-colors", on ? "border-foreground bg-foreground text-background" : "bg-card text-muted-foreground hover:text-foreground")}>
     {children}
   </button>
 );
@@ -354,7 +354,7 @@ function AddSheet({ open, setOpen, stash, tabs, tab }) {
         {tabs.length > 1 && (
           <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
             {tabs.map(t => <button key={t.id} type="button" onClick={() => setTo(t.id)}
-              className={cn("h-8 shrink-0 rounded-full border px-3 text-sm", t.id === to ? "border-foreground bg-foreground text-background" : "text-muted-foreground")}>{t.name}</button>)}
+              className={cn("h-8 shrink-0 rounded-md border font-mono px-3 text-sm", t.id === to ? "border-foreground bg-foreground text-background" : "text-muted-foreground")}>{t.name}</button>)}
           </div>
         )}
         <button type="button" onClick={() => fromClip(clip)} disabled={busy}
@@ -540,7 +540,7 @@ function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
               <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><ArrowRightLeftIcon className="size-3.5" />На доску</div>
               <div className="flex flex-wrap gap-1">
                 {tabs.map(t => <button key={t.id} type="button" disabled={t.id === c.tab} onClick={act(() => moveTo(t.id))}
-                  className={cn("h-7 rounded-full border px-2.5 text-xs", t.id === c.tab ? "border-transparent bg-accent font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>{t.name}</button>)}
+                  className={cn("h-7 rounded-md border font-mono px-2.5 text-xs", t.id === c.tab ? "border-transparent bg-accent font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>{t.name}</button>)}
               </div>
             </div>
           )}
@@ -549,7 +549,7 @@ function Bubble({ c, tabs, moveTo, allTags, onOpen, toggleSeen }) {
               <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><LayoutGridIcon className="size-3.5" />В другой стэш</div>
               <div className="flex flex-wrap gap-1">
                 {otherStashes(c).map(s => <button key={s.id} type="button" onClick={act(() => toStash(c, s))}
-                  className="h-7 rounded-full border px-2.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground">{s.name || "Без названия"}</button>)}
+                  className="h-7 rounded-md border font-mono px-2.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground">{s.name || "Без названия"}</button>)}
               </div>
             </div>
           )}
@@ -965,7 +965,7 @@ function Sources({ stash, tab }) {
       {list.map(s => {
         const st = states[s.id];
         return (
-          <button key={s.id} type="button" onClick={() => setOpen(s)} className="inline-flex h-7 items-center gap-1.5 rounded-full border bg-card px-2.5 text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+          <button key={s.id} type="button" onClick={() => setOpen(s)} className="inline-flex h-7 items-center gap-1.5 rounded-md border font-mono bg-card px-2.5 text-muted-foreground hover:border-foreground/30 hover:text-foreground"
             title={st === "missing" ? "Папка подключена на другом устройстве" : "Открыть папку: смотреть файлы и отправлять выбранные в стэш"}>
             <FolderOpenIcon className="size-3.5" />{s.name}
             {st === "prompt" && <LockIcon className="size-3" />}
@@ -976,7 +976,7 @@ function Sources({ stash, tab }) {
       <input ref={pick} type="file" webkitdirectory="" multiple className="hidden" onChange={e => browseOnce(e.target.files)} onClick={e => { e.currentTarget.value = ""; }} />
       {open && <Suspense fallback={null}><FolderPortal stash={stash} source={open} mem={open.mem} tab={tab} onClose={() => setOpen(null)} /></Suspense>}
       <button type="button" onClick={connect} disabled={busy} title={canUseFolders ? "Папка читается прямо с диска; в облако попадает только то, что выберешь" : "Этот браузер не запоминает папки: её придётся выбирать каждый раз. В облако попадает только то, что выберешь"}
-        className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-2.5 text-muted-foreground hover:text-foreground">
+        className="inline-flex h-7 items-center gap-1 rounded-md border font-mono border-dashed px-2.5 text-muted-foreground hover:text-foreground">
         {busy ? <Loader2Icon className="size-3.5 animate-spin" /> : <FolderPlusIcon className="size-3.5" />}{canUseFolders ? "Подключить папку с компьютера" : "Открыть папку с компьютера"}
       </button>
     </div>

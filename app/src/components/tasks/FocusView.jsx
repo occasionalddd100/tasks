@@ -43,7 +43,7 @@ export default function FocusView() {
   const [slot, setSlot] = useState(null);
   useEffect(() => setSlot(document.getElementById("topbar-slot")), []);
   const actions = <>
-    <button type="button" onClick={() => openTagEditor()} title="Править теги" aria-label="Править теги" className="inline-flex h-9 transition-all shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground max-md:px-2.5"><PencilIcon className="size-3.5" /><span className="max-md:hidden">Теги</span></button>
+    <button type="button" onClick={() => openTagEditor()} title="Править теги" aria-label="Править теги" className="inline-flex h-9 transition-all shrink-0 items-center gap-1.5 rounded-md border px-3 font-mono text-[13px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground max-md:px-2.5"><PencilIcon className="size-3.5" /><span className="max-md:hidden">Теги</span></button>
     <ZenButton /><TodayDone />
   </>;
   // a tag picked in the menu: the page starts over at the top
@@ -110,7 +110,7 @@ export default function FocusView() {
     <div className={cn(VIEW, "max-w-3xl max-md:px-2 lg:max-w-none lg:gap-2 lg:px-2 lg:pt-2 lg:pb-2")}>
       {phone && slot && createPortal(<div className="flex items-center gap-1.5 [&_button]:h-8 [&_button]:text-xs">{actions}</div>, slot)}
       {!phone && <header className="flex items-center gap-2">
-        <div className="flex-1"><TagMenu items={menu} title={shownTag ? tagName(shownTag) : "Задачи"} onPick={pick} /></div>
+        <div className="min-w-0 flex-1">{wide ? <TagTabs items={menu} onPick={pick} /> : <TagMenu items={menu} title={shownTag ? tagName(shownTag) : "Задачи"} onPick={pick} />}</div>
         {actions}
       </header>}
 
@@ -165,7 +165,7 @@ function NextUp() {
     return "через " + (h ? h + " ч" + (m % 60 ? " " + (m % 60) + " мин" : "") : m + " мин");
   };
   return (
-    <div className="flex h-9 items-center gap-2 rounded-full bg-violet-500/10 pr-1 pl-3 text-sm">
+    <div className="flex h-9 items-center gap-2 rounded-md border border-violet-500/20 bg-violet-500/10 pr-1 pl-3 text-sm">
       <AlarmClockIcon className="size-4 shrink-0 text-violet-500" />
       <button type="button" onClick={() => openTask(first.t.id)} className="flex min-w-0 flex-1 items-baseline gap-1.5 text-left">
         <span className="shrink-0 font-semibold tabular-nums">{left(first.at - now)}</span>
@@ -178,6 +178,24 @@ function NextUp() {
       <button type="button" onClick={() => hide(key)} aria-label="Скрыть" title="Скрыть до следующей задачи"
         className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-background/60"><XIcon className="size-3.5" /></button>
     </div>
+  );
+}
+
+// wide computer: the tags are tabs in place of the title
+function TagTabs({ items, onPick }) {
+  return (
+    <nav className="thin-scroll flex min-w-0 items-stretch overflow-x-auto rounded-md border font-mono text-[13px]">
+      {items.map(it => (
+        <button key={it.id} type="button" onClick={() => onPick(it.id)}
+          className={cn("flex h-9 shrink-0 items-center gap-1.5 border-r px-3 whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground",
+            it.on && "bg-accent font-semibold text-foreground shadow-[inset_0_-2px_0_var(--primary)]")}>
+          {it.id === ALL ? <ListTodoIcon className="size-3.5" /> : it.id === NONE ? <InboxIcon className="size-3.5" />
+            : it.tag?.emoji ? <span className="text-sm leading-none">{it.tag.emoji}</span> : <span className="size-2 rounded-full" style={{ background: it.tag?.color || "currentColor" }} />}
+          <span>{it.name}</span>
+          {it.n > 0 && <span className="tabular-nums opacity-60">{it.n}</span>}
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -588,7 +606,7 @@ function TodayDone() {
     <Pop.Root open={open} onOpenChange={setOpen}>
       <Pop.Trigger asChild>
         <button type="button" onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)}
-          className={cn("inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors", items.length ? "border-good/40 bg-good/10 text-good" : "text-muted-foreground")}>
+          className={cn("inline-flex h-9 items-center gap-1.5 rounded-md border px-3 font-mono text-[13px] font-medium transition-colors", items.length ? "border-good/40 bg-good/10 text-good" : "text-muted-foreground")}>
           <CheckIcon className="size-4" strokeWidth={2.6} /><span className="tabular-nums">{items.length}</span><span className="max-sm:hidden">сегодня</span>
         </button>
       </Pop.Trigger>
@@ -664,7 +682,7 @@ function ZenButton() {
   }, []);
   return (
     <button type="button" onClick={() => { location.hash = "#zen"; }} title="Фокус: одна задача на весь экран (F)"
-      className="relative inline-flex h-9 items-center gap-1.5 rounded-full bg-foreground px-3.5 text-sm font-semibold text-background transition-transform hover:scale-[1.03] active:scale-95">
+      className="relative inline-flex h-9 items-center gap-1.5 rounded-md bg-foreground px-3.5 font-mono text-[13px] font-semibold text-background transition-transform active:scale-95">
       {fresh && <span className="absolute -top-0.5 -right-0.5 size-2.5 animate-ping rounded-full bg-emerald-400" />}
       {fresh && <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-400" />}
       <CrosshairIcon className="size-4" />Фокус
