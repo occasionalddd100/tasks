@@ -1,7 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { BellIcon, DatabaseIcon, HardDriveIcon, Loader2Icon, MonitorIcon, MoonIcon, PaletteIcon, RefreshCwIcon, SparklesIcon, SunIcon, Trash2Icon } from "lucide-react";
+import { BellIcon, ScrollTextIcon, DatabaseIcon, HardDriveIcon, Loader2Icon, MonitorIcon, MoonIcon, PaletteIcon, RefreshCwIcon, SparklesIcon, SunIcon, Trash2Icon } from "lucide-react";
 import { openTour } from "@/components/Tour";
 import { testNotify } from "@/lib/native";
+import { openChangelog } from "@/components/Changelog";
 import { toast } from "sonner";
 import { rpc, useDb } from "@/lib/db";
 import { ACCENTS, setAppearance, useAppearance } from "@/lib/appearance";
@@ -76,6 +77,10 @@ function Look() {
       </Row>
       <Row label="Размер текста"><Seg value={a.scale} onChange={scale => setAppearance({ scale })} options={[[90, "Мельче"], [100, "Обычный"], [110, "Крупнее"], [120, "Крупный"]]} /></Row>
       <Row label="Анимации" hint="Влетающие карточки, переходы, конфетти"><Seg value={a.motion} onChange={motion => setAppearance({ motion })} options={[["on", "Включены"], ["off", "Выключены"]]} /></Row>
+      <Row label="Что нового" hint="Список изменений приложения">
+        <button type="button" onClick={() => { close(); setTimeout(openChangelog, 200); }}
+          className="inline-flex h-9 items-center gap-1.5 self-start rounded-lg border px-3 text-sm font-medium hover:bg-accent"><ScrollTextIcon className="size-4" />Что нового</button>
+      </Row>
       <Row label="Уведомления" hint="Пришлёт проверочное уведомление через 5 секунд и покажет ближайшее напоминание">
         <button type="button" onClick={() => testNotify()}
           className="inline-flex h-9 items-center gap-1.5 self-start rounded-lg border px-3 text-sm font-medium hover:bg-accent"><BellIcon className="size-4" />Проверить уведомления</button>
