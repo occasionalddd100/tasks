@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KeyboardIcon, Loader2Icon } from "lucide-react";
+import { KeyboardIcon, Loader2Icon, RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +40,25 @@ export default function HotkeyRow({ Row }) {
           rec && "border-primary ring-2 ring-primary/30", cur && cur !== "old" && !cur[1] && "border-destructive text-destructive")}>
         {busy ? <Loader2Icon className="size-4 animate-spin" /> : <KeyboardIcon className="size-4" />}
         {rec ? "Нажми сочетание… (Esc — отмена)" : cur && !old ? nice(cur[0]) : "…"}
+      </button>
+    </Row>
+  );
+}
+
+// Computer app only: its version and a button to look for a newer one now
+export function UpdateRow({ Row }) {
+  const [ver, setVer] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { ipc()?.invoke("app_version").then(setVer, () => setVer("old")); }, []);
+  if (!ipc()) return null;
+  const old = ver === "old";
+  const go = async () => { setBusy(true); try { toast(await ipc().invoke("update_check")); } catch (e) { toast.error(String(e)); } setBusy(false); };
+  return (
+    <Row label="Приложение для ПК" hint={old ? "Эта версия не умеет проверять обновления по кнопке: она проверит сама при запуске" : "Обновляется само; кнопка проверит и поставит новую версию сейчас"}>
+      <button type="button" disabled={old || busy} onClick={go}
+        className="inline-flex h-9 items-center gap-1.5 self-start rounded-lg border px-3 text-sm font-medium hover:bg-accent disabled:opacity-50">
+        {busy ? <Loader2Icon className="size-4 animate-spin" /> : <RefreshCwIcon className="size-4" />}
+        {ver && !old ? `Версия ${ver} · проверить обновления` : "Проверить обновления"}
       </button>
     </Row>
   );

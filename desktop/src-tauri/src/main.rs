@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State, WindowEvent, Wry};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_window_state::StateFlags;
 
 mod update;
@@ -87,6 +88,17 @@ fn hotkey_set(app: AppHandle, hot: State<Hot>, key: String) -> Result<(), String
     }
 }
 
+#[tauri::command]
+async fn update_check(app: AppHandle) -> String {
+    let build = app.package_info().version.patch;
+    tauri::async_runtime::spawn_blocking(move || update::check(&app, build, true)).await.unwrap_or_default()
+}
+
+#[tauri::command]
+fn app_version(app: AppHandle) -> u64 {
+    app.package_info().version.patch
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app)))
@@ -107,7 +119,7 @@ fn main() {
                 .build(),
         )
         .manage(Hot::default())
-        .invoke_handler(tauri::generate_handler![hotkey_get, hotkey_set])
+        .invoke_handler(tauri::generate_handler![hotkey_get, hotkey_set, update_check, app_version])
         .setup(|app| {
             // the saved key, else Ctrl+Space, else Ctrl+Alt+Space when another program holds it
             let saved = hotkey_file(app.handle()).and_then(|f| std::fs::read_to_string(f).ok()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
@@ -146,7 +158,7 @@ fn main() {
             let reload = MenuItem::with_id(app, "reload", "Обновить страницу", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
             let build = app.package_info().version.patch;
-            let version = MenuItem::with_id(app, "version", format!("Версия {build}, обновляется сама"), false, None::<&str>)?;
+            let version = MenuItem::with_id(app, "version", format!("Версия {build}: проверить обновления"), true, None::<&str>)?;
             let sep1 = PredefinedMenuItem::separator(app)?;
             let sep2 = PredefinedMenuItem::separator(app)?;
             let menu = Menu::with_items(app, &[&open, &hotkey, &sep1, &autostart, &reload, &version, &sep2, &quit])?;
@@ -159,6 +171,14 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "open" => show(app),
+                    "version" => {
+                        let app = app.clone();
+                        std::thread::spawn(move || {
+                            let build = app.package_info().version.patch;
+                            let msg = update::check(&app, build, true);
+                            let _ = app.notification().builder().title("Обновления").body(msg).show();
+                        });
+                    }
                     "quit" => app.exit(0),
                     "reload" => {
                         if let Some(w) = app.get_webview_window("main") {

@@ -64,43 +64,81 @@ fn away(app: &AppHandle) -> bool {
         .unwrap_or(true)
 }
 
+fn log(app: &AppHandle, line: &str) {
+    if let Ok(dir) = app.path().app_config_dir() {
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("update.log")) {
+            let _ = writeln!(f, "{line}");
+        }
+    }
+}
+
+fn install(app: &AppHandle, file: &std::path::Path, n: u64) -> bool {
+    let _ = app
+        .notification()
+        .builder()
+        .title("Задачи обновляются")
+        .body(format!("Ставлю версию {n}, через несколько секунд окно вернётся."))
+        .show();
+    // passive install (a small progress bar), then start the new version
+    let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default();
+    let mut cmd = std::process::Command::new("cmd");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // raw: cmd parses its own quotes
+        cmd.raw_arg(format!("/C \"\"{}\" /P & start \"\" \"{}\"\"", file.display(), exe));
+        cmd.creation_flags(0x0800_0000);
+    }
+    match cmd.spawn() {
+        Ok(_) => {
+            log(app, &format!("installing {n}"));
+            app.exit(0);
+            true
+        }
+        Err(e) => {
+            log(app, &format!("could not start the installer: {e}"));
+            false
+        }
+    }
+}
+
+/// Look now. `now`: install right away (asked for by hand); otherwise wait until the window is put away.
+/// Returns what happened, for the settings and the tray.
+pub fn check(app: &AppHandle, current: u64, now: bool) -> String {
+    if !installed() {
+        return "Это версия без установки: обновления ставятся через Tasks-Setup.exe".into();
+    }
+    let Some((n, url)) = newer(current) else {
+        log(app, &format!("checked: {current} is the newest"));
+        return format!("Стоит последняя версия ({current})");
+    };
+    let Some(file) = fetch(&url, n) else {
+        log(app, &format!("download of {n} failed"));
+        return format!("Не получилось скачать версию {n}");
+    };
+    if !now && !away(app) {
+        let _ = app
+            .notification()
+            .builder()
+            .title("Есть новая версия Задач")
+            .body(format!("Версия {n} скачана. Поставлю, когда свернёшь или спрячешь окно."))
+            .show();
+        // don't pull the window from under the person
+        while !away(app) {
+            std::thread::sleep(Duration::from_secs(20));
+        }
+    }
+    if install(app, &file, n) { format!("Ставлю версию {n}") } else { format!("Не получилось запустить установку версии {n}") }
+}
+
 pub fn watch(app: AppHandle, current: u64) {
     if !installed() {
         return;
     }
-    std::thread::sleep(Duration::from_secs(45));
+    std::thread::sleep(Duration::from_secs(20));
     loop {
-        if let Some((n, url)) = newer(current) {
-            if let Some(file) = fetch(&url, n) {
-                // don't pull the window from under the person: wait until it is hidden or minimised (max ~2 h)
-                for _ in 0..120 {
-                    if away(&app) {
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_secs(60));
-                }
-                let _ = app
-                    .notification()
-                    .builder()
-                    .title("Задачи обновляются")
-                    .body(format!("Ставлю версию {n}, через несколько секунд окно вернётся."))
-                    .show();
-                // passive install (a small progress bar), then start the new version
-                let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default();
-                let mut cmd = std::process::Command::new("cmd");
-                #[cfg(windows)]
-                {
-                    use std::os::windows::process::CommandExt;
-                    // raw: cmd parses its own quotes
-                    cmd.raw_arg(format!("/C \"\"{}\" /P & start \"\" \"{}\"\"", file.display(), exe));
-                    cmd.creation_flags(0x0800_0000);
-                }
-                if cmd.spawn().is_ok() {
-                    app.exit(0);
-                    return;
-                }
-            }
-        }
-        std::thread::sleep(Duration::from_secs(4 * 3600));
+        check(&app, current, false);
+        std::thread::sleep(Duration::from_secs(30 * 60));
     }
 }
