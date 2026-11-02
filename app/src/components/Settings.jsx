@@ -3,6 +3,7 @@ import { BellIcon, ScrollTextIcon, DatabaseIcon, HardDriveIcon, Loader2Icon, Mon
 import { openTour } from "@/components/Tour";
 import { testNotify } from "@/lib/native";
 import { openChangelog } from "@/components/Changelog";
+import HotkeyRow from "@/components/HotkeyRow";
 import { toast } from "sonner";
 import { rpc, useDb } from "@/lib/db";
 import { ACCENTS, setAppearance, useAppearance } from "@/lib/appearance";
@@ -81,6 +82,7 @@ function Look() {
         <button type="button" onClick={() => { close(); setTimeout(openChangelog, 200); }}
           className="inline-flex h-9 items-center gap-1.5 self-start rounded-lg border px-3 text-sm font-medium hover:bg-accent"><ScrollTextIcon className="size-4" />Что нового</button>
       </Row>
+      <HotkeyRow Row={Row} />
       <Row label="Уведомления" hint="Пришлёт проверочное уведомление через 5 секунд и покажет ближайшее напоминание">
         <button type="button" onClick={() => testNotify()}
           className="inline-flex h-9 items-center gap-1.5 self-start rounded-lg border px-3 text-sm font-medium hover:bg-accent"><BellIcon className="size-4" />Проверить уведомления</button>

@@ -4,9 +4,10 @@
 
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, WindowEvent};
+use std::sync::Mutex;
+use tauri::{AppHandle, Manager, State, WindowEvent, Wry};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_window_state::StateFlags;
 
 mod update;
@@ -25,6 +26,63 @@ fn toggle(app: &AppHandle) {
             let _ = w.hide();
         } else {
             show(app);
+        }
+    }
+}
+
+// the show/hide key: chosen in the app's settings, kept in hotkey.txt
+#[derive(Default)]
+struct Hot(Mutex<HotState>);
+#[derive(Default)]
+struct HotState {
+    key: String,
+    ok: bool,
+    item: Option<MenuItem<Wry>>,
+}
+
+fn hotkey_file(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join("hotkey.txt"))
+}
+
+fn register(app: &AppHandle, key: &str) -> Result<(), String> {
+    let sc: Shortcut = key.parse().map_err(|e| format!("{e}"))?;
+    let gs = app.global_shortcut();
+    let _ = gs.unregister_all();
+    gs.register(sc).map_err(|e| e.to_string())
+}
+
+fn set_label(st: &HotState) {
+    if let Some(item) = &st.item {
+        let text = if st.ok { format!("Горячая клавиша: {}", st.key) } else { format!("Горячая клавиша {} занята", st.key) };
+        let _ = item.set_text(text);
+    }
+}
+
+#[tauri::command]
+fn hotkey_get(hot: State<Hot>) -> (String, bool) {
+    let st = hot.0.lock().unwrap();
+    (st.key.clone(), st.ok)
+}
+
+#[tauri::command]
+fn hotkey_set(app: AppHandle, hot: State<Hot>, key: String) -> Result<(), String> {
+    let mut st = hot.0.lock().unwrap();
+    match register(&app, &key) {
+        Ok(()) => {
+            if let Some(f) = hotkey_file(&app) {
+                let _ = std::fs::create_dir_all(f.parent().unwrap());
+                let _ = std::fs::write(f, &key);
+            }
+            st.key = key;
+            st.ok = true;
+            set_label(&st);
+            Ok(())
+        }
+        Err(e) => {
+            // put the old one back
+            let old = st.key.clone();
+            st.ok = !old.is_empty() && register(&app, &old).is_ok();
+            Err(format!("Не получилось занять {key}: {e}"))
         }
     }
 }
@@ -48,19 +106,21 @@ fn main() {
                 })
                 .build(),
         )
+        .manage(Hot::default())
+        .invoke_handler(tauri::generate_handler![hotkey_get, hotkey_set])
         .setup(|app| {
-            // Ctrl+Space, or Ctrl+Alt+Space when another program holds it
-            let keys = [
-                (Shortcut::new(Some(Modifiers::CONTROL), Code::Space), "Ctrl+Space"),
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space), "Ctrl+Alt+Space"),
-            ];
-            let mut label = String::from("занята другой программой");
-            for (key, name) in keys {
-                if app.global_shortcut().register(key).is_ok() {
-                    label = name.to_string();
+            // the saved key, else Ctrl+Space, else Ctrl+Alt+Space when another program holds it
+            let saved = hotkey_file(app.handle()).and_then(|f| std::fs::read_to_string(f).ok()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+            let mut keys: Vec<String> = saved.into_iter().collect();
+            keys.extend(["Ctrl+Space".to_string(), "Ctrl+Alt+Space".to_string()]);
+            let mut chosen = (keys[0].clone(), false);
+            for k in &keys {
+                if register(app.handle(), k).is_ok() {
+                    chosen = (k.clone(), true);
                     break;
                 }
             }
+            let label = if chosen.1 { chosen.0.clone() } else { format!("{} занята", chosen.0) };
 
             // first run: start with Windows, quietly in the tray
             if let Ok(dir) = app.path().app_config_dir() {
@@ -74,7 +134,14 @@ fn main() {
             let auto = app.autolaunch().is_enabled().unwrap_or(false);
 
             let open = MenuItem::with_id(app, "open", "Открыть Задачи", true, None::<&str>)?;
-            let hotkey = MenuItem::with_id(app, "hotkey", format!("Горячая клавиша: {label}"), false, None::<&str>)?;
+            let hotkey = MenuItem::with_id(app, "hotkey", format!("Горячая клавиша: {label} (меняется в настройках)"), false, None::<&str>)?;
+            {
+                let hot = app.state::<Hot>();
+                let mut st = hot.0.lock().unwrap();
+                st.key = chosen.0.clone();
+                st.ok = chosen.1;
+                st.item = Some(hotkey.clone());
+            }
             let autostart = CheckMenuItem::with_id(app, "auto", "Запускать при входе в Windows", true, auto, None::<&str>)?;
             let reload = MenuItem::with_id(app, "reload", "Обновить страницу", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
