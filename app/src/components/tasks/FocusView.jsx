@@ -428,8 +428,9 @@ const span = ms => {
   const m = Math.round(Math.abs(ms) / 60e3);
   if (m < 60) return m + " мин";
   const h = Math.floor(m / 60), mm = m % 60;
-  if (h < 24) return h + " ч" + (mm && h < 5 ? " " + mm + " мин" : "");
-  return Math.round(h / 24) + " дн";
+  if (h < 24) return h + " ч" + (mm ? " " + mm + " мин" : "");
+  const d = Math.floor(h / 24), hh = h % 24;
+  return d + " дн" + (hh ? " " + hh + " ч" : "");
 };
 // how long until the task is due: «через 2 ч 10 мин», «через 3 дн», «40 мин назад»
 export function untilText(t, now) {
