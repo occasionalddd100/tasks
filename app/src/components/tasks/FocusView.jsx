@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { WhenPicker, TimePicker } from "@/components/ui/when-picker";
 import { createPortal } from "react-dom";
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
@@ -420,6 +420,35 @@ function useSubFold(id) {
   return [folded, toggle];
 }
 
+// a clock that ticks once a minute for every «через …» label
+let minute = Date.now(); const ticks = new Set();
+setInterval(() => { minute = Date.now(); ticks.forEach(f => f()); }, 60e3);
+const useMinute = () => useSyncExternalStore(f => (ticks.add(f), () => ticks.delete(f)), () => minute);
+const span = ms => {
+  const m = Math.round(Math.abs(ms) / 60e3);
+  if (m < 60) return m + " мин";
+  const h = Math.floor(m / 60), mm = m % 60;
+  if (h < 24) return h + " ч" + (mm && h < 5 ? " " + mm + " мин" : "");
+  return Math.round(h / 24) + " дн";
+};
+// how long until the task is due: «через 2 ч 10 мин», «через 3 дн», «40 мин назад»
+export function untilText(t, now) {
+  if (!t.due) return "";
+  if (!t.time) {
+    const k = dayDiff(today(), t.due);
+    return k === 0 ? "" : k > 0 ? "через " + k + " дн" : -k + " дн назад";
+  }
+  const at = new Date(t.due + "T" + t.time).getTime(), d = at - now;
+  return Math.abs(d) < 60e3 ? "сейчас" : d > 0 ? "через " + span(d) : span(d) + " назад";
+}
+function Until({ t }) {
+  const now = useMinute();
+  const s = untilText(t, now);
+  if (!s) return null;
+  const past = s.endsWith("назад"), soon = !past && t.time && new Date(t.due + "T" + t.time) - now < 3600e3;
+  return <span className={cn("mt-0.5 shrink-0 font-mono text-[13px] tabular-nums", past ? "text-red-500" : soon ? "text-orange-500" : "text-muted-foreground/70")}>{s}</span>;
+}
+
 function TuiRow({ t, depth = 0, showDate }) {
   const db = useDb();
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);
@@ -439,12 +468,12 @@ function TuiRow({ t, depth = 0, showDate }) {
         onClick={e => { if (e.shiftKey || e.ctrlKey || e.metaKey || selActive()) toggleSel(t.id); else openTask(t.id); }}
         onKeyDown={e => e.key === "Enter" && openTask(t.id)}
         onContextMenu={e => { e.preventDefault(); openTaskMenu(t, e.clientX, e.clientY); }}
-        className={cn("group/r relative mx-1 flex min-h-10 cursor-default items-start gap-3 rounded px-2.5 py-2 leading-snug outline-none select-none hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring",
+        className={cn("group/r relative mx-1 flex min-h-10 cursor-default items-start gap-3 rounded py-2 pr-2.5 pl-6 leading-snug outline-none select-none hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring",
           picked && "bg-primary/15 ring-1 ring-primary/40 ring-inset hover:bg-primary/20", isDragging && "opacity-30", t.done && "text-muted-foreground line-through", "text-base")}
-        style={depth ? { paddingLeft: 8 + depth * 20 } : undefined}>
+        style={depth ? { paddingLeft: 24 + depth * 22 } : undefined}>
         {depth > 0 && <span className="-ml-3 font-mono text-xs text-muted-foreground/50">└</span>}
         {kids.length > 0 && <button type="button" onClick={e => { stop(e); toggleFold(); }} onPointerDown={stop} aria-label={folded ? "Показать подзадачи" : "Свернуть подзадачи"}
-          className="-mx-1 mt-0.5 grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"><ChevronRightIcon className={cn("size-3.5 transition-transform", !folded && "rotate-90")} /></button>}
+          className="absolute top-2.5 grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground" style={{ left: 2 + depth * 22 }}><ChevronRightIcon className={cn("size-3.5 transition-transform", !folded && "rotate-90")} /></button>}
         <Checkbox className="mt-0.5 size-[18px]" checked={!!t.done} onClick={stop} onPointerDown={stop} onCheckedChange={v => done(!!v)} aria-label={t.text} />
         <span className="min-w-0 flex-1 break-words">{t.text}</span>
         {kids.length > 0 && <span className="mt-0.5 font-mono text-[13px] text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
@@ -455,6 +484,7 @@ function TuiRow({ t, depth = 0, showDate }) {
           <button type="button" onClick={e => { stop(e); moveTasks([t.id], "tomorrow"); }} onPointerDown={stop} title="На завтра" aria-label="На завтра" className={quick}><SunriseIcon className="size-3.5" /></button>
           <button type="button" onClick={e => { stop(e); setAdding(true); }} onPointerDown={stop} title="Добавить подзадачу" aria-label="Добавить подзадачу" className={quick}><CornerDownRightIcon className="size-3.5" /></button>
         </span>}
+        {!t.done && <Until t={t} />}
         {(showDate || t.time) && t.due && <span className={cn("mt-0.5 shrink-0 font-mono text-[13px] tabular-nums", late ? "text-red-500" : "text-muted-foreground")}>{showDate ? shortDue(t) : t.time}</span>}
       </div>
       <Fold open={kids.length > 0 && (!folded || adding)}><Rows>{kids.map(k => <TuiRow key={k.id} t={k} depth={depth + 1} />)}</Rows></Fold>
