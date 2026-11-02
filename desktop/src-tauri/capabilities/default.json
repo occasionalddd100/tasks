@@ -4,5 +4,5 @@
   "description": "The site may show notifications (reminders) through the app",
   "windows": ["main"],
   "remote": { "urls": ["https://occasionalddd100.github.io/*"] },
-  "permissions": ["core:default", "notification:default", "allow-hotkey-get", "allow-hotkey-set", "allow-update-check", "allow-app-version"]
+  "permissions": ["core:default", "notification:default", "allow-hotkey-get", "allow-hotkey-set", "allow-update-check", "allow-app-version", "allow-idle-secs"]
 }

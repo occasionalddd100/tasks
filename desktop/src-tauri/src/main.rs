@@ -94,6 +94,38 @@ async fn update_check(app: AppHandle) -> String {
     tauri::async_runtime::spawn_blocking(move || update::check(&app, build, true)).await.unwrap_or_default()
 }
 
+// seconds since the last key or mouse input anywhere in Windows (the focus mode's «away» detector)
+#[tauri::command]
+fn idle_secs() -> u64 {
+    #[cfg(windows)]
+    {
+        #[repr(C)]
+        struct LastInputInfo {
+            cb_size: u32,
+            dw_time: u32,
+        }
+        #[link(name = "user32")]
+        extern "system" {
+            fn GetLastInputInfo(p: *mut LastInputInfo) -> i32;
+        }
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetTickCount() -> u32;
+        }
+        unsafe {
+            let mut li = LastInputInfo { cb_size: 8, dw_time: 0 };
+            if GetLastInputInfo(&mut li) == 0 {
+                return 0;
+            }
+            (GetTickCount().wrapping_sub(li.dw_time) / 1000) as u64
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        0
+    }
+}
+
 #[tauri::command]
 fn app_version(app: AppHandle) -> u64 {
     app.package_info().version.patch
@@ -119,7 +151,7 @@ fn main() {
                 .build(),
         )
         .manage(Hot::default())
-        .invoke_handler(tauri::generate_handler![hotkey_get, hotkey_set, update_check, app_version])
+        .invoke_handler(tauri::generate_handler![hotkey_get, hotkey_set, update_check, app_version, idle_secs])
         .setup(|app| {
             // the saved key, else Ctrl+Space, else Ctrl+Alt+Space when another program holds it
             let saved = hotkey_file(app.handle()).and_then(|f| std::fs::read_to_string(f).ok()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());

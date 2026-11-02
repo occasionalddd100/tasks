@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { parseWhen } from "@/lib/when";
+import { focus, useFocusSession } from "@/lib/focusSession";
+import { toast } from "sonner";
 import { WhenPicker, TimePicker } from "@/components/ui/when-picker";
 import { createPortal } from "react-dom";
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
@@ -8,7 +11,7 @@ import { ActionsContext } from "@/components/ui/actions";
 import * as Pop from "@radix-ui/react-popover";
 import { useDb, update, add } from "@/lib/db";
 import { openList, labelOf } from "@/lib/focus";
-import { useSelection, toggleSel, selActive, isSelected, getSel, clearSel, moveTasks, MOVES } from "@/lib/select";
+import { useSelection, toggleSel, pickOnly, selActive, isSelected, getSel, clearSel, moveTasks, MOVES } from "@/lib/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { timeOf } from "@/lib/reminders";
 import { exText, exAt } from "@/lib/done";
@@ -463,6 +466,23 @@ function Until({ t }) {
   );
 }
 
+// the task's text edited right in the row: Enter saves, Esc leaves it as it was; words like «завтра в 15:00» set the date
+function EditText({ t, onDone }) {
+  const [v, setV] = useState(t.text);
+  const save = () => {
+    const w = parseWhen(v), text = (w.due || w.time ? w.text : v).trim();
+    if (text && (text !== t.text || w.due || w.time)) update("tasks", t.id, { text, ...(w.due || w.time ? { due: w.due || t.due || today(), time: w.time || t.time || "" } : {}) });
+    onDone();
+  };
+  const stop = e => e.stopPropagation();
+  return (
+    <textarea autoFocus value={v} rows={1} onChange={e => setV(e.target.value)} onBlur={save} onClick={stop} onPointerDown={stop} onDoubleClick={stop}
+      onFocus={e => e.target.setSelectionRange(v.length, v.length)}
+      onKeyDown={e => { stop(e); if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); } if (e.key === "Escape") { e.preventDefault(); onDone(); } }}
+      className="field-sizing-content -my-1 min-w-0 flex-1 resize-none rounded bg-background px-1.5 py-1 leading-snug outline-none ring-1 ring-primary/50" aria-label="Текст задачи" />
+  );
+}
+
 function TuiRow({ t, depth = 0, showDate }) {
   const db = useDb();
   const kids = db.tasks.filter(k => k.parent === t.id && !stale(k)).sort(byOrder);
@@ -470,6 +490,7 @@ function TuiRow({ t, depth = 0, showDate }) {
   const picked = useSelection().has(t.id);
   const [folded, toggleFold] = useSubFold(t.id);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
   // «Подзадача» in the right-click menu asks this row to open its input
   useEffect(() => { const f = e => e.detail === t.id && setAdding(true); addEventListener("tui-addsub", f); return () => removeEventListener("tui-addsub", f); }, [t.id]);
   const late = t.due && !t.done && t.due < today();
@@ -479,8 +500,11 @@ function TuiRow({ t, depth = 0, showDate }) {
   return (
     <motion.li initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={EASE} className="overflow-hidden">
       <div ref={setNodeRef} {...listeners} {...attributes} role="button" tabIndex={0} title={t.text}
-        onClick={e => { if (e.shiftKey || e.ctrlKey || e.metaKey || selActive()) toggleSel(t.id); else openTask(t.id); }}
-        onKeyDown={e => e.key === "Enter" && openTask(t.id)}
+        // computer: a click picks the task (Ctrl/Shift adds more), a double click or Enter/F2 edits the text in place;
+        // the full card is «Открыть» in the right-click menu. Touch screens open the card as before.
+        onClick={e => { if (editing) return; if (matchMedia("(pointer: coarse)").matches && !selActive()) return openTask(t.id); if (e.shiftKey || e.ctrlKey || e.metaKey) toggleSel(t.id); else pickOnly(t.id); }}
+        onDoubleClick={e => { if (e.target.closest("button,[role=checkbox]")) return; clearSel(); setEditing(true); }}
+        onKeyDown={e => { if (editing) return; if (e.key === "Enter" || e.key === "F2") { e.preventDefault(); setEditing(true); } }}
         onContextMenu={e => { e.preventDefault(); openTaskMenu(t, e.clientX, e.clientY); }}
         className={cn("group/r relative mx-1 flex min-h-10 cursor-default items-start gap-3 rounded py-2 pr-2.5 pl-6 leading-snug outline-none select-none hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring",
           picked && "bg-primary/15 ring-1 ring-primary/40 ring-inset hover:bg-primary/20", isDragging && "opacity-30", t.done && "text-muted-foreground line-through", "text-base")}
@@ -489,7 +513,8 @@ function TuiRow({ t, depth = 0, showDate }) {
         {kids.length > 0 && <button type="button" onClick={e => { stop(e); toggleFold(); }} onPointerDown={stop} aria-label={folded ? "Показать подзадачи" : "Свернуть подзадачи"}
           className="absolute top-2.5 grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground" style={{ left: 2 + depth * 22 }}><ChevronRightIcon className={cn("size-3.5 transition-transform", !folded && "rotate-90")} /></button>}
         <Checkbox className="mt-0.5 size-[18px]" checked={!!t.done} onClick={stop} onPointerDown={stop} onCheckedChange={v => done(!!v)} aria-label={t.text} />
-        <span className="min-w-0 flex-1 break-words">{t.text}{!t.done && <Until t={t} />}</span>
+        {editing ? <EditText t={t} onDone={() => setEditing(false)} />
+          : <span className="min-w-0 flex-1 break-words">{t.text}{!t.done && <Until t={t} />}</span>}
         {kids.length > 0 && <span className="mt-0.5 font-mono text-[13px] text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
         {t.body?.trim() && <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground/70" />}
         {t.prio === "urgent" && !t.done && <FlameIcon className="size-3.5 shrink-0 text-red-500" />}
@@ -760,19 +785,23 @@ function PrioBtn({ t, small }) {
   );
 }
 
-// the way into Фокус; glows until it's been opened today. «F» works too
+// the way into Фокус: works on the picked tasks (Shift+click or right click → Выбрать); «F» too
 function ZenButton() {
-  const fresh = (() => { try { return localStorage.getItem("zenSeen") !== today(); } catch { return true; } })();
+  const sel = useSelection(), run = useFocusSession();
+  const go = () => {
+    if (sel.size) { focus.start([...sel]); clearSel(); }
+    else if (run) focus.show(true);
+    else toast("Выдели задачи и нажми «Фокус»", { description: "Клик или Shift+клик по задачам, потом F или кнопка «Фокус»" });
+  };
   useEffect(() => {
-    const on = e => { if ((e.key === "f" || e.key === "а") && !e.ctrlKey && !e.metaKey && !e.target.closest?.("input,textarea,[contenteditable=true],[role=dialog]")) { e.preventDefault(); location.hash = "#zen"; } };
+    const on = e => { if ((e.key === "f" || e.key === "а") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.target.closest?.("input,textarea,[contenteditable=true],[role=dialog]")) { e.preventDefault(); go(); } };
     window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
-  }, []);
+  });
   return (
-    <button type="button" onClick={() => { location.hash = "#zen"; }} title="Фокус: одна задача на весь экран (F)"
+    <button type="button" onClick={go} title="Фокус на выделенных задачах (F)"
       className="relative inline-flex h-9 items-center gap-1.5 rounded-md bg-foreground px-3.5 font-mono text-[13px] font-semibold text-background transition-transform active:scale-95">
-      {fresh && <span className="absolute -top-0.5 -right-0.5 size-2.5 animate-ping rounded-full bg-emerald-400" />}
-      {fresh && <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-400" />}
-      <CrosshairIcon className="size-4" />Фокус
+      {run && <span className="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full bg-emerald-400" />}
+      <CrosshairIcon className="size-4" />{sel.size ? `Фокус (${sel.size})` : "Фокус"}
     </button>
   );
 }

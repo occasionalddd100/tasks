@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { WhenBody } from "@/components/ui/when-picker";
-import { CalendarIcon, CheckIcon, CornerDownRightIcon, ChevronRightIcon, FlameIcon, InboxIcon, PencilIcon, SquareCheckIcon, SunIcon, SunriseIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import { focus } from "@/lib/focusSession";
+import { CalendarIcon, CheckIcon, CornerDownRightIcon, CrosshairIcon, ChevronRightIcon, FlameIcon, InboxIcon, PencilIcon, SquareCheckIcon, SunIcon, SunriseIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { useDb, update } from "@/lib/db";
 import { getSel, isSelected, toggleSel, clearSel, moveTasks } from "@/lib/select";
 import { today, addDays } from "@/lib/tasks";
@@ -47,6 +48,7 @@ export function TaskMenuHost() {
     !many && { l: "Открыть", i: PencilIcon, k: "Enter", run: () => { close(); openTask(t.id); } },
     t.done ? { l: "Вернуть в работу", i: UndoIcon, run: run(() => tasks.forEach(x => update("tasks", x.id, { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false }))) }
       : { l: many ? `Готово (${ids.length})` : "Готово", i: CheckIcon, run: run(() => moveTasks(ids, "done")) },
+    !t.done && { l: many ? `Фокус (${ids.length})` : "Фокус", i: CrosshairIcon, k: "F", run: run(() => focus.start(ids)) },
     !many && !t.done && !t.parent && { l: "Добавить подзадачу", i: CornerDownRightIcon, run: () => { close(); dispatchEvent(new CustomEvent("tui-addsub", { detail: t.id })); } },
     "-",
     !t.done && { l: "На сегодня", i: SunIcon, on: t.due === now, run: run(() => moveTasks(ids, "today")) },

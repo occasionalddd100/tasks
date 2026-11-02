@@ -11,6 +11,8 @@ export const selActive = () => sel.size > 0;
 export const isSelected = id => sel.has(id);
 export const toggleSel = id => { sel = new Set(sel); sel.has(id) ? sel.delete(id) : sel.add(id); emit(); };
 export const getSel = () => sel;
+// a plain click: just this one (a second click on the only picked one lets it go)
+export const pickOnly = id => { sel = sel.size === 1 && sel.has(id) ? new Set() : new Set([id]); emit(); };
 export const clearSel = () => { if (sel.size) { sel = new Set(); emit(); } };
 
 // what a task (or every selected one, when it is among them) turns into when sent somewhere

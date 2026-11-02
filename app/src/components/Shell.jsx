@@ -16,8 +16,7 @@ import { TourHost } from "@/components/Tour";
 import SelectionBar from "@/components/tasks/SelectionBar";
 import { PicsViewer } from "@/components/stash/Pics";
 import ShareInbox from "@/components/stash/ShareInbox";
-const ZenView = lazy(() => import("@/components/tasks/ZenView"));
-import ZenFloat from "@/components/tasks/ZenFloat";
+import FocusHost from "@/components/tasks/FocusMode";
 import { useAppearance } from "@/lib/appearance";
 import Avatar from "@/components/Avatar";
 import ProfileDialog from "@/components/ProfileDialog";
@@ -74,7 +73,7 @@ const readHash = () => {
   if (m) return { [m[1]]: m[2] };
   if (location.hash === "#journal") return { focus: true }; // the timeline is gone: its old links open the tasks
   if (location.hash === "#focus") return { focus: true };
-  if (location.hash === "#zen") return { focus: true, zen: true };
+  if (location.hash === "#zen") return { focus: true };
   if (location.hash === "#personal") return { personal: true };
   if (location.hash === "#diary") return { diary: true };
   // home is the task list: open the app, add what's on your mind
@@ -223,8 +222,7 @@ export default function Shell() {
       <SelectionBar />
       <ShareInbox go={go} />
       <PicsViewer />
-      <AnimatePresence>{view.zen && <Suspense fallback={null}><ZenView onClose={() => go({ focus: true })} /></Suspense>}</AnimatePresence>
-      {!view.zen && <ZenFloat />}
+      <FocusHost />
       <IconPickerHost />
     </div>
     </MotionConfig>
