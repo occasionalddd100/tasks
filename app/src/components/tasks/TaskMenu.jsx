@@ -35,7 +35,7 @@ export function TaskMenuHost() {
   useLayoutEffect(() => {
     if (!s || !box.current) return setPos(null);
     const r = box.current.getBoundingClientRect();
-    setPos({ x: Math.min(s.x, innerWidth - r.width - 8), y: Math.min(s.y, innerHeight - r.height - 8) });
+    setPos({ x: Math.max(8, Math.min(s.x, innerWidth - r.width - 8)), y: Math.max(8, Math.min(s.y, innerHeight - r.height - 8)) });
   }, [s]);
   if (!s || !t) return null;
 
@@ -80,7 +80,7 @@ export function TaskMenuHost() {
               {(it.tags || it.date) && <ChevronRightIcon className="size-3.5 opacity-60" />}
             </button>
             {it.tags && sub === "tags" && (
-              <div className={cn("absolute top-0 max-h-80 w-52 overflow-y-auto rounded-md border bg-popover p-1 shadow-xl", side)}>
+              <SubBox className={cn("max-h-80 w-52 overflow-y-auto p-1", side)}>
                 {tagsOf(db).map(g => (
                   <button key={g.id} type="button" onClick={run(() => tasks.forEach(x => setTag(x, g.id)))} className={row}>
                     <span className="size-2 shrink-0 rounded-full" style={{ background: g.color || "currentColor" }} />
@@ -88,16 +88,28 @@ export function TaskMenuHost() {
                     {g.id === cur && <CheckIcon className="size-3.5 opacity-70" />}
                   </button>
                 ))}
-              </div>
+              </SubBox>
             )}
             {it.date && sub === "date" && (
-              <div className={cn("absolute top-0 rounded-md border bg-popover p-3 shadow-xl", side)}>
+              <SubBox className={cn("p-3", side)}>
                 <WhenBody due={t.due || ""} time={t.time || ""} onChange={w => { tasks.forEach(x => update("tasks", x.id, { due: w.due, time: w.time })); if (!w.time) { close(); if (many) clearSel(); } }} />
-              </div>
+              </SubBox>
             )}
           </div>
         ))}
       </div>
     </div>
   );
+}
+
+// a submenu that slides up when it would run off the bottom (or top) of the window
+function SubBox({ className, children }) {
+  const ref = useRef(null);
+  const [dy, setDy] = useState(0);
+  useLayoutEffect(() => {
+    const r = ref.current?.getBoundingClientRect(); if (!r) return;
+    const top = r.top - dy, over = top + r.height - (innerHeight - 8);
+    setDy(over > 0 ? -Math.min(over, top - 8) : 0);
+  }, []);
+  return <div ref={ref} style={{ top: dy }} className={cn("absolute rounded-md border bg-popover text-popover-foreground shadow-xl", className)}>{children}</div>;
 }
