@@ -441,12 +441,25 @@ export function untilText(t, now) {
   const at = new Date(t.due + "T" + t.time).getTime(), d = at - now;
   return Math.abs(d) < 60e3 ? "сейчас" : d > 0 ? "через " + span(d) : span(d) + " назад";
 }
+// right after the text: a ring that fills up as the deadline nears (a day for a timed task, a week for a dated one) and the time left
 function Until({ t }) {
   const now = useMinute();
   const s = untilText(t, now);
   if (!s) return null;
-  const past = s.endsWith("назад"), soon = !past && t.time && new Date(t.due + "T" + t.time) - now < 3600e3;
-  return <span className={cn("mt-0.5 shrink-0 font-mono text-[13px] tabular-nums", past ? "text-red-500" : soon ? "text-orange-500" : "text-muted-foreground/70")}>{s}</span>;
+  const at = new Date(t.due + "T" + (t.time || "23:59")).getTime(), left = at - now;
+  const win = t.time ? 864e5 : 7 * 864e5;
+  const p = left <= 0 ? 1 : Math.max(0.04, Math.min(1, 1 - left / win));
+  const c = left <= 0 ? "#ef4444" : left < 3600e3 ? "#f97316" : left < 864e5 ? "#f59e0b" : left < 3 * 864e5 ? "#3b82f6" : "#64748b";
+  const R = 6, L = 2 * Math.PI * R;
+  return (
+    <span className="ml-2 inline-flex translate-y-[-1px] items-center gap-1 align-middle font-mono text-[12px] whitespace-nowrap tabular-nums" style={{ color: c }} title={s}>
+      <svg viewBox="0 0 16 16" className="size-3.5 shrink-0 -rotate-90" aria-hidden>
+        <circle cx="8" cy="8" r={R} fill="none" stroke="currentColor" strokeOpacity=".2" strokeWidth="2.5" />
+        <circle cx="8" cy="8" r={R} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray={`${p * L} ${L}`} />
+      </svg>
+      {s.replace(/^через /, "")}
+    </span>
+  );
 }
 
 function TuiRow({ t, depth = 0, showDate }) {
@@ -475,7 +488,7 @@ function TuiRow({ t, depth = 0, showDate }) {
         {kids.length > 0 && <button type="button" onClick={e => { stop(e); toggleFold(); }} onPointerDown={stop} aria-label={folded ? "Показать подзадачи" : "Свернуть подзадачи"}
           className="absolute top-2.5 grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground" style={{ left: 2 + depth * 22 }}><ChevronRightIcon className={cn("size-3.5 transition-transform", !folded && "rotate-90")} /></button>}
         <Checkbox className="mt-0.5 size-[18px]" checked={!!t.done} onClick={stop} onPointerDown={stop} onCheckedChange={v => done(!!v)} aria-label={t.text} />
-        <span className="min-w-0 flex-1 break-words">{t.text}</span>
+        <span className="min-w-0 flex-1 break-words">{t.text}{!t.done && <Until t={t} />}</span>
         {kids.length > 0 && <span className="mt-0.5 font-mono text-[13px] text-muted-foreground tabular-nums">{kids.filter(k => k.done).length}/{kids.length}</span>}
         {t.body?.trim() && <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground/70" />}
         {t.prio === "urgent" && !t.done && <FlameIcon className="size-3.5 shrink-0 text-red-500" />}
@@ -484,7 +497,6 @@ function TuiRow({ t, depth = 0, showDate }) {
           <button type="button" onClick={e => { stop(e); moveTasks([t.id], "tomorrow"); }} onPointerDown={stop} title="На завтра" aria-label="На завтра" className={quick}><SunriseIcon className="size-3.5" /></button>
           <button type="button" onClick={e => { stop(e); setAdding(true); }} onPointerDown={stop} title="Добавить подзадачу" aria-label="Добавить подзадачу" className={quick}><CornerDownRightIcon className="size-3.5" /></button>
         </span>}
-        {!t.done && <Until t={t} />}
         {(showDate || t.time) && t.due && <span className={cn("mt-0.5 shrink-0 font-mono text-[13px] tabular-nums", late ? "text-red-500" : "text-muted-foreground")}>{showDate ? shortDue(t) : t.time}</span>}
       </div>
       <Fold open={kids.length > 0 && (!folded || adding)}><Rows>{kids.map(k => <TuiRow key={k.id} t={k} depth={depth + 1} />)}</Rows></Fold>
