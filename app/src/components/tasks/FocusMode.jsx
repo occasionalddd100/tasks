@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CheckIcon, CoffeeIcon, HistoryIcon, Maximize2Icon, Minimize2Icon, PlayIcon, SquareIcon, MoonIcon } from "lucide-react";
+import { CheckIcon, CoffeeIcon, PlusIcon, HistoryIcon, Maximize2Icon, Minimize2Icon, PlayIcon, SquareIcon, MoonIcon } from "lucide-react";
 import { toast } from "sonner";
-import { useDb, update } from "@/lib/db";
+import { useDb, update, add } from "@/lib/db";
+import { addTask } from "@/components/tasks/QuickAdd";
 import { MOVES } from "@/lib/select";
-import { byOrder } from "@/lib/tasks";
+import { byOrder, nextOrder, today } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { focus, useFocusSession, totals, clock, dur, AWAY_MIN } from "@/lib/focusSession";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -151,6 +152,8 @@ function FocusMode({ s, onEnd }) {
 
         <ul className="mt-2 flex w-full flex-col gap-2">
           {tops.map(x => <FocusTask key={x.id} t={x} ids={ids} />)}
+          <li><AddLine placeholder="Ещё задача в фокус… (завтра, в 15:00, #тег)" big
+            onAdd={async v => { const r = await addTask(v, { due: today() }); if (r?.id) focus.start([r.id]); }} /></li>
         </ul>
         <p className="font-mono text-[11px] text-muted-foreground/60">Если {AWAY_MIN} минут нет движения мыши и клавиатуры, время записывается как «отходил»{ipc() ? "" : " (во вкладке браузера считается только эта страница)"}</p>
       </main>
@@ -166,10 +169,34 @@ function FocusTask({ t, ids }) {
   return (
     <motion.li layout className={cn("rounded-xl border bg-card/80 p-4 backdrop-blur transition-opacity", t.done && "opacity-60")}>
       <Tick t={t} onClick={() => tick(t)} big />
-      {kids.length > 0 && <ul className="mt-2 ml-9 flex flex-col gap-0.5 border-l pl-3">{kids.map(k => <li key={k.id}><Tick t={k} onClick={() => tick(k)} /></li>)}</ul>}
+      <ul className="mt-2 ml-9 flex flex-col gap-0.5 border-l pl-3">
+        {kids.map(k => <li key={k.id}><Tick t={k} onClick={() => tick(k)} /></li>)}
+        {!t.done && <li><AddLine placeholder="Шаг" onAdd={v => add("tasks", { text: v, cat: t.cat, parent: t.id, order: nextOrder(kids), done: false })} /></li>}
+      </ul>
     </motion.li>
   );
 }
+// «+» that turns into a line to type in; Enter adds and keeps it open for the next one, Esc closes
+function AddLine({ placeholder, onAdd, big }) {
+  const [on, setOn] = useState(false), [v, setV] = useState("");
+  if (!on) return (
+    <button type="button" onClick={() => setOn(true)}
+      className={cn("flex items-center gap-2 text-muted-foreground hover:text-foreground", big ? "h-14 w-full justify-center rounded-xl border border-dashed text-[15px] hover:bg-accent/50" : "h-7 text-sm")}>
+      <PlusIcon className={big ? "size-5" : "size-4"} />{big ? "Добавить задачу" : "шаг"}
+    </button>
+  );
+  const done = () => { setOn(false); setV(""); };
+  return (
+    <form onSubmit={e => { e.preventDefault(); const x = v.trim(); if (x) { onAdd(x); setV(""); } else done(); }}
+      className={cn("flex items-center gap-2", big && "rounded-xl border bg-card/80 px-4 py-3")}>
+      <PlusIcon className={cn("shrink-0 text-muted-foreground", big ? "size-5" : "size-4")} />
+      <input autoFocus value={v} onChange={e => setV(e.target.value)} placeholder={placeholder} onBlur={() => !v.trim() && done()}
+        onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") done(); }}
+        className={cn("min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground/60", big ? "text-xl" : "text-[15px]")} />
+    </form>
+  );
+}
+
 function Tick({ t, onClick, big }) {
   return (
     <button type="button" onClick={onClick} className="flex w-full items-start gap-3 rounded-lg text-left">
