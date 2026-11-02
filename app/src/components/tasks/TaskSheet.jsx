@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { WhenPicker } from "@/components/ui/when-picker";
 import * as D from "@radix-ui/react-dialog";
 import {
   AlarmClockIcon, CalendarIcon, CopyIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlameIcon, ColumnsIcon, PencilIcon, Trash2Icon, UserIcon, XIcon,
@@ -74,15 +75,16 @@ export default function TaskSheet({ t, open, onOpenChange, people = [], onNote, 
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => day(today())} className={chip(t.due === today(), "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400")}>Сегодня</button>
                 <button type="button" onClick={() => day(addDays(1))} className={chip(t.due === addDays(1), "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400")}>Завтра</button>
-                {/* the native pickers sit on top of the chips, so one tap opens the phone's own calendar or clock */}
-                <label className={cn(chip(t.due && t.due !== today() && t.due !== addDays(1), "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), "relative")}>
-                  <CalendarIcon className="size-4" />{t.due && t.due !== today() && t.due !== addDays(1) ? dueLabel(t.due) : "Дата"}
-                  <input type="date" value={t.due || ""} onChange={e => set(e.target.value ? { due: e.target.value } : { due: "", time: "" })} className="absolute inset-0 opacity-0" aria-label="Дата" />
-                </label>
-                <label className={cn(chip(!!t.time, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), "relative")}>
-                  <AlarmClockIcon className="size-4" />{t.time || "Время"}
-                  <input type="time" value={t.time || ""} onChange={e => set(e.target.value ? { time: e.target.value, due: t.due || today() } : { time: "" })} className="absolute inset-0 opacity-0" aria-label="Время" />
-                </label>
+                <WhenPicker due={t.due || ""} time={t.time || ""} onChange={set}>
+                  <button type="button" className={chip(t.due && t.due !== today() && t.due !== addDays(1), "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400")}>
+                    <CalendarIcon className="size-4" />{t.due && t.due !== today() && t.due !== addDays(1) ? dueLabel(t.due) : "Дата"}
+                  </button>
+                </WhenPicker>
+                <WhenPicker due={t.due || ""} time={t.time || ""} onChange={set} focus="time">
+                  <button type="button" className={chip(!!t.time, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400")}>
+                    <AlarmClockIcon className="size-4" />{t.time || "Время"}
+                  </button>
+                </WhenPicker>
                 {t.due && <button type="button" onClick={() => set({ due: "", time: "" })} className={chip(false)} aria-label="Убрать срок"><XIcon className="size-4" /></button>}
               </div>
             </>}

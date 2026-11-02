@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { TimePicker } from "@/components/ui/when-picker";
 import { AnimatePresence, motion } from "motion/react";
 import { AlarmClockIcon, BellIcon, BellRingIcon, CheckIcon, CrosshairIcon, FlameIcon, MoonStarIcon, SunIcon, SunriseIcon, SunsetIcon, CalendarClockIcon, CalendarDaysIcon, ChevronDownIcon, PlusIcon, XIcon } from "lucide-react";
 import { useDb, update } from "@/lib/db";
@@ -279,7 +280,9 @@ function AddSlot({ when, empty, label }) {
         <input autoFocus value={text} onChange={e => setText(e.target.value)} placeholder="Что сделать… #тег" aria-label="Новая задача на время" enterKeyHint="done"
           onKeyDown={e => e.key === "Escape" && setOpen(false)} className="h-10 rounded-lg bg-transparent px-2 text-[15px] outline-none" />
         <div className="flex items-center gap-2">
-          <input type="time" value={time} onChange={e => setTime(e.target.value)} aria-label="Время" className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-2 text-sm tabular-nums" />
+          <TimePicker value={time} onChange={setTime}>
+            <button type="button" aria-label="Время" className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-2 text-left font-mono text-sm tabular-nums">{time || "чч:мм"}</button>
+          </TimePicker>
           <button type="button" onClick={() => setOpen(false)} aria-label="Отмена" className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground"><XIcon className="size-4" /></button>
           <button type="submit" disabled={!text.trim()} className="h-9 shrink-0 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-40">Добавить</button>
         </div>

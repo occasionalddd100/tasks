@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { WhenPicker, TimePicker } from "@/components/ui/when-picker";
 import * as D from "@radix-ui/react-dialog";
 import { motion, AnimatePresence } from "motion/react";
 import { AlarmClockIcon, ArrowUpIcon, CalendarIcon, CheckIcon, HashIcon, SunIcon, XIcon } from "lucide-react";
@@ -86,16 +87,17 @@ export function Composer({ autoFocus, defaultTag = null, onAdded, className }) {
       <div className="grid grid-cols-3 gap-1.5">
         <button type="button" onClick={() => setDid(d => !d)} aria-pressed={did} className={tile(did, "border-emerald-500/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400")}><CheckIcon />Сделал</button>
         <button type="button" disabled={did} onClick={() => { setDue(d => (d === today() ? "" : today())); }} aria-pressed={due === today()} className={tile(due === today() && !did, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400")}><SunIcon />Сегодня</button>
-        {/* the phone's own calendar and clock sit on top of the tile */}
-        <label className={cn(tile(!!due && due !== today() && !did, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), "relative", did && "pointer-events-none opacity-40")}>
-          <CalendarIcon />{due && due !== today() ? dueLabel(due) : "Дата"}
-          <input type="date" value={due} onChange={e => { setDue(e.target.value); if (!e.target.value) setTime(""); }} className="absolute inset-0 opacity-0" aria-label="Дата" />
-        </label>
+        <WhenPicker due={due} time={time} onChange={w => { setDue(w.due); setTime(w.time); }} align="end">
+          <button type="button" disabled={did} className={cn(tile(!!due && due !== today() && !did, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), did && "opacity-40")}>
+            <CalendarIcon />{due && due !== today() ? dueLabel(due) : "Дата"}
+          </button>
+        </WhenPicker>
       </div>
-      {due && !did && <label className={cn(chip(!!time, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), "relative self-start")}>
-        <AlarmClockIcon className="size-3.5" />{time ? "в " + time : "Указать время"}
-        <input type="time" value={time} onChange={e => setTime(e.target.value)} className="absolute inset-0 opacity-0" aria-label="Время" />
-      </label>}
+      {due && !did && <TimePicker value={time} onChange={setTime}>
+        <button type="button" className={cn(chip(!!time, "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400"), "self-start")}>
+          <AlarmClockIcon className="size-3.5" />{time ? "в " + time : "Указать время"}
+        </button>
+      </TimePicker>}
       {!did && tags.length > 0 && <div className="flex flex-wrap gap-1.5">
         {tags.map(t => (
           <button key={t.id} type="button" onClick={() => setTag(cur === t.id ? null : t.id)} aria-pressed={cur === t.id} className={chip(cur === t.id)}>

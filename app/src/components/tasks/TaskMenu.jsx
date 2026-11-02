@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { WhenBody } from "@/components/ui/when-picker";
 import { CalendarIcon, CheckIcon, CornerDownRightIcon, ChevronRightIcon, FlameIcon, InboxIcon, PencilIcon, SquareCheckIcon, SunIcon, SunriseIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { useDb, update } from "@/lib/db";
 import { getSel, isSelected, toggleSel, clearSel, moveTasks } from "@/lib/select";
@@ -88,9 +89,8 @@ export function TaskMenuHost() {
               </div>
             )}
             {it.date && sub === "date" && (
-              <div className={cn("absolute top-0 rounded-md border bg-popover p-2 shadow-xl", side)}>
-                <input type="date" autoFocus defaultValue={t.due || ""} className="h-8 rounded border bg-background px-2 font-mono text-sm"
-                  onChange={e => e.target.value && run(() => tasks.forEach(x => update("tasks", x.id, { due: e.target.value })))()} />
+              <div className={cn("absolute top-0 rounded-md border bg-popover p-3 shadow-xl", side)}>
+                <WhenBody due={t.due || ""} time={t.time || ""} onChange={w => { tasks.forEach(x => update("tasks", x.id, { due: w.due, time: w.time })); if (!w.time) { close(); if (many) clearSel(); } }} />
               </div>
             )}
           </div>

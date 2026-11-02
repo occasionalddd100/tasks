@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { WhenPicker, TimePicker } from "@/components/ui/when-picker";
 import { createPortal } from "react-dom";
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
 import { CrosshairIcon, FlameIcon, InboxIcon, ListTodoIcon, PlusIcon, XIcon, PencilIcon, AlarmClockIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, ArchiveIcon, SunIcon, SunriseIcon, CalendarClockIcon, CornerDownRightIcon, FileTextIcon, ListChecksIcon, ChevronLeftIcon } from "lucide-react";
@@ -545,13 +546,14 @@ function AddLine({ placeholder, onAdd, onClose, withDate, className }) {
   const submit = e => { e.preventDefault(); const v = text.trim(); if (!v) return onClose(); onAdd(v, date); setText(""); };
   return (
     <form ref={box} onSubmit={submit} className={cn("flex items-center gap-1.5 px-1.5 py-1", className)}
-      onBlur={e => { if (!box.current?.contains(e.relatedTarget) && !text.trim()) setTimeout(onClose, 200); /* after the click that took focus lands */ }}>
+      onBlur={e => { if (!box.current?.contains(e.relatedTarget) && !e.relatedTarget?.closest?.("[data-radix-popper-content-wrapper]") && !text.trim()) setTimeout(onClose, 200); /* after the click that took focus lands */ }}>
       <PlusIcon className="size-4 shrink-0 text-muted-foreground" />
       <HiliteField autoFocus value={text} onChange={e => setText(e.target.value)} placeholder={placeholder} aria-label={placeholder} enterKeyHint="done"
         onKeyDown={e => e.key === "Escape" && (setText(""), onClose())}
         className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60" />
-      {withDate && <input type="date" value={date} min={addDays(2)} onChange={e => setDate(e.target.value)} aria-label="Когда"
-        className="h-7 shrink-0 rounded-md border bg-background px-1.5 text-xs text-muted-foreground outline-none" />}
+      {withDate && <WhenPicker due={date} noTime min={addDays(2)} onChange={w => setDate(w.due || addDays(2))} align="end">
+        <button type="button" aria-label="Когда" className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border bg-background px-1.5 font-mono text-xs text-muted-foreground hover:text-foreground"><CalendarClockIcon className="size-3.5" />{dueLabel(date)}</button>
+      </WhenPicker>}
     </form>
   );
 }

@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { WhenPicker } from "@/components/ui/when-picker";
 import { createContext, useContext, useRef, useState, useSyncExternalStore } from "react";
 import {
   AlarmClockIcon, AlarmClockOffIcon, ArchiveIcon, CalendarIcon, CalendarXIcon, ChevronRightIcon, CornerDownRightIcon, EyeOffIcon, FileTextIcon, FlameIcon,
@@ -101,7 +102,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [sheet, setSheet] = useState(false);
   const phone = usePhone(), inCard = useContext(Stacked), stack = phone || inCard;
-  const dateRef = useRef(null), timeRef = useRef(null);
+  const [whenOpen, setPick] = useState(null); // our date picker: null, "date" or "time"
 
   const toggle = v => update("tasks", t.id, v ? { done: true, doneOn: today(), doneAt: new Date().toISOString(), doneBy: getDb().me } : { done: false, doneOn: "", doneAt: "", doneBy: "", hidden: false });
   const canHide = t.done && !stale(t) && !overlay;
@@ -117,8 +118,7 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub }) {
     people.length > 0 && { sep: true },
     { label: "Без исполнителя", icon: UserXIcon, disabled: !t.assignee, onSelect: () => assign("") },
   ];
-  const openPicker = ref => { const i = ref.current; if (!i) return; try { i.showPicker(); } catch { i.focus(); i.click(); } };
-  const openDate = () => openPicker(dateRef), openTime = () => openPicker(timeRef);
+  const openDate = () => setPick("date"), openTime = () => setPick("time");
   const when = t.due ? dueLabel(t.due) + (t.time ? " " + t.time : "") : "";
 
   const items = [
@@ -155,15 +155,14 @@ export default function TaskRow({ t, grip, overlay, kids, onAddSub, sub }) {
   // date and marks: right of the text on a wide screen, a line under it on the phone so the text keeps the width
   const meta = !overlay && (
         <div className={cn("flex shrink-0 items-center", stack && "-ml-1 mt-0.5 min-w-0 flex-wrap gap-x-1")}>
+          <WhenPicker due={t.due || ""} time={t.time || ""} focus={whenOpen} open={!!whenOpen} onOpenChange={o => setPick(o && !phone ? "date" : null)}
+            onChange={w => update("tasks", t.id, { due: w.due, time: w.time })} align="end">
           <button type="button" onClick={phone ? () => setSheet(true) : openDate} title={t.due ? "Срок: " + t.due + (t.time ? " " + t.time : "") : "Поставить дату"} aria-label={t.due ? "Срок " + when : "Поставить дату"}
             className={cn("relative grid h-6 min-w-6 place-items-center rounded px-1 text-xs text-muted-foreground hover:bg-background",
               !t.due && "opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100 max-md:hidden", t.due && "bg-muted", late && "text-destructive")}>
             {t.due ? when : <CalendarIcon className="size-3.5" />}
-            <input ref={dateRef} type="date" tabIndex={-1} value={t.due || ""} onChange={e => update("tasks", t.id, e.target.value ? { due: e.target.value } : { due: "", time: "" })}
-              className="pointer-events-none absolute inset-0 opacity-0" aria-hidden />
-            <input ref={timeRef} type="time" tabIndex={-1} value={t.time || ""} onChange={e => update("tasks", t.id, { time: e.target.value || "" })}
-              className="pointer-events-none absolute inset-0 opacity-0" aria-hidden />
           </button>
+          </WhenPicker>
           {canHide && (
             <button type="button" onClick={() => hideTask(t)} title="Скрыть в выполненные" aria-label={"Скрыть в выполненные: " + t.text}
               className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-background hover:text-foreground md:opacity-0 md:group-hover/task:opacity-100 md:focus-visible:opacity-100">

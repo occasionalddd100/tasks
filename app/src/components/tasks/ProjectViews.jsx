@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { TimePicker } from "@/components/ui/when-picker";
 import * as Pop from "@radix-ui/react-popover";
 import { ArrowLeftIcon, ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon, ListChecksIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Repeat2Icon, Trash2Icon, UsersIcon, XIcon } from "lucide-react";
 import { useDb, add, update, updateMany, remove, isMine } from "@/lib/db";
@@ -202,8 +203,9 @@ function HabitRow({ h, waiting, onMark, tui }) {
       <select value={edit.every} onChange={e => setEdit({ ...edit, every: e.target.value })} aria-label="Как часто" className="h-8 rounded-md border border-input bg-background px-2 text-sm">
         {Object.entries({ ...EVERY, ...(EVERY[edit.every] ? {} : { [edit.every]: `каждые ${edit.every} дн.` }) }).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
       </select>
-      <input type="time" value={edit.time} onChange={e => setEdit({ ...edit, time: e.target.value })} title="Напомнить в это время" aria-label="Время напоминания"
-        className="h-8 rounded-md border border-input bg-background px-2 font-mono text-sm" />
+      <TimePicker value={edit.time} onChange={time => setEdit({ ...edit, time })}>
+        <button type="button" title="Напомнить в это время" aria-label="Время напоминания" className="h-8 rounded-md border border-input bg-background px-2 font-mono text-sm">⏰ {edit.time || "без времени"}</button>
+      </TimePicker>
       <Button size="sm" className="h-8" onClick={save}>Сохранить</Button>
       <Button size="sm" variant="ghost" className="h-8" onClick={() => setEdit(null)}>Отмена</Button>
     </li>
