@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { parseWhen } from "@/lib/when";
-import { focus, useFocusSession } from "@/lib/focusSession";
+import { focus, useFocusSession, dur } from "@/lib/focusSession";
+import { History as FocusHistory } from "@/components/tasks/FocusMode";
+import { HistoryIcon } from "lucide-react";
 import { toast } from "sonner";
 import { WhenPicker, TimePicker } from "@/components/ui/when-picker";
 import { createPortal } from "react-dom";
@@ -50,7 +52,7 @@ export default function FocusView() {
   useEffect(() => setSlot(document.getElementById("topbar-slot")), []);
   const actions = <>
     <button type="button" onClick={() => openTagEditor()} title="Править теги" aria-label="Править теги" className="inline-flex h-9 transition-all shrink-0 items-center gap-1.5 rounded-md border px-3 font-mono text-[13px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground max-md:px-2.5"><PencilIcon className="size-3.5" /><span className="max-md:hidden">Теги</span></button>
-    <ZenButton /><TodayDone />
+    <ZenButton /><FocusStat /><TodayDone />
   </>;
   // a tag picked in the menu: the page starts over at the top
   const jump = () => setTimeout(() => document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" }), 60);
@@ -782,6 +784,22 @@ function PrioBtn({ t, small }) {
         on ? "text-red-500" : "text-muted-foreground hover:text-red-500")}>
       <FlameIcon className={small ? "size-3.5" : "size-4"} fill={on ? "currentColor" : "none"} />
     </button>
+  );
+}
+
+// today's focus time; opens the history of focus sessions
+function FocusStat() {
+  const db = useDb();
+  const [open, setOpen] = useState(false);
+  const ms = db.focus.filter(f => f.day === today()).reduce((a, f) => a + (f.work || 0), 0);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} title="История фокуса"
+        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-3 font-mono text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground">
+        <HistoryIcon className="size-3.5" />{ms ? dur(ms) : <span className="max-md:hidden">История</span>}
+      </button>
+      <FocusHistory open={open} onOpenChange={setOpen} />
+    </>
   );
 }
 
